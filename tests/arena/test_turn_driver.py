@@ -24,6 +24,22 @@ class _SequenceAgent(Agent):
         return call
 
 
+class _RecordingAgent(Agent):
+    """Emits a fixed sequence and records the observations it was given."""
+
+    def __init__(self, calls: List[ToolCall]):
+        super().__init__("Rec", "a")
+        self._calls = calls
+        self._i = 0
+        self.seen: List[Dict[str, Any]] = []
+
+    def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
+        self.seen.append(observation)
+        call = self._calls[min(self._i, len(self._calls) - 1)]
+        self._i += 1
+        return call
+
+
 def _started(make_combat, entities, focus):
     combat = make_combat(entities)
     combat.start_combat()
@@ -83,6 +99,36 @@ def test_dead_actor_turn_is_skipped(make_entity, make_combat):
 
     assert outcome.actions_taken == 0
     assert outcome.forced_end is True
+
+
+def test_rejected_action_is_fed_back_next_observation(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    # First an illegal attack (bad target), then end the turn.
+    illegal = ToolCall("attack", {"action_name": "Longsword", "defender_id": "bad"})
+    agent = _RecordingAgent([illegal, ToolCall("end_turn", {})])
+    run_turn(combat, fighter, agent)
+
+    assert "rejected_actions" not in agent.seen[0]  # nothing rejected yet on the first call
+    fed = agent.seen[1]["rejected_actions"]  # the second call carries the rejection + reason
+    assert fed[0]["action"]["name"] == "attack"
+    assert "Unknown entity_id" in fed[0]["error"]
+
+
+def test_success_clears_rejection_feedback(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0), hp=30)
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    illegal = ToolCall("attack", {"action_name": "Longsword", "defender_id": "bad"})
+    good = ToolCall("attack", {"action_name": "Longsword", "defender_id": goblin.entity_id})
+    agent = _RecordingAgent([illegal, good, ToolCall("end_turn", {})])
+    run_turn(combat, fighter, agent)
+
+    assert "rejected_actions" in agent.seen[1]  # after the illegal attempt
+    assert "rejected_actions" not in agent.seen[2]  # cleared after the successful attack
 
 
 def test_transcript_records_turn(make_entity, make_combat):

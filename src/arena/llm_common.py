@@ -62,14 +62,35 @@ def augment_tools_with_notes(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
 
 def render_observation(notes: str, observation: Dict[str, Any]) -> str:
-    """Render an observation as the user message: prior note, instruction, then state JSON."""
+    """Render an observation as the user message.
+
+    Order: prior note → any rejected-action feedback (a compact header, so the model learns
+    *why* its last attempt this turn failed and can choose differently — not a wasteful
+    conversation thread) → the instruction and state JSON. ``rejected_actions`` is pulled out
+    of the dict before dumping so it isn't shown twice.
+    """
+    obs = dict(observation)
+    rejected = obs.pop("rejected_actions", None)
+
     parts: List[str] = []
     if notes:
         parts.append(f"Your note to self from last turn: {notes}")
+    if rejected:
+        lines = [
+            "Your last action(s) this turn were REJECTED by the referee — read why and "
+            "choose a DIFFERENT action (do not repeat a rejected one):"
+        ]
+        for r in rejected:
+            action = r.get("action", {})
+            lines.append(
+                f"- {action.get('name')} {json.dumps(action.get('arguments', {}))}"
+                f" -> {r.get('error')}"
+            )
+        parts.append("\n".join(lines))
     parts.append(
         "It is your turn. Study the battlefield and your legal options, then take "
         "exactly one action.\n\n"
-        + json.dumps(observation, indent=2, default=str)
+        + json.dumps(obs, indent=2, default=str)
     )
     return "\n\n".join(parts)
 

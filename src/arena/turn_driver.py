@@ -14,7 +14,7 @@ own ``end_turn`` (executed by the ``ToolExecutor``) or a single forced ``end_tur
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from src.arena.agent import Agent
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
@@ -64,15 +64,24 @@ def run_turn(
     consecutive = 0
     failures = 0
     actions = 0
+    # Rejected actions since the last successful one — fed back so the agent learns *why*
+    # a move was refused and can self-correct within the turn (cleared on any success).
+    rejections: List[Dict[str, Any]] = []
 
     while True:
         observation = build_observation(combat, actor, policy)
+        if rejections:
+            observation["rejected_actions"] = list(rejections)
         call = agent.decide(observation, TOOLS)
         result = executor.apply(actor, call, policy)
         if transcript is not None:
             transcript.action(actor.entity_id, call, result)
 
         if not result["ok"]:
+            rejections.append({
+                "action": {"name": call.name, "arguments": dict(call.arguments)},
+                "error": result.get("error", ""),
+            })
             consecutive += 1
             failures += 1
             if consecutive >= MAX_CONSECUTIVE_FAILURES or failures >= MAX_TOTAL_FAILURES:
@@ -80,6 +89,7 @@ def run_turn(
                 return _finish(transcript, combat, actor, actions, failures, forced=True)
             continue
 
+        rejections.clear()
         consecutive = 0
         if result.get("ended_turn"):  # the agent ended its own turn (already advanced)
             return _finish(transcript, combat, actor, actions, failures, forced=False)
