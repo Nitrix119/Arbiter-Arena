@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List
 
-from src.arena.agent import Agent, ScriptedAgent
+from src.arena.agent import Agent, NoToolCallError, ScriptedAgent
 from src.arena.tools import ToolCall
 from src.arena.transcript import Transcript
 from src.arena.turn_driver import run_turn
@@ -87,6 +87,28 @@ def test_total_failure_budget_forces_end(make_entity, make_combat):
     assert outcome.failures == 5
     assert outcome.actions_taken == 2  # the two successful moves
     assert outcome.forced_end is True
+
+
+class _NoToolAgent(Agent):
+    """Never produces a tool call — mimics a flaky model returning only prose."""
+
+    def __init__(self):
+        super().__init__("NoTool", "a")
+
+    def decide(self, observation, tools):
+        raise NoToolCallError("no tool call")
+
+
+def test_no_tool_call_is_contained_not_crashing(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    outcome = run_turn(combat, fighter, _NoToolAgent())  # must not raise
+
+    assert outcome.failures == 3  # counted against the budget like an illegal move
+    assert outcome.forced_end is True
+    assert combat.get_current_entity() is not fighter  # the turn still advanced
 
 
 def test_dead_actor_turn_is_skipped(make_entity, make_combat):

@@ -16,10 +16,10 @@ own ``end_turn`` (executed by the ``ToolExecutor``) or a single forced ``end_tur
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from src.arena.agent import Agent
+from src.arena.agent import Agent, NoToolCallError
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
 from src.arena.observation import build_observation, snapshot_state
-from src.arena.tools import TOOLS, ToolExecutor
+from src.arena.tools import TOOLS, ToolCall, ToolExecutor
 from src.arena.transcript import Transcript
 from src.models.entity import Entity
 
@@ -72,8 +72,15 @@ def run_turn(
         observation = build_observation(combat, actor, policy)
         if rejections:
             observation["rejected_actions"] = list(rejections)
-        call = agent.decide(observation, TOOLS)
-        result = executor.apply(actor, call, policy)
+        try:
+            call = agent.decide(observation, TOOLS)
+        except NoToolCallError as exc:
+            # A flaky/weak model produced no tool call — treat it like an illegal action
+            # (counted against the budget, fed back), not a match-ending crash.
+            call = ToolCall("(no_tool_call)", {})
+            result = {"ok": False, "error": str(exc)}
+        else:
+            result = executor.apply(actor, call, policy)
         if transcript is not None:
             transcript.action(actor.entity_id, call, result)
 

@@ -10,6 +10,7 @@ of messages + tools into one :class:`~src.arena.tools.ToolCall` (or ``None``).
 import json
 from typing import Any, Callable, Dict, List, Optional
 
+from src.arena.agent import NoToolCallError
 from src.arena.tools import TOOL_END_TURN, ToolCall
 
 #: One request → one ToolCall, or None when the model made no tool call.
@@ -125,7 +126,7 @@ def decide_one_action(
         messages.append({"role": "user", "content": "Respond with exactly one tool call."})
         call = request_fn(messages, api_tools)
     if call is None:
-        raise RuntimeError(
+        raise NoToolCallError(
             f"{agent.name}: the model returned no tool call after a retry; cannot act."
         )
     return capture_notes(agent, call)

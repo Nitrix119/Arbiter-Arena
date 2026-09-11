@@ -19,6 +19,14 @@ from typing import Any, Dict, List, Optional
 from src.arena.tools import TOOL_ATTACK, TOOL_CAST_SPELL, TOOL_END_TURN, TOOL_MOVE, ToolCall
 
 
+class NoToolCallError(RuntimeError):
+    """An agent could not produce a tool call for its turn (e.g. the model returned prose).
+
+    The turn driver treats this like an illegal action — counted against the failure budget
+    and fed back — rather than a crash, so one flaky model response can't abort a whole match.
+    """
+
+
 class Agent(ABC):
     """Base class: decides one action from an observation.
 
