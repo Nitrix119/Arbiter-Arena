@@ -41,6 +41,27 @@ def test_scripted_duel_produces_a_winner(make_entity, make_combat):
     assert transcript.records_of("match_end")[0]["winner"] == result.winner
 
 
+def test_scripted_2v2_makes_no_illegal_moves(make_entity, make_combat):
+    """The heuristic must not trip over occupied space in a crowded fight (the 2v2 bug)."""
+    entities = [
+        make_entity("A1", team="a", pos=(0, 0, 0), hp=15, attacks=[melee_attack()]),
+        make_entity("A2", team="a", pos=(0, 0, 10), hp=15, attacks=[melee_attack()]),
+        make_entity("B1", team="b", pos=(15, 0, 0), hp=15, attacks=[melee_attack()]),
+        make_entity("B2", team="b", pos=(15, 0, 10), hp=15, attacks=[melee_attack()]),
+    ]
+    combat = make_combat(entities)
+    agents = {"a": ScriptedAgent("A", "a"), "b": ScriptedAgent("B", "b")}
+    transcript = Transcript()
+
+    run_match(combat, agents, seed=1, transcript=transcript)
+
+    failed = [
+        r for r in transcript.records_of("action")
+        if r["call"]["name"] == "move" and not r["result"].get("ok")
+    ]
+    assert failed == []  # every move the heuristic chose was legal by construction
+
+
 def test_match_is_deterministic_under_a_seed(make_entity, make_combat):
     def play():
         combat = _duel(make_entity, make_combat)

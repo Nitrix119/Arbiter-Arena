@@ -148,9 +148,22 @@ Match (two teams, seeded RNG)
   - spells: each `entity.stat_block.known_spells` name →
     `combat.get_spell_for_entity(...)`, filtered by `can_afford` **and**
     `spell_slots.can_afford(level)`.
-  - targets: `get_enemies`/`get_allies`, each range-checked via
-    [range_check.py](../src/spatial/range_check.py) so only reachable targets are listed.
-  - movement: `entity.resources.movement`.
+  - targets: range-checked via [range_check.py](../src/spatial/range_check.py) so only
+    reachable targets are listed, each tagged with its `relation` (`self`/`ally`/`enemy`).
+    A **weapon attack lists enemies only** (offering an ally invites a wasted, self-defeating
+    action — a *menu-only* rule; the referee does not forbid a raw ally attack). A **spell
+    lists every reachable target, tagged** — the same spell may heal an ally or harm a foe,
+    and the engine carries no generic beneficial/harmful flag. _(Deferred: a `target_affiliation`
+    field on `SpellAction`, authored in JSON, would let beneficial spells auto-filter to allies.)_
+  - **move candidates:** `move_candidates(combat, entity)` yields named, *legal-by-construction*
+    destinations (close-to-melee, retreat, and a `kite_range` point for ranged attackers),
+    each overlap-checked against **every** creature via the engine's shared
+    `CombatSystem.is_destination_clear` predicate and backed off to a clear point when blocked.
+    An agent picks one by `option_id` (the `move` tool resolves it) or still moves to a raw
+    coordinate. This removes the illegal-move churn the 2026-09-15 diagnostic exposed while
+    leaving bespoke positioning open. It is also the substrate the utility-scoring
+    `HeuristicAgent` will score (HEURISTIC_PLAN §2).
+  - movement budget: `entity.resources.movement`.
   Reusable beyond agents (e.g. a future "valid moves" UI hint).
 
 - **`tools.py`** — provider-neutral tool **schemas** (`attack`, `cast_spell`, `move`,

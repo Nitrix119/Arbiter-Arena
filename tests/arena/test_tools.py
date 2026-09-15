@@ -135,6 +135,46 @@ def test_move_too_far_is_structured_error(make_entity, make_combat):
     assert (fighter.x, fighter.z) == (0, 0)  # position unchanged on failure
 
 
+def test_move_by_option_id_resolves_to_candidate_destination(make_entity, make_combat):
+    from src.arena.action_space import move_candidates
+
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    option = next(
+        o for o in move_candidates(combat, fighter) if o.option_id == f"toward_melee:{goblin.entity_id}"
+    )
+    result = ToolExecutor(combat).apply(
+        fighter, ToolCall("move", {"option_id": option.option_id})
+    )
+
+    assert result["ok"] is True
+    assert (fighter.x, fighter.y, fighter.z) == (option.x, option.y, option.z)
+    assert 0 < fighter.x <= 30  # moved toward the enemy, within budget
+
+
+def test_move_unknown_option_id_is_structured_error(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0))
+    goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    result = ToolExecutor(combat).apply(fighter, ToolCall("move", {"option_id": "toward_melee:nope"}))
+    assert result["ok"] is False
+    assert "nope" in result["error"]
+    assert (fighter.x, fighter.z) == (0, 0)
+
+
+def test_move_without_option_or_coords_is_structured_error(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0))
+    goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    result = ToolExecutor(combat).apply(fighter, ToolCall("move", {}))
+    assert result["ok"] is False
+    assert "option_id" in result["error"]
+
+
 # -- end_turn ----------------------------------------------------------------
 
 

@@ -208,3 +208,15 @@ The "implement a new spell" **skill** is well-supported by this architecture: a 
 `SPELL_DEFINITION_GUIDE.md` + `ANIMATION_GUIDE.md`, writes a JSON file to `examples/spells/`, and
 adds an execution test would be low-risk precisely *because* spells are pure data. Best built
 after P1 adds a spell-JSON schema validator (E4) so the skill gets structured feedback.
+
+### Arena adjacent problems (noted, not yet fixed)
+
+- **A1. `OpenRouterAgent` crashes on a malformed API response.**
+  `openrouter_agent.py:_request_action` does `response.choices[0].message` unguarded; a free model
+  that returns `choices=None` (error/empty payload — observed live with
+  `nvidia/nemotron-3-super-120b-a12b:free`, 2026-09-15) raises `TypeError` and aborts the whole
+  match. Free-model APIs are flaky (rate limits, error bodies, truncation); the adapter should treat
+  a missing/empty `choices` as "no tool call" (return `None`, which the turn driver already handles
+  as a counted failure) rather than crash. Belongs with the batch-runner robustness work — a batch
+  must survive one flaky response. Same fragility class as the dead default model
+  (`DEFAULT_MODEL = nvidia/nemotron-nano-9b-v2:free` 404s; needs a live-model preflight).

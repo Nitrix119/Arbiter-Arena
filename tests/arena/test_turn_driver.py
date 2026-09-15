@@ -7,7 +7,9 @@ from src.arena.tools import ToolCall
 from src.arena.transcript import Transcript
 from src.arena.turn_driver import run_turn
 
-from .conftest import force_turn, melee_attack
+import math
+
+from .conftest import force_turn, melee_attack, ranged_attack
 
 
 class _SequenceAgent(Agent):
@@ -151,6 +153,24 @@ def test_success_clears_rejection_feedback(make_entity, make_combat):
 
     assert "rejected_actions" in agent.seen[1]  # after the illegal attempt
     assert "rejected_actions" not in agent.seen[2]  # cleared after the successful attack
+
+
+def test_kite_option_ends_turn_out_of_reach(make_entity, make_combat):
+    """Choosing the kite_range move opens distance and lands the archer out of melee reach."""
+    archer = make_entity("Archer", team="a", pos=(0, 0, 0), attacks=[ranged_attack()])
+    bruiser = make_entity("Bruiser", team="b", pos=(40, 0, 0), attacks=[melee_attack()])
+    combat = _started(make_combat, [archer, bruiser], archer)
+
+    agent = _SequenceAgent(
+        [ToolCall("move", {"option_id": f"kite_range:{bruiser.entity_id}"}), ToolCall("end_turn", {})]
+    )
+    outcome = run_turn(combat, archer, agent)
+
+    assert outcome.failures == 0  # the kite move was legal by construction
+    dist = math.dist((archer.x, archer.z), (bruiser.x, bruiser.z))
+    assert dist > 40  # opened the gap rather than standing and trading
+    melee_reach = archer.stat_block.size.size_ft / 2 + bruiser.stat_block.size.size_ft / 2 + 5
+    assert dist > melee_reach  # ends the turn beyond the bruiser's reach
 
 
 def test_transcript_records_turn(make_entity, make_combat):

@@ -33,6 +33,9 @@ from and correct. Prefer choices from the listed legal options.
 The world model:
 - Positions and distances are in FEET, on an open battlefield — there is no grid. You may \
 move to any point within your movement budget; melee reach is measured edge to edge.
+- Your legal options list named move destinations (close to melee, retreat, kite to range). \
+Take one with move(option_id=…), or move anywhere with move(x, z) — you cannot move onto \
+another creature.
 - You only know what you can observe. An enemy's HP, AC, or capabilities may be hidden; \
 you learn about them by seeing what they do and the damage they take.
 

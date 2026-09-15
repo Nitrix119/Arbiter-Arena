@@ -607,6 +607,32 @@ class CombatSystem:
         entity.y = new_y
         entity.z = new_z
 
+    def is_destination_clear(
+        self,
+        moving: Entity,
+        new_x: float,
+        new_y: float,
+        new_z: float = 0.0,
+    ) -> bool:
+        """Return True if placing *moving* at the new position overlaps no alive entity.
+
+        Read-only: the authoritative occupancy test used both to validate a move
+        (:meth:`_check_movement_overlap`) and to generate legal move destinations. Dead
+        entities (corpses) do not block movement and are skipped.
+        """
+        s = moving.stat_block.size.size_ft
+        half = s / 2.0
+        new_bbox = BoundingBox(
+            min_corner=Point3D(new_x - half, new_y, new_z - half),
+            max_corner=Point3D(new_x + half, new_y + s, new_z + half),
+        )
+        for other in self.get_alive_entities():
+            if other is moving:
+                continue
+            if new_bbox.overlaps(other.bounding_box):
+                return False
+        return True
+
     def _check_movement_overlap(
         self,
         moving: Entity,
@@ -616,7 +642,8 @@ class CombatSystem:
     ) -> None:
         """Raise ValueError if placing *moving* at the new position overlaps any alive entity.
 
-        Dead entities (corpses) do not block movement and are skipped.
+        Names the blocking entity for the error message; the boolean test lives in
+        :meth:`is_destination_clear`.
         """
         s = moving.stat_block.size.size_ft
         half = s / 2.0

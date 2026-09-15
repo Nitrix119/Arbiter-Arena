@@ -24,6 +24,7 @@ is never in the result (the next observation carries it, gated by ``reveal_enemy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from src.arena.action_space import move_candidates
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
 from src.models.action import AttackAction
 from src.models.entity import Entity
@@ -104,17 +105,23 @@ TOOLS: List[Dict[str, Any]] = [
     {
         "name": TOOL_MOVE,
         "description": (
-            "Move to a position on the battlefield, in feet. Costs movement equal to the "
-            "straight-line distance; you cannot move onto another creature."
+            "Move on the battlefield. Either pass an `option_id` from your legal move "
+            "options (a named, already-legal destination), OR give raw `x`/`z` in feet for a "
+            "bespoke spot. Costs movement equal to the straight-line distance; you cannot "
+            "move onto another creature."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
+                "option_id": {
+                    "type": "string",
+                    "description": "id of a move option from your legal options; resolves to "
+                    "its destination. Omit if giving raw x/z.",
+                },
                 "x": {"type": "number", "description": "Destination x, in feet (east)."},
                 "y": {"type": "number", "description": "Destination y, in feet (up); usually 0."},
                 "z": {"type": "number", "description": "Destination z, in feet (south)."},
             },
-            "required": ["x", "z"],
         },
     },
     {
@@ -285,9 +292,24 @@ class ToolExecutor:
     def _move(
         self, actor: Entity, args: Dict[str, Any], policy: InformationPolicy
     ) -> Dict[str, Any]:
-        x = float(args["x"])
-        z = float(args["z"])
-        y = float(args.get("y", 0.0))
+        option_id = args.get("option_id")
+        if option_id:
+            option = next(
+                (o for o in move_candidates(self._combat, actor) if o.option_id == option_id),
+                None,
+            )
+            if option is None:
+                raise ValueError(
+                    f"No move option {option_id!r} is available now; "
+                    "choose a listed option_id or give raw x/z."
+                )
+            x, y, z = option.x, option.y, option.z
+        elif "x" in args and "z" in args:
+            x = float(args["x"])
+            z = float(args["z"])
+            y = float(args.get("y", 0.0))
+        else:
+            raise ValueError("move requires either an option_id or both x and z.")
         self._combat.move_entity(actor, x, y, z)
         return _ok(
             action=TOOL_MOVE,

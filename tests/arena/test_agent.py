@@ -45,9 +45,14 @@ def test_scripted_moves_toward_distant_enemy(make_entity, make_combat):
     call = ScriptedAgent("A", "a").decide(obs, TOOLS)
 
     assert call.name == "move"
-    # Steps toward the enemy, no further than the 30 ft movement budget.
-    assert 0 < call.arguments["x"] <= 30
-    assert call.arguments["z"] == 0
+    # Picks the legal 'close to melee' option for the enemy (overlap-checked upstream).
+    assert call.arguments["option_id"] == f"toward_melee:{goblin.entity_id}"
+    # That option steps toward the enemy, no further than the 30 ft movement budget.
+    opt = next(
+        m for m in obs["legal_actions"]["moves"] if m["option_id"] == call.arguments["option_id"]
+    )
+    assert 0 < opt["x"] <= 30
+    assert opt["z"] == 0
 
 
 def test_scripted_ends_turn_with_no_enemies(make_entity, make_combat):

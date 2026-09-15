@@ -69,28 +69,19 @@ def _pick_target(self_view: Dict[str, Any], candidates: List[Dict[str, Any]]) ->
     return min(candidates, key=lambda c: _dist(sp, c["position"]))
 
 
-def _move_toward(
-    self_view: Dict[str, Any], target_view: Dict[str, Any], budget_ft: float
-) -> Optional[ToolCall]:
-    """A ``move`` ToolCall stepping toward *target*, stopping just inside melee reach.
+def _move_option_toward(observation: Dict[str, Any], enemy_id: str) -> Optional[ToolCall]:
+    """A ``move`` ToolCall taking the legal ``toward_melee`` option for *enemy_id*, if any.
 
-    Stops at a standoff of ``self_half + target_half + 0.5`` ft between centres — close
-    enough to attack (edge gap 0.5 ft ≤ melee reach) without overlapping. Returns ``None``
-    when already at/inside that standoff or the step would be negligible.
+    The option comes from :func:`~src.arena.action_space.move_candidates`, so it is already
+    overlap-checked against every creature — closing to melee never lands on a third body
+    (unlike computing a raw standoff). Returns ``None`` when no such legal option exists
+    (e.g. already in reach, or fully boxed in).
     """
-    sp, tp = self_view["position"], target_view["position"]
-    dist = _dist(sp, tp)
-    if dist == 0:
-        return None
-    standoff = self_view["size_ft"] / 2 + target_view["size_ft"] / 2 + 0.5
-    travel = min(dist - standoff, budget_ft)
-    if travel < 1:
-        return None
-    ux, uy, uz = (tp["x"] - sp["x"]) / dist, (tp["y"] - sp["y"]) / dist, (tp["z"] - sp["z"]) / dist
-    return ToolCall(
-        TOOL_MOVE,
-        {"x": sp["x"] + ux * travel, "y": sp["y"] + uy * travel, "z": sp["z"] + uz * travel},
-    )
+    want = f"toward_melee:{enemy_id}"
+    for move in observation["legal_actions"].get("moves", []):
+        if move["option_id"] == want:
+            return ToolCall(TOOL_MOVE, {"option_id": want})
+    return None
 
 
 def _attacks_on_enemies(
@@ -149,12 +140,8 @@ class RandomAgent(Agent):
             candidates.append(
                 ToolCall(TOOL_CAST_SPELL, {"spell_name": sp["name"], "target_ids": [target["entity_id"]]})
             )
-        if la["movement_remaining_ft"] > 0 and observation["enemies"]:
-            move = _move_toward(
-                observation["self"], self._rng.choice(observation["enemies"]), la["movement_remaining_ft"]
-            )
-            if move is not None:
-                candidates.append(move)
+        for move in la.get("moves", []):
+            candidates.append(ToolCall(TOOL_MOVE, {"option_id": move["option_id"]}))
 
         return self._rng.choice(candidates)
 
@@ -187,7 +174,7 @@ class ScriptedAgent(Agent):
         budget = observation["legal_actions"]["movement_remaining_ft"]
         if budget >= 1 and enemies:
             nearest = min(enemies, key=lambda e: _dist(self_view["position"], e["position"]))
-            move = _move_toward(self_view, nearest, budget)
+            move = _move_option_toward(observation, nearest["entity_id"])
             if move is not None:
                 return move
 

@@ -52,6 +52,17 @@ def melee_attack(name: str = "Longsword") -> AttackAction:
     )
 
 
+def ranged_attack(name: str = "Longbow", *, range_ft: float = 80.0) -> AttackAction:
+    """A ranged weapon attack (range > melee), for kiting/positioning tests."""
+    return AttackAction(
+        name=name,
+        description="",
+        bonus_to_hit=5,
+        damage=[Damage(DamageType.PIERCING, formula="1d8")],
+        range_ft=range_ft,
+    )
+
+
 def single_target_spell(
     name: str = "Firebolt", *, spell_level: int = 0, distance_ft: int = 120
 ) -> SpellAction:

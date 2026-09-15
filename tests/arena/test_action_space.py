@@ -5,10 +5,10 @@ hand-built menu — so they prove the assembler agrees with what the engine woul
 actually allow.
 """
 
-from src.arena.action_space import legal_actions
+from src.arena.action_space import legal_actions, move_candidates
 from src.models.action_resources import ActionCost
 
-from .conftest import melee_attack, single_target_spell
+from .conftest import force_turn, melee_attack, ranged_attack, single_target_spell
 
 
 def test_melee_attack_lists_only_in_range_targets(make_entity, make_combat):
@@ -117,7 +117,96 @@ def test_to_dict_is_json_shaped(make_entity, make_combat):
         "movement_remaining_ft",
         "attacks",
         "spells",
+        "moves",
         "can_end_turn",
     }
     assert data["attacks"][0]["cost"] == ActionCost(actions=1).__dict__
     assert data["attacks"][0]["targets"][0]["entity_id"] == enemy.entity_id
+    assert data["attacks"][0]["targets"][0]["relation"] == "enemy"
+
+
+# -- move candidates ---------------------------------------------------------
+
+
+def test_move_candidates_are_all_legal(make_entity, make_combat):
+    """Every generated destination must be one the engine actually accepts."""
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[ranged_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(40, 0, 0))
+    combat = make_combat([fighter, goblin])
+    combat.start_combat()
+    force_turn(combat, fighter)
+
+    options = move_candidates(combat, fighter)
+    assert options  # a ranged attacker vs one enemy has toward/retreat/kite
+
+    budget = fighter.resources.movement
+    origin = (fighter.x, fighter.y, fighter.z)
+    for opt in options:
+        combat.move_entity(fighter, opt.x, opt.y, opt.z)  # must not raise
+        assert (fighter.x, fighter.y, fighter.z) == (opt.x, opt.y, opt.z)
+        fighter.x, fighter.y, fighter.z = origin  # reset for the next candidate
+        fighter.resources.movement = budget
+
+
+def test_toward_melee_backs_off_a_blocking_third_body(make_entity, make_combat):
+    """A standoff point that would land on a third creature is backed off to a clear one."""
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
+    blocker = make_entity("Bystander", team="b", pos=(30, 0, 0))  # sits in the path
+    combat = make_combat([fighter, goblin, blocker])
+    combat.start_combat()
+    force_turn(combat, fighter)
+
+    toward = next(
+        o for o in move_candidates(combat, fighter) if o.option_id == f"toward_melee:{goblin.entity_id}"
+    )
+    # Naive standoff (~54 ft) is unreachable in 30 ft anyway, but the 30 ft point overlaps the
+    # blocker at x=30; the option must be backed off to a clear point and be legal to execute.
+    assert combat.is_destination_clear(fighter, toward.x, toward.y, toward.z)
+    assert toward.x <= 25  # clear of the blocker's 27.5–32.5 ft footprint
+    combat.move_entity(fighter, toward.x, toward.y, toward.z)  # legal, does not raise
+
+
+def test_kite_option_only_for_ranged_attackers(make_entity, make_combat):
+    ranged = make_entity("Archer", team="a", pos=(0, 0, 0), attacks=[ranged_attack()])
+    melee = make_entity("Brute", team="a", pos=(0, 0, 10), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(40, 0, 0))
+    combat = make_combat([ranged, melee, goblin])
+
+    ranged_ids = {o.option_id for o in move_candidates(combat, ranged)}
+    melee_ids = {o.option_id for o in move_candidates(combat, melee)}
+
+    assert f"kite_range:{goblin.entity_id}" in ranged_ids
+    assert f"kite_range:{goblin.entity_id}" not in melee_ids
+
+
+def test_attacks_exclude_allies_but_spells_tag_every_relation(make_entity, make_combat, registry_with):
+    caster = make_entity(
+        "Cleric", team="a", pos=(0, 0, 0),
+        attacks=[melee_attack()], known_spells=["Firebolt"],
+    )
+    ally = make_entity("Ally", team="a", pos=(5, 0, 5))
+    enemy = make_entity("Goblin", team="b", pos=(5, 0, 0))
+    registry = registry_with(single_target_spell("Firebolt", distance_ft=120))
+    combat = make_combat([caster, ally, enemy], registry=registry)
+
+    legal = legal_actions(combat, caster)
+
+    # Weapon attack: enemies only, tagged enemy.
+    attack_targets = {t.entity_id: t.relation for t in legal.attacks[0].targets}
+    assert attack_targets == {enemy.entity_id: "enemy"}
+
+    # Spell: both friend and foe are offered, each tagged by relation.
+    spell_targets = {t.entity_id: t.relation for t in legal.spells[0].targets}
+    assert spell_targets == {ally.entity_id: "ally", enemy.entity_id: "enemy"}
+
+
+def test_move_candidates_are_deterministic(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[ranged_attack()])
+    g1 = make_entity("G1", team="b", pos=(40, 0, 0))
+    g2 = make_entity("G2", team="b", pos=(0, 0, 40))
+    combat = make_combat([fighter, g1, g2])
+
+    first = [o.option_id for o in move_candidates(combat, fighter)]
+    second = [o.option_id for o in move_candidates(combat, fighter)]
+    assert first == second

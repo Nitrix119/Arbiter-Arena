@@ -42,6 +42,20 @@ def test_observation_shape_and_viewpoint(make_entity, make_combat):
     assert obs["self"]["position"] == {"x": 0, "y": 0, "z": 0}
 
 
+def test_legal_actions_menu_includes_move_options_and_relations(make_entity, make_combat):
+    me = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    enemy = make_entity("Goblin", team="b", pos=(40, 0, 0))
+    combat = make_combat([me, enemy])
+
+    la = build_observation(combat, me)["legal_actions"]
+
+    assert "moves" in la
+    toward = next(m for m in la["moves"] if m["option_id"] == f"toward_melee:{enemy.entity_id}")
+    assert set(toward) == {"option_id", "label", "description", "x", "y", "z", "cost_ft"}
+    # Attack targets carry their relation to the actor.
+    assert la["attacks"][0]["targets"] == []  # enemy is out of melee range at 40 ft
+
+
 def test_full_information_shows_enemy_hp_and_ac(make_entity, make_combat):
     me, ally, enemy, combat = _setup(make_entity, make_combat)
 

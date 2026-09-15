@@ -17,6 +17,7 @@ The result is a **hint**, embedded in an agent's observation so it can see its o
 engine's ``resolve_*`` methods remain the authority that actually enforces legality.
 """
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
@@ -36,13 +37,20 @@ if TYPE_CHECKING:  # avoid importing the whole combat stack at module load
 
 @dataclass(frozen=True)
 class TargetOption:
-    """A single entity an action may be aimed at."""
+    """A single entity an action may be aimed at.
+
+    ``relation`` is the target's affiliation to the acting entity — ``"self"``,
+    ``"ally"``, or ``"enemy"`` — so an agent can tell friend from foe (a weapon
+    attack lists only enemies; a spell lists every reachable target, tagged, since
+    the same spell may heal an ally or harm a foe).
+    """
 
     entity_id: str
     name: str
+    relation: str
 
     def to_dict(self) -> dict:
-        return {"entity_id": self.entity_id, "name": self.name}
+        return {"entity_id": self.entity_id, "name": self.name, "relation": self.relation}
 
 
 @dataclass(frozen=True)
@@ -98,6 +106,37 @@ class SpellOption:
 
 
 @dataclass(frozen=True)
+class MoveOption:
+    """A named, legal destination the entity can move to this turn.
+
+    Every ``MoveOption`` is affordable (within the movement budget) and
+    overlap-clear (does not land on another creature) — *legal by construction*, so
+    an agent can pick one by ``option_id`` instead of solving the geometry itself.
+    Raw-coordinate movement stays available for bespoke positioning. ``x/y/z`` are
+    the destination in backend feet; ``cost_ft`` the movement it spends.
+    """
+
+    option_id: str
+    label: str
+    description: str
+    x: float
+    y: float
+    z: float
+    cost_ft: float
+
+    def to_dict(self) -> dict:
+        return {
+            "option_id": self.option_id,
+            "label": self.label,
+            "description": self.description,
+            "x": self.x,
+            "y": self.y,
+            "z": self.z,
+            "cost_ft": self.cost_ft,
+        }
+
+
+@dataclass(frozen=True)
 class LegalActions:
     """Everything *entity* may legally attempt on its turn, as a menu.
 
@@ -109,6 +148,7 @@ class LegalActions:
     movement_remaining_ft: float
     attacks: List[AttackOption] = field(default_factory=list)
     spells: List[SpellOption] = field(default_factory=list)
+    moves: List[MoveOption] = field(default_factory=list)
     can_end_turn: bool = True
 
     def to_dict(self) -> dict:
@@ -117,6 +157,7 @@ class LegalActions:
             "movement_remaining_ft": self.movement_remaining_ft,
             "attacks": [a.to_dict() for a in self.attacks],
             "spells": [s.to_dict() for s in self.spells],
+            "moves": [m.to_dict() for m in self.moves],
             "can_end_turn": self.can_end_turn,
         }
 
@@ -130,27 +171,42 @@ def _cost_to_dict(cost: ActionCost) -> dict:
     }
 
 
+def _relation(actor: Entity, other: Entity) -> str:
+    """Affiliation of *other* to *actor*: ``self``, ``ally``, or ``enemy``."""
+    if other is actor:
+        return "self"
+    return "ally" if other.team == actor.team else "enemy"
+
+
 def _attack_targets(
     combat: "CombatSystem", attacker: Entity, action: AttackAction
 ) -> List[TargetOption]:
-    """Alive entities (other than *attacker*) within the attack's range."""
+    """Enemies within the attack's range.
+
+    Weapon attacks list only foes — offering allies invites wasted, self-defeating
+    actions and muddies the benchmark signal. (The referee does not forbid a raw
+    ally attack; the menu simply does not suggest one.)
+    """
     reachable: List[TargetOption] = []
     for other in combat.get_alive_entities():
-        if other is attacker:
+        if other is attacker or other.team == attacker.team:
             continue
         try:
             check_attack_range(attacker, other, action)
         except ValueError:
             continue
-        reachable.append(TargetOption(other.entity_id, other.name))
+        reachable.append(TargetOption(other.entity_id, other.name, "enemy"))
     return reachable
 
 
 def _spell_targets(
     combat: "CombatSystem", caster: Entity, action: SpellAction
 ) -> List[TargetOption]:
-    """In-range entities for a single-target spell.
+    """In-range entities for a single-target spell, each tagged by relation.
 
+    Unlike an attack, a spell may aim at friend or foe (heal an ally, harm an
+    enemy), and the engine carries no generic beneficial/harmful flag — so every
+    reachable target is listed with its ``relation`` and the caster chooses.
     AoE / multi-target / special spells are aimed at a point or assigned per
     projectile, so no fixed target list is produced for them.
     """
@@ -164,7 +220,7 @@ def _spell_targets(
             check_single_target_range(caster, other, action)
         except ValueError:
             continue
-        reachable.append(TargetOption(other.entity_id, other.name))
+        reachable.append(TargetOption(other.entity_id, other.name, _relation(caster, other)))
     return reachable
 
 
@@ -190,6 +246,106 @@ def _castable_levels(caster: Entity, action: SpellAction) -> List[int]:
 def _owned_attacks(entity: Entity) -> List[Action]:
     """Attack/ability actions the entity carries directly (innate + granted)."""
     return list(entity.stat_block.actions) + list(entity.granted_actions)
+
+
+def _max_attack_range_ft(entity: Entity) -> float:
+    """Longest reach among the entity's affordable weapon/attack actions (0 if none)."""
+    ranges = [
+        a.range_ft
+        for a in _owned_attacks(entity)
+        if isinstance(a, AttackAction) and entity.can_afford(a.cost)
+    ]
+    return max(ranges) if ranges else 0.0
+
+
+def _clear_option_along(
+    combat: "CombatSystem",
+    entity: Entity,
+    unit: tuple,
+    desired_travel: float,
+    budget: float,
+    option_id: str,
+    label: str,
+    description: str,
+) -> Optional[MoveOption]:
+    """Build a legal :class:`MoveOption` a distance ``desired_travel`` along *unit*.
+
+    Clamps to the movement ``budget``, then steps back toward the origin in 1 ft
+    decrements until the destination is overlap-clear (the origin is always clear, so
+    this terminates). Returns ``None`` when no clear point of at least 1 ft exists —
+    the option is simply omitted rather than offered as an illegal move.
+    """
+    ux, uy, uz = unit
+    travel = min(max(desired_travel, 0.0), budget)
+    while travel >= 1.0:
+        nx = entity.x + ux * travel
+        ny = entity.y + uy * travel
+        nz = entity.z + uz * travel
+        if combat.is_destination_clear(entity, nx, ny, nz):
+            return MoveOption(option_id, label, description, nx, ny, nz, round(travel, 1))
+        travel -= 1.0
+    return None
+
+
+def move_candidates(combat: "CombatSystem", entity: Entity) -> List[MoveOption]:
+    """Named, legal move destinations for *entity* — its tactical positioning menu.
+
+    For each enemy (ordered by ``entity_id`` for deterministic replays): close to melee
+    standoff, retreat at full speed, and — for an entity with a ranged attack — a
+    ``kite_range`` point as far back as possible while staying within weapon range. Every
+    option is affordable and overlap-clear (see :func:`_clear_option_along`); an agent may
+    still move to a raw coordinate instead. Read-only.
+    """
+    budget = entity.resources.movement
+    if budget < 1:
+        return []
+
+    options: List[MoveOption] = []
+    max_range = _max_attack_range_ft(entity)
+    ox, oy, oz = entity.x, entity.y, entity.z
+    self_half = entity.stat_block.size.size_ft / 2.0
+
+    for enemy in sorted(combat.get_enemies(entity), key=lambda e: e.entity_id):
+        dx, dy, dz = enemy.x - ox, enemy.y - oy, enemy.z - oz
+        dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+        if dist == 0:
+            continue
+        toward = (dx / dist, dy / dist, dz / dist)
+        away = (-toward[0], -toward[1], -toward[2])
+        standoff = self_half + enemy.stat_block.size.size_ft / 2.0 + 0.5
+
+        melee = _clear_option_along(
+            combat, entity, toward, dist - standoff, budget,
+            f"toward_melee:{enemy.entity_id}",
+            f"Close to melee reach of {enemy.name}",
+            f"Move toward {enemy.name}, stopping just within melee reach.",
+        )
+        if melee is not None:
+            options.append(melee)
+
+        retreat = _clear_option_along(
+            combat, entity, away, budget, budget,
+            f"retreat:{enemy.entity_id}",
+            f"Retreat from {enemy.name}",
+            f"Move directly away from {enemy.name} at full speed.",
+        )
+        if retreat is not None:
+            options.append(retreat)
+
+        if max_range > 5:
+            travel = min(max_range, dist + budget) - dist  # extra distance to open up
+            if travel >= 1:
+                kite = _clear_option_along(
+                    combat, entity, away, travel, budget,
+                    f"kite_range:{enemy.entity_id}",
+                    f"Kite {enemy.name} to weapon range",
+                    f"Fall back from {enemy.name} as far as possible while staying "
+                    f"within your {max_range:g} ft attack range.",
+                )
+                if kite is not None:
+                    options.append(kite)
+
+    return options
 
 
 def legal_actions(combat: "CombatSystem", entity: Entity) -> LegalActions:
@@ -248,4 +404,5 @@ def legal_actions(combat: "CombatSystem", entity: Entity) -> LegalActions:
         movement_remaining_ft=result.movement_remaining_ft,
         attacks=attacks,
         spells=spells,
+        moves=move_candidates(combat, entity),
     )
