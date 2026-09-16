@@ -325,7 +325,10 @@ observation only when revealed (default on; hide it for the info-asymmetry exper
 
 ### Deferred (designed-for, not built now)
 - Information-hiding **experiments** + the **batch** match-runner and win-rate /
-  illegal-move / efficiency **scoring** (computed from transcripts, not re-runs — E2).
+  illegal-move / efficiency **scoring** (computed from transcripts, not re-runs — E2). The
+  metric catalogue to draw from is designed in [AGENT_ARENA_METRICS.md](AGENT_ARENA_METRICS.md)
+  (conformance / outcome / tactical / positioning / info-sensitivity / cost / oracle families);
+  the batch runner that aggregates them is the next build after the metrics are chosen.
 - **Battle replay — the priority way to watch (E5):** _(built — first prototype)._ The
   standalone `/playback` page (`web/templates/playback.html`, `web/static/js/playback*.js`)
   reuses the canvas renderer to play a recorded transcript back step-by-step (step
