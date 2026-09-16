@@ -72,12 +72,21 @@ decide(observation, weights) -> ToolCall:
     return first_step(best)                     # emit ONE tool call; re-plan next turn
 ```
 
-`score` is a **pure function of `(plan, observation, weights)`** — no RNG, no combat mutation.
-That purity is a hard requirement, for three reasons: the GA needs determinism to compare
-genomes; the regret metric (I1) replays it on recorded observations and must get the same number
-we got live; and cheapness is what makes both feasible. It lives in an importable module
-(`src/arena/heuristic/`, §11), *not* buried in the agent class, precisely so the metric can call
-it.
+`score` is a **pure function of `(plan, combat, entity, policy, weights)`** — no RNG, no combat
+mutation. That purity is a hard requirement, for three reasons: the GA needs determinism to
+compare genomes; the regret metric (I1) replays it and must get the same number we got live; and
+cheapness is what makes both feasible. It lives in an importable module (`src/arena/heuristic/`,
+§11), *not* buried in the agent class, precisely so the metric can call it.
+
+> **Implementation note (what actually feeds the scorer).** The policy-gated observation dict does
+> not carry the numbers the EV math needs — save bonuses, ability scores, speed/reach, damage
+> formulas, resistances. Since the heuristic is always **in-process**, it is bound to the live
+> `CombatSystem` and reads `Entity`/`StatBlock` objects directly (read-only), applying the
+> `InformationPolicy` *itself* when it consults enemy facts (§9) so a hidden-information match still
+> degrades correctly. The observation's `legal_actions` menu is still the *candidate substrate*
+> (already legal-by-construction). No engine change is needed — all reads use existing public
+> helpers. For the regret metric to replay this later, its scorer input is reconstructed from the
+> transcript's logged stat blocks + snapshots, not the thin observation.
 
 Because we re-plan every call, the loop naturally produces a multi-action turn: call 1 emits
 `move`; the engine applies it and hands back a new observation with movement spent; call 2 now
@@ -348,9 +357,11 @@ nothing.
 
 ## 9. Playing with less than full information
 
-The scorer runs off the **observation**, which is policy-gated for enemies
-([`_serialize_enemy`](../src/arena/observation.py)). It must degrade gracefully so it stays usable
-under any `InformationPolicy` (and so the regret metric can score hidden-info matches):
+The scorer reads live entity state but **applies the `InformationPolicy` itself** on enemy facts
+(mirroring what [`_serialize_enemy`](../src/arena/observation.py) would hide), so it degrades
+gracefully and stays usable under any policy (and so the regret metric can score hidden-info
+matches). In Phase A+B, `reveal_enemy_actions` gates enemy capabilities and doubles as the proxy
+for "do we know this enemy's defensive profile" (resistances have no dedicated policy flag):
 
 | Hidden field | Fallback |
 |---|---|
@@ -386,12 +397,16 @@ and the observation/policy layer.
 
 **Build (new, pure, importable):** a `src/arena/heuristic/` package —
 
-- `estimate.py` — the §4 primitives: `hit_chance`, `expected_formula`, `expected_attack_ev`,
-  `save_fail_prob`, `effective_hp`. Pure; drift-tested against sampled rolls.
-- `plan.py` — `enumerate_plans(observation)` (§3) and the AoE `placement_search` (§3.1).
-- `features.py` — the §5 feature extractors and `threat` (§7), each reading only observation data.
-- `score.py` — `score(plan, observation, weights)` and `HeuristicWeights` (the GA genome).
-- `agent.py` — `HeuristicAgent(Agent)`: the §2 loop, plus the §8 ledger on the team agent.
+- `estimate.py` — the §4 primitives: `hit_chance`, `expected_formula`, `expected_attack_damage`,
+  `attack_ev_vs_ac`, `save_fail_prob`, `spell_expected_damage`. Pure; drift-tested against sampled
+  rolls. *(Built, Phase A.)*
+- `plan.py` — `enumerate_plans(combat, entity, policy)` (§3); the AoE `placement_search` (§3.1) is
+  Phase C.
+- `features.py` — the §5 feature extractors and `threat` (§7). The positioning term is implemented
+  as a range-aware **engagement** gradient (saturates once the target is in your own reach), which
+  makes melee close and ranged hold distance without a role flag. *(Built, Phase B.)*
+- `score.py` — `score(plan, combat, entity, policy, weights)` and `HeuristicWeights` (the GA genome).
+- `agent.py` — `HeuristicAgent(Agent)`: the §2 loop; the §8 ledger is Phase C.
 
 The split matters because **the regret/oracle metrics (I1/I2) import `score` and `enumerate_plans`
 directly** to replay each logged decision through the same policy — the reason HEURISTIC_PLAN insists

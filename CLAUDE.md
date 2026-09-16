@@ -233,7 +233,10 @@ An agent should know where a new file belongs without guessing — read the tree
 content). Note `tests/` mirrors the engine; ignore `build/lib/` (stale untracked copy).
 `src/arena/` is the headless agent-vs-agent harness (LLM benchmarking) — a *driver* over
 the engine, not part of it; it depends on `src/combat`/`src/models`, never the reverse. See
-[docs/AGENT_ARENA_PLAN.md](docs/AGENT_ARENA_PLAN.md).
+[docs/AGENT_ARENA_PLAN.md](docs/AGENT_ARENA_PLAN.md). `src/arena/heuristic/` is the
+utility-scoring `HeuristicAgent` — the arena's strong, tunable yardstick opponent (a pure,
+read-only consumer of the engine; scores whole-turn plans by expected value). See
+[docs/HEURISTIC_DECISION_MODEL.md](docs/HEURISTIC_DECISION_MODEL.md).
 
 **Content invariants:**
 
