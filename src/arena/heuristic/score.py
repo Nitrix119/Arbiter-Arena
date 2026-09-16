@@ -10,7 +10,7 @@ already competent.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import Dict, Optional, TYPE_CHECKING
 
 from src.arena.information_policy import InformationPolicy
 from src.models.entity import Entity
@@ -32,6 +32,9 @@ class HeuristicWeights:
         exposure: weight on expected incoming damage at the plan's end position.
         engagement: weight on ending in position to strike a high-threat enemy (the
             range-aware gradient that makes melee units close and ranged units hold range).
+        friendly_fire: penalty on expected AoE damage to allies (fraction of their HP).
+        control: weight on the conditions a spell would impose (severity × threat × p_apply).
+        resource: penalty for spending a scarce spell slot (scaled by slot level).
         aggression: divides the exposure fear — higher is braver (holds ground/advances).
         end_turn_threshold: minimum score improvement over standing pat to bother acting.
     """
@@ -40,6 +43,9 @@ class HeuristicWeights:
     kill: float = 1.2
     exposure: float = 0.8
     engagement: float = 0.9
+    friendly_fire: float = 2.0
+    control: float = 1.0
+    resource: float = 0.5
     aggression: float = 1.0
     end_turn_threshold: float = 0.01
 
@@ -54,13 +60,32 @@ def score(
     *,
     policy: InformationPolicy,
     weights: HeuristicWeights,
+    committed: Optional[Dict[str, float]] = None,
 ) -> float:
-    """The utility of *plan* for *entity* — higher is better. Pure and deterministic."""
+    """The utility of *plan* for *entity* — higher is better. Pure and deterministic.
+
+    ``committed`` is the optional team damage-ledger (§8) passed through to
+    :func:`features.offense` so allies concentrate fire without overkilling.
+    """
     total = 0.0
 
-    if plan.action is not None:
-        progress, kill = features.offense(entity, plan.action, combat, policy=policy)
+    if plan.action is not None and plan.action.kind == "aoe":
+        progress, kill, friendly_fire = features.aoe_offense(
+            entity, plan.action, combat, policy=policy, committed=committed
+        )
         total += weights.damage * progress + weights.kill * kill
+        total -= weights.friendly_fire * friendly_fire
+        total -= weights.resource * features.resource_cost(entity, plan.action, combat)
+    elif plan.action is not None:
+        progress, kill = features.offense(
+            entity, plan.action, combat, policy=policy, committed=committed
+        )
+        total += weights.damage * progress + weights.kill * kill
+        if plan.action.kind == "spell":
+            total += weights.control * features.control(
+                entity, plan.action, combat, policy=policy
+            )
+            total -= weights.resource * features.resource_cost(entity, plan.action, combat)
 
     end_pos = plan.end_position(entity)
     exposure = features.exposure_fraction(entity, end_pos, combat, policy=policy)

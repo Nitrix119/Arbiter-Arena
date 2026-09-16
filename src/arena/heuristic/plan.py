@@ -24,9 +24,11 @@ from src.arena.tools import (
     TOOL_MOVE,
     ToolCall,
 )
-from src.models.action import AttackAction
+from src.models.action import AttackAction, SpellAction
 from src.models.entity import Entity
 from src.models.spell_properties import TargetingType
+from src.spatial.geometry import Point3D
+from src.spatial.range_check import derive_aoe_origin
 
 from . import estimate
 
@@ -36,16 +38,30 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class PlannedAction:
-    """The main action of a plan: an attack or single-target spell against one target."""
+    """The main action of a plan.
 
-    kind: str  # "attack" | "spell"
+    ``kind`` is ``"attack"`` or ``"spell"`` (single target, via ``target_id``) or
+    ``"aoe"`` (an area spell aimed at ``target_point``, catching ``aoe_targets`` — the
+    entity ids the volume covers, precomputed by the placement search so scoring and
+    resolution agree on who is hit).
+    """
+
+    kind: str
     name: str
-    target_id: str
+    target_id: str = ""
+    target_point: Optional[Tuple[float, float, float]] = None
+    aoe_targets: Tuple[str, ...] = ()
 
     def to_tool_call(self) -> ToolCall:
         if self.kind == "attack":
             return ToolCall(
                 TOOL_ATTACK, {"action_name": self.name, "defender_id": self.target_id}
+            )
+        if self.kind == "aoe" and self.target_point is not None:
+            px, py, pz = self.target_point
+            return ToolCall(
+                TOOL_CAST_SPELL,
+                {"spell_name": self.name, "target_point": {"x": px, "y": py, "z": pz}},
             )
         return ToolCall(
             TOOL_CAST_SPELL, {"spell_name": self.name, "target_ids": [self.target_id]}
@@ -128,6 +144,9 @@ def enumerate_plans(
         if tail is not None:
             plans.append(TurnPlan(None, act, tail))
 
+    for act in _aoe_plans(combat, entity, la):
+        plans.append(TurnPlan(None, act, None))
+
     for move in moves:
         enabled = _attack_after_move(combat, entity, move)
         if enabled is not None:
@@ -151,6 +170,48 @@ def _legal_main_actions(la: LegalActions) -> List[PlannedAction]:
         for target in spell.targets:
             if target.relation == "enemy":
                 out.append(PlannedAction("spell", spell.name, target.entity_id))
+    return out
+
+
+def _aoe_plans(
+    combat: "CombatSystem", entity: Entity, la: LegalActions
+) -> List[PlannedAction]:
+    """A best-placement AoE plan per castable area spell — the placement search (§3.1).
+
+    For each candidate aim point (each alive enemy's position) it asks the engine's own
+    ``derive_aoe_origin`` + ``get_targets_in_aoe`` who the volume would catch (so scoring
+    and resolution agree), and keeps the point catching the most enemies for the fewest
+    allies. Final utility (enemy damage vs friendly fire) is scored in ``features``.
+    """
+    out: List[PlannedAction] = []
+    for spell_opt in la.spells:
+        if spell_opt.targeting != TargetingType.AOE.value:
+            continue
+        spell = combat.get_spell_for_entity(entity, spell_opt.name)
+        if not isinstance(spell, SpellAction) or spell.aoe is None:
+            continue
+        best_point: Optional[Tuple[float, float, float]] = None
+        best_ids: Tuple[str, ...] = ()
+        best_net = 0
+        for enemy in combat.get_enemies(entity):
+            if not enemy.is_alive():
+                continue
+            aim = (enemy.x, enemy.y, enemy.z)
+            origin, direction = derive_aoe_origin(entity, spell, Point3D(*aim))
+            hit = combat.get_targets_in_aoe(origin, spell.aoe, direction)
+            foes = [e for e in hit if e.team != entity.team]
+            if not foes:
+                continue
+            allies = [e for e in hit if e.team == entity.team]
+            net = len(foes) - len(allies)  # a proxy to pick the point; features scores value
+            if best_point is None or net > best_net:
+                best_point = aim
+                best_ids = tuple(e.entity_id for e in hit)
+                best_net = net
+        if best_point is not None:
+            out.append(
+                PlannedAction("aoe", spell_opt.name, target_point=best_point, aoe_targets=best_ids)
+            )
     return out
 
 

@@ -220,6 +220,22 @@ def _to_damage_type(name: str) -> Optional[DamageType]:
         return None
 
 
+def _unwrap_iterators(program: list) -> list:
+    """Flatten a ``for_each_target`` iterator to its ``then`` body for per-target scanning.
+
+    An AoE spell wraps its save/damage in ``for_each_target``; the body runs once per
+    affected creature, so its per-target expected damage is the expected damage of that
+    body. Non-iterator blocks pass through unchanged.
+    """
+    flat: list = []
+    for block in program:
+        if block.get("block") == "for_each_target":
+            flat.extend(block.get("then", []))
+        else:
+            flat.append(block)
+    return flat
+
+
 def spell_expected_damage(
     spell: SpellAction,
     caster: Entity,
@@ -232,11 +248,13 @@ def spell_expected_damage(
     Scans the spell's block ``program`` for a leading gate (``attack_roll`` or
     ``saving_throw``) and its ``damage`` blocks, and applies the same to-hit / crit /
     save-halving rules the engine uses. It covers the common single-target damage shapes
-    (Fire Bolt: attack + hit-gated damage; Sacred Flame: save + no-damage-on-success).
-    Multi-block, conditional, iterator, and AoE spells fall back to a coarse sum of their
-    ``damage`` blocks — sharpened when Phase C adds richer spell handling.
+    (Fire Bolt: attack + hit-gated damage; Sacred Flame: save + no-damage-on-success) and,
+    by unwrapping a ``for_each_target`` iterator to its ``then`` body, the *per-target*
+    damage of an AoE spell (Fireball: save + half-on-success) — so an AoE placement search
+    can sum this over the creatures a volume catches. Conditional/multi-gate spells fall
+    back to a coarse sum of their ``damage`` blocks.
     """
-    program = spell.program or []
+    program = _unwrap_iterators(spell.program or [])
     p_hit: Optional[float] = None
     p_crit = 0.0
     p_fail: Optional[float] = None

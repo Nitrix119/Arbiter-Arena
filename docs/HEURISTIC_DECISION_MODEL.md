@@ -400,13 +400,20 @@ and the observation/policy layer.
 - `estimate.py` — the §4 primitives: `hit_chance`, `expected_formula`, `expected_attack_damage`,
   `attack_ev_vs_ac`, `save_fail_prob`, `spell_expected_damage`. Pure; drift-tested against sampled
   rolls. *(Built, Phase A.)*
-- `plan.py` — `enumerate_plans(combat, entity, policy)` (§3); the AoE `placement_search` (§3.1) is
-  Phase C.
-- `features.py` — the §5 feature extractors and `threat` (§7). The positioning term is implemented
-  as a range-aware **engagement** gradient (saturates once the target is in your own reach), which
-  makes melee close and ranged hold distance without a role flag. *(Built, Phase B.)*
-- `score.py` — `score(plan, combat, entity, policy, weights)` and `HeuristicWeights` (the GA genome).
-- `agent.py` — `HeuristicAgent(Agent)`: the §2 loop; the §8 ledger is Phase C.
+- `plan.py` — `enumerate_plans(combat, entity, policy)` (§3) and the AoE `_aoe_plans` placement
+  search (§3.1), which asks the engine's own `derive_aoe_origin` + `get_targets_in_aoe` who each
+  candidate aim point would catch. *(Built, Phases B–C.)*
+- `features.py` — the §5 feature extractors and `threat` (§7): the unified offensive core (with the
+  team damage-ledger threaded in), a range-aware **engagement** gradient (saturates once the target
+  is in your own reach — melee closes, ranged holds, no role flag), `aoe_offense` (with a
+  friendly-fire term), `control` (a `CONTROL_SEVERITY` table × threat × p_apply), and `resource_cost`
+  (slot-level economy). *(Built, Phases B–C.)*
+- `score.py` — `score(plan, combat, entity, policy, weights, committed)` and `HeuristicWeights` (the
+  GA genome: damage, kill, exposure, engagement, friendly_fire, control, resource, aggression,
+  end_turn_threshold).
+- `agent.py` — `HeuristicAgent(Agent)`: the §2 loop plus the §8 per-round team damage-ledger (reset
+  on round change; reserves committed damage so allies focus-fire without overkill). *(Built,
+  Phases B–C.)*
 
 The split matters because **the regret/oracle metrics (I1/I2) import `score` and `enumerate_plans`
 directly** to replay each logged decision through the same policy — the reason HEURISTIC_PLAN insists
@@ -426,14 +433,15 @@ substrate for *both* the yardstick opponent and the entire oracle metric family,
 
 Mirroring HEURISTIC_PLAN §7's "features before optimiser", but at the mechanism level:
 
-1. **`estimate.py` + a parity test** — the EV math must match the engine before anything trusts it.
-2. **`enumerate_plans` (no AoE) + the §5.1 offensive core + §6 exposure**, hand-weighted. This alone
-   fixes the four `ScriptedAgent` failures (stuck-move, no-kite, HP-not-threat targeting, no
-   kill-securing) and is a far better yardstick — benchmark it against `ScriptedAgent`/`RandomAgent`
-   before touching the GA.
-3. **AoE placement, control, resources, the §8 ledger** — layer in as the roster grows to need them.
+1. ✅ **`estimate.py` + a parity test** — the EV math must match the engine before anything trusts it.
+   *(Phase A.)*
+2. ✅ **`enumerate_plans` (no AoE) + the §5.1 offensive core + §6 exposure**, hand-weighted. This
+   alone fixes the four `ScriptedAgent` failures (stuck-move, no-kite, HP-not-threat targeting, no
+   kill-securing) and is a far better yardstick — benchmarked against `ScriptedAgent` (a fast kiter
+   wins 20/20). *(Phase B.)*
+3. ✅ **AoE placement, control, resources, the §8 ledger** — layered in. *(Phase C.)*
 4. **Expose `score`/`enumerate_plans` to the regret metric** (I1) — the payoff that makes the whole
-   scorer double as the benchmark's judge.
+   scorer double as the benchmark's judge. *(Next, alongside the GA — Phase D.)*
 
 Only then does the GA (HEURISTIC_PLAN §4) have a feature set worth optimising — because, as that doc
 rightly says, *the optimiser only weights what the features can express*, and this document is about

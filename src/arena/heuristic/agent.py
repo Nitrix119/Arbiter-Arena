@@ -41,8 +41,14 @@ class HeuristicAgent(Agent):
         self._combat = combat
         self._policy = policy
         self._weights = weights
+        # Team damage-ledger (§8): expected damage this team has already committed to each
+        # target this round, so its units concentrate fire without overkilling. Reset when
+        # the round advances (the agent persists across all its units' turns).
+        self._ledger: Dict[str, float] = {}
+        self._ledger_round = -1
 
     def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
+        self._roll_ledger(observation)
         entity = self._active_entity(observation)
         if entity is None:
             return ToolCall(TOOL_END_TURN, {})
@@ -59,17 +65,45 @@ class HeuristicAgent(Agent):
             return ToolCall(TOOL_END_TURN, {})
         if scored[_plan_sort_key(best)] - scored[_plan_sort_key(stay)] <= self._weights.end_turn_threshold:
             return ToolCall(TOOL_END_TURN, {})
+
+        self._record_commitment(entity, best)
         return best.first_step()
 
     def _score(self, entity: Entity, plan: TurnPlan) -> float:
         return score(
-            plan, self._combat, entity, policy=self._policy, weights=self._weights
+            plan, self._combat, entity, policy=self._policy,
+            weights=self._weights, committed=self._ledger,
         )
 
+    def _roll_ledger(self, observation: Dict[str, Any]) -> None:
+        """Clear the damage-ledger at the start of each new round."""
+        round_no = observation.get("round", 0)
+        if round_no != self._ledger_round:
+            self._ledger = {}
+            self._ledger_round = round_no
+
+    def _record_commitment(self, entity: Entity, plan: TurnPlan) -> None:
+        """Book a plan's expected damage against its target when the attack is emitted now.
+
+        Only when the committed step *is* the action (``first_step`` returns the attack, not
+        a preceding move), so a later ally sees the reserved damage and does not overkill.
+        """
+        if plan.pre_move is not None or plan.action is None:
+            return
+        if plan.action.kind not in ("attack", "spell"):
+            return  # AoE hits many; the single-target ledger doesn't model it (Phase C+)
+        target = self._lookup(plan.action.target_id)
+        if target is None:
+            return
+        dmg = plan.action.expected_damage(entity, target, self._combat, policy=self._policy)
+        self._ledger[plan.action.target_id] = self._ledger.get(plan.action.target_id, 0.0) + dmg
+
     def _active_entity(self, observation: Dict[str, Any]) -> Optional[Entity]:
-        self_id = observation.get("self", {}).get("entity_id")
+        return self._lookup(observation.get("self", {}).get("entity_id"))
+
+    def _lookup(self, entity_id: Optional[str]) -> Optional[Entity]:
         for e in self._combat.combatants:
-            if e.entity_id == self_id:
+            if e.entity_id == entity_id:
                 return e
         return None
 
