@@ -5,6 +5,10 @@
 > against (see [AGENT_ARENA_PLAN.md](AGENT_ARENA_PLAN.md), [AGENT_ARENA_DECISIONS.md](AGENT_ARENA_DECISIONS.md)).
 > This captures the plan and my reasoning; nothing here is built yet. Recorded at the user's
 > request as the end-of-session note for the heuristic work.
+>
+> **Companion:** this doc settles the *strategy* (scoring policy + GA); the precise *mechanism* —
+> what unit is scored, over what candidate set, with what EV math and factors — is worked out in
+> [HEURISTIC_DECISION_MODEL.md](HEURISTIC_DECISION_MODEL.md).
 
 ---
 
