@@ -263,6 +263,28 @@ leave a brief note here.
 - **Rule going forward:** the concrete, testable rule.
 ```
 
+### 2026-09-17 — A richer policy lost to a trivial one because a penalty had no counter-force
+- **Context:** Benchmarking the utility-scoring `HeuristicAgent` against the weak `ScriptedAgent`
+  yardstick. On the symmetric 2v2 melee scenario (`alpha_strike`) the heuristic won only ~35%,
+  *worse* than scripted-vs-scripted's ~50-55% side baseline — the sophisticated agent lost to the
+  dumb one.
+- **What went wrong:** the exposure penalty (expected incoming damage at a position) is a **sum over
+  every enemy that can reach you**, while the engagement reward that keeps a unit in the fight is a
+  **max over enemies**. In a multi-enemy melee the sum dwarfs the max, so *after a melee unit spent
+  its action attacking* — with no offense term left to anchor it — retreating (exposure→0) always
+  outscored holding, and units backpedalled out of their own melee every turn, bleeding tempo. A
+  low-HP self-preservation clause made it worse: cornered units fled a fight they couldn't escape.
+  None of the unit tests caught it because they scored single decisions in 1v1s, where one enemy's
+  exposure is small enough that engaging still wins.
+- **Rule going forward:** when a scoring term *penalises the very thing a unit must do to be useful*
+  (here, be in melee range), there must be a counter-force of comparable magnitude, or the action
+  must not be offered at all. The fix gates disengage plans: a healthy pure-melee unit is never
+  offered retreat/kite plans (it holds ground); only a ranged unit, or one hurt *and* able to
+  actually outrun its pursuers, may open range. **And benchmark every heuristic against the trivial
+  baseline on the scenario built to test it** — "beats Random" is not "beats a three-line if/elif."
+  A policy that loses to the scripted agent on the scenario meant to showcase it is the loudest
+  possible signal of a scoring bug.
+
 ### 2026-09-03 — A hand-written schema needs a machine-checked link to the code it describes
 - **Context:** Building the per-field block schema (`BlockContract.fields`) that lets the loader
   reject an unknown or malformed arg. The declarations are written by hand, next to each handler.

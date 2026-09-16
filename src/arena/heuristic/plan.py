@@ -35,6 +35,16 @@ from . import estimate
 if TYPE_CHECKING:
     from src.combat.combat_system import CombatSystem
 
+# An attack reaching beyond this is "ranged" — its owner can act from a distance and so
+# genuinely benefits from opening range.
+MELEE_RANGE_FT = 5.0
+
+# A healthy pure-melee unit does not flee: retreating from an equal-speed enemy only
+# forfeits its own offence (it must re-close next turn) while the enemy follows. Disengage
+# plans (retreat / kite tail) are therefore offered only to a unit that can act from range,
+# or one hurt below this HP fraction, where self-preservation outweighs its damage.
+RETREAT_HP_FRACTION = 0.35
+
 
 @dataclass(frozen=True)
 class PlannedAction:
@@ -136,13 +146,15 @@ def enumerate_plans(
     """
     la = legal_actions(combat, entity)
     moves = list(la.moves)
+    may_disengage = _may_disengage(combat, entity)
     plans: List[TurnPlan] = []
 
     for act in _legal_main_actions(la):
         plans.append(TurnPlan(None, act, None))
-        tail = _tail_for(moves, act.target_id)
-        if tail is not None:
-            plans.append(TurnPlan(None, act, tail))
+        if may_disengage:
+            tail = _tail_for(moves, act.target_id)
+            if tail is not None:
+                plans.append(TurnPlan(None, act, tail))
 
     for act in _aoe_plans(combat, entity, la):
         plans.append(TurnPlan(None, act, None))
@@ -153,9 +165,37 @@ def enumerate_plans(
             plans.append(TurnPlan(move, enabled, None))
 
     for move in moves:
+        if _is_disengage(move) and not may_disengage:
+            continue  # a healthy pure-melee unit holds its ground rather than backpedalling
         plans.append(TurnPlan(move, None, None))
 
     return plans
+
+
+def _is_disengage(move: MoveOption) -> bool:
+    """A move that opens distance from an enemy (retreat or kite), not an advance."""
+    return move.option_id.startswith(("retreat:", "kite_range:"))
+
+
+def _may_disengage(combat: "CombatSystem", entity: Entity) -> bool:
+    """Whether *entity* should even consider opening range.
+
+    A ranged unit always may (it can attack from the distance it opens). A pure-melee unit
+    may only when it is both hurt (below RETREAT_HP_FRACTION) *and* fast enough to actually
+    outrun its pursuers — fleeing an equal-speed enemy just forfeits a turn of damage while
+    the enemy follows, so in a straight brawl a melee unit holds its ground and fights.
+    """
+    if any(a.range_ft > MELEE_RANGE_FT for a in _owned_attacks(entity)):
+        return True
+    current_hp = entity.current_hp if entity.current_hp is not None else entity.max_hp
+    if current_hp / max(1, entity.max_hp) >= RETREAT_HP_FRACTION:
+        return False
+    my_speed = entity.stat_block.resource_defaults.get("speed", 30)
+    fastest_threat = max(
+        (e.stat_block.resource_defaults.get("speed", 30) for e in combat.get_enemies(entity)),
+        default=0,
+    )
+    return my_speed > fastest_threat
 
 
 def _legal_main_actions(la: LegalActions) -> List[PlannedAction]:

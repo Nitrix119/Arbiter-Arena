@@ -304,6 +304,15 @@ exposure += can_reach · EV(e → me at P)           # e's best-attack EV vs my 
 This same lookahead feeds *offense* on allies' behalf (heal-urgency spikes for an ally whose
 exposure implies a likely drop) and *self-preservation* (retreat when own exposure ≫ own offense).
 
+> **Disengage gate (learned the hard way — §9 2026-09-17).** Exposure is a *sum* over reachable
+> enemies while engagement is a *max*, so in a multi-enemy melee the penalty outgrows the anchor and
+> a melee unit — once it has spent its action and has no offense term left — scores retreat above
+> holding, backpedalling out of its own fight every turn. This made the heuristic *lose* the
+> symmetric-melee scenario to the trivial `ScriptedAgent`. The cure is not a weight tweak but a plan
+> gate: a **healthy pure-melee unit is never offered retreat/kite plans** (`plan._may_disengage`); it
+> holds ground. Only a ranged unit, or one hurt *and* fast enough to actually outrun its pursuers,
+> may open range — fleeing an equal-speed enemy just forfeits a turn while it follows.
+
 ---
 
 ## 7. Target valuation — what "threat" actually means
