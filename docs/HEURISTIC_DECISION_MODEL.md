@@ -440,8 +440,12 @@ Mirroring HEURISTIC_PLAN §7's "features before optimiser", but at the mechanism
    kill-securing) and is a far better yardstick — benchmarked against `ScriptedAgent` (a fast kiter
    wins 20/20). *(Phase B.)*
 3. ✅ **AoE placement, control, resources, the §8 ledger** — layered in. *(Phase C.)*
-4. **Expose `score`/`enumerate_plans` to the regret metric** (I1) — the payoff that makes the whole
-   scorer double as the benchmark's judge. *(Next, alongside the GA — Phase D.)*
+4. ✅ **Self-play GA over the weights** — `src/arena/heuristic/ga.py` evolves `HeuristicWeights`
+   against the scripted yardstick on the scenarios (fixed-opponent fitness, shared per-generation
+   seeds, parallel, fully logged; battles regenerate from weights + seed). *(Phase D — see
+   [HEURISTIC_PLAN.md](HEURISTIC_PLAN.md) §7.)*
+5. **Expose `score`/`enumerate_plans` to the regret metric** (I1) — the payoff that makes the whole
+   scorer double as the benchmark's judge. *(Next.)*
 
 Only then does the GA (HEURISTIC_PLAN §4) have a feature set worth optimising — because, as that doc
 rightly says, *the optimiser only weights what the features can express*, and this document is about
