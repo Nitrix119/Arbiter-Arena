@@ -35,12 +35,12 @@ from typing import cast, Dict, List, Optional, Tuple, TYPE_CHECKING
 from src.arena.agent import Agent, ScriptedAgent
 from src.arena.match import run_match
 from src.arena.scenarios import SCENARIOS
+from src.utils import dice
 
 from .agent import HeuristicAgent
 from .score import DEFAULT_WEIGHTS, HeuristicWeights
 
 if TYPE_CHECKING:
-    from src.combat.combat_system import CombatSystem
     from src.arena.match import MatchResult
     from src.arena.transcript import Transcript
 
@@ -106,17 +106,6 @@ def mutate(
 # ---------------------------------------------------------------------------
 
 
-def _assign_stable_ids(combat: "CombatSystem") -> None:
-    """Overwrite uuid entity ids with deterministic ones so battles are reproducible.
-
-    ``entity_id`` defaults to a ``uuid4`` (drawn from ``os.urandom``, not the seeded RNG),
-    which would make a match's tie-breaks differ run-to-run. Stable ids make ``(weights,
-    scenario, seed)`` fully determine the fight.
-    """
-    for index, entity in enumerate(combat.combatants):
-        entity.entity_id = f"{entity.team}#{index}"
-
-
 def _play(
     weights: HeuristicWeights,
     scenario_name: str,
@@ -125,8 +114,11 @@ def _play(
     transcript: Optional["Transcript"] = None,
 ) -> "MatchResult":
     scenario = SCENARIOS[scenario_name]
-    combat = scenario.build()
-    _assign_stable_ids(combat)
+    # Build entities under the seed so their ids are reproducible too (ids feed Entity
+    # hashing and tie-breaks). run_match then reseeds combat.rng for the roll stream, so
+    # ``(weights, scenario, seed)`` fully determines the fight — no id-stabilising patch.
+    with dice.using_rng(dice.new_rng(seed)):
+        combat = scenario.build()
     agents: Dict[Optional[str], Agent] = {
         scenario.llm_team: HeuristicAgent("candidate", scenario.llm_team, combat, weights=weights),
         scenario.heuristic_team: ScriptedAgent("yardstick", scenario.heuristic_team),

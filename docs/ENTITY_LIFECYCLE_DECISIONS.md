@@ -88,6 +88,13 @@ the first feature that makes the random-UUID choice actually bite.
 **Recommendation:** **(a)** — a small, contained change (a deterministic id factory for created
 entities) that preserves the replay guarantee, which is a stated core principle. Reject (c).
 
+**Resolved (2026-09-17): adopted (b).** `Entity.entity_id` now defaults to `dice.new_id()`, drawn
+from the active (context-scoped) RNG, so any entity built while a seed is bound — pre-placed **or**
+summoned mid-battle — gets a reproducible id. This subsumes (a) without a special summon-id scheme.
+Paired with the per-instance RNG (each `CombatSystem(seed=…)` owns its `random.Random`, bound via
+`dice.using_rng`), a whole non-LLM battle replays bit-for-bit and concurrent battles stay isolated.
+The arena's `_assign_stable_ids` workaround was removed in favour of building under the seed.
+
 **Your answer:**
 > Recommendation is perfect.
 

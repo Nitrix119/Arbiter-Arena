@@ -221,8 +221,17 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
 | Lint | `flake8 src/ web/` |
 | Type-check | `mypy src/` |
 
-- **RNG:** one shared `random.Random` in `src/utils/dice.py`; call `dice.seed_rng(seed)`
-  for reproducible battles. `dice.py` is the only module that touches `random`.
+- **RNG:** all randomness flows through a single **context-scoped** `random.Random` in
+  `src/utils/dice.py` (a `contextvars.ContextVar`), so each battle can own its own seed
+  without any roll call site changing. `dice.py` is the only module that touches `random`.
+  - `CombatSystem(seed=…)` gives a battle its **own** private, seeded RNG — reproducible and
+    isolated from every other battle in the process (concurrent web sessions included). No
+    seed → the battle **inherits the ambient** RNG, so `dice.seed_rng(n)` still seeds a whole
+    single-battle run process-wide (back-compat). The instance's methods bind their RNG
+    (`dice.using_rng`) so `combat.rng` is authoritative regardless of caller.
+  - Entity ids come from the seeded RNG too (`entity_id = dice.new_id()`), so a seeded run
+    reproduces ids (which feed `Entity` hashing/tie-breaks). Build entities *under* the seed
+    (`with dice.using_rng(dice.new_rng(seed)): …`) when you need id reproducibility.
 
 ---
 

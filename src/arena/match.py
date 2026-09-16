@@ -124,13 +124,33 @@ def run_match(
         transcript: Optional log to record the whole match into.
     """
     policies = policies or {}
-    if seed is not None:
-        dice.seed_rng(seed)
-        _reroll_initiative(combat)  # so the seed governs turn order, not just resolution
-
-    executor = ToolExecutor(combat)
     if transcript is not None:
         transcript.seed = seed
+    if seed is not None:
+        # Seed this battle's *own* RNG (not a process global), so concurrent matches
+        # stay isolated and reproducible. Reseeding here — not at combat construction —
+        # keeps entity ids (already assigned at build) independent of the roll stream.
+        combat.rng.seed(seed)
+        # Reproducible agent choices, on a stream separate from the dice RNG.
+        for index, agent in enumerate(agents.values()):
+            agent.reseed(seed * 7919 + index)
+
+    with dice.using_rng(combat.rng):
+        if seed is not None:
+            _reroll_initiative(combat)  # so the seed governs turn order, not just resolution
+        return _run_seeded(combat, agents, policies, round_cap, transcript)
+
+
+def _run_seeded(
+    combat: "CombatSystem",
+    agents: Dict[Optional[str], Agent],
+    policies: Dict[Optional[str], InformationPolicy],
+    round_cap: int,
+    transcript: Optional[Transcript],
+) -> MatchResult:
+    """Drive the match to completion under the caller-bound RNG context."""
+    executor = ToolExecutor(combat)
+    if transcript is not None:
         transcript.match_start(
             _teams(combat),
             combatants=[serialize_stat_block(e) for e in combat.combatants],

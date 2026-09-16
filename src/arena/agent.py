@@ -45,6 +45,14 @@ class Agent(ABC):
         """Store a capped scratchpad note to carry to the agent's next turn."""
         self.notes = (text or "")[: self.MAX_NOTES_CHARS]
 
+    def reseed(self, seed: int) -> None:
+        """Reseed any private randomness this agent uses (default: no-op).
+
+        Called by the match runner so one match seed governs a stochastic agent's
+        choices too — kept on a stream *separate* from the dice RNG so changing dice
+        draws does not reshuffle agent decisions. Deterministic agents ignore it.
+        """
+
     @abstractmethod
     def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
         """Return one action to attempt, given the current observation."""
@@ -126,6 +134,10 @@ class RandomAgent(Agent):
     def __init__(self, name: str, team: Optional[str] = None, rng: Optional[random.Random] = None):
         super().__init__(name, team)
         self._rng = rng or random.Random()
+
+    def reseed(self, seed: int) -> None:
+        """Reseed this agent's private choice RNG for a reproducible match."""
+        self._rng.seed(seed)
 
     def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
         la = observation["legal_actions"]
