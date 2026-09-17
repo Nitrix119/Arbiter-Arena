@@ -1,7 +1,7 @@
 # D&D Auto-Battler — Codebase Review
 
 _Last updated: 2026-08-08. A critical-but-fair health review to orient contributors
-(human or agent) and to anchor the repair roadmap. Read alongside [CLAUDE.md](../CLAUDE.md)._
+(human or agent) and to anchor the repair roadmap. Read alongside [CLAUDE.md](../../CLAUDE.md)._
 
 ## Bottom line up front
 
@@ -23,7 +23,7 @@ _Last updated: 2026-08-08. A critical-but-fair health review to orient contribut
 |---|---|
 | Language | Python 3.9+ engine; JS only in `web/static/js/` (rendering/input client) |
 | Entry (web) | `uvicorn web.app:app` → `http://localhost:8000` (`serve.bat` on Windows) |
-| Entry (lib) | `Entity(StatBlockLoader.load_from_json(...))` + `CombatSystem` (see [README.md](../README.md), `examples/example_combat.py`) |
+| Entry (lib) | `Entity(StatBlockLoader.load_from_json(...))` + `CombatSystem` (see [README.md](../../README.md), `examples/example_combat.py`) |
 | Packaging | `pyproject.toml` — zero core deps; `fastapi/uvicorn/jinja2` under `[web]`; `pytest/black/flake8/mypy` under `[dev]` |
 | Tests | Large, real pytest suite (535 tests as of this review) — a genuine strength |
 | Ignore | `build/lib/…` is a **stale, untracked** duplicate tree; read engine logic only from `src/` |

@@ -7,7 +7,7 @@
 
 Free OpenRouter models cost ~nothing; paid models/opponents bill the respective key. Needs
 the `openai` SDK and an OpenRouter key in secrets/openrouter.key (or $OPENROUTER_API_KEY) —
-see docs/AGENT_ARENA_LLM_SETUP.md. Cross-provider (`--opponent claude`) also needs a Claude key.
+see docs/current/AGENT_ARENA_LLM_SETUP.md. Cross-provider (`--opponent claude`) also needs a Claude key.
 """
 
 import argparse

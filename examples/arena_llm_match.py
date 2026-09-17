@@ -3,7 +3,7 @@
     python -m examples.arena_llm_match                # LLM (team A) vs scripted (team B)
     python -m examples.arena_llm_match --llm-vs-llm   # both sides LLM (~2x the tokens)
 
-Needs the anthropic SDK and credentials — see docs/AGENT_ARENA_LLM_SETUP.md. A single
+Needs the anthropic SDK and credentials — see docs/current/AGENT_ARENA_LLM_SETUP.md. A single
 match is small, but start with one and watch the bill. The offline, free demo is
 `examples.arena_match` (scripted vs scripted).
 """

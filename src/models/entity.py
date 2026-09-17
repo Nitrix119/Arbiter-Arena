@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass, field
 from typing import Optional, List
-import uuid
 
+from src.utils import dice
 from .action_resources import ActionCost, ActionResources
 from .action import Action
 from .stat_block import StatBlock
@@ -25,7 +25,9 @@ class Entity:
     """
 
     stat_block: StatBlock
-    entity_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    # Drawn from the active (optionally seeded) RNG so a seeded battle produces
+    # the same ids every run — ids feed __hash__/__eq__ and tie-breaks.
+    entity_id: str = field(default_factory=dice.new_id)
     initiative_roll: Optional[int] = None
     is_player_controlled: bool = False
     current_hp: Optional[int] = None  # None → set to max in __post_init__

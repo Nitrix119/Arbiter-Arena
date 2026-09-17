@@ -1,11 +1,11 @@
 # The Heuristic's Decision Procedure — How It Actually Chooses
 
-> **Purpose.** [HEURISTIC_PLAN.md](HEURISTIC_PLAN.md) settles the *strategy* — a utility-scoring
+> **Purpose.** [HEURISTIC_PLAN.md](../archive/HEURISTIC_PLAN.md) settles the *strategy* — a utility-scoring
 > agent, a weight genome, a self-play GA. This document settles the **mechanism**: given one
 > entity on its turn, *precisely* how does the agent turn the observation into a chosen action?
 > What is the thing we score, over what candidate set, using what numbers, weighing which
 > factors? It is the design I would build against — grounded in the real
-> [`action_space`](../src/arena/action_space.py) / [`observation`](../src/arena/observation.py)
+> [`action_space`](../../src/arena/action_space.py) / [`observation`](../../src/arena/observation.py)
 > data and the engine's real to-hit/damage/save math — and the reusable scorer the oracle/regret
 > metrics ([AGENT_ARENA_METRICS.md](AGENT_ARENA_METRICS.md) family I) will call. Nothing here is
 > built yet.
@@ -106,7 +106,7 @@ Plan = [ pre_move? , main_action? , bonus_action? , post_move? ]
 ```
 
 - **`pre_move`** — one of the named destinations from
-  [`move_candidates`](../src/arena/action_space.py) (`toward_melee:<e>`, `retreat:<e>`,
+  [`move_candidates`](../../src/arena/action_space.py) (`toward_melee:<e>`, `retreat:<e>`,
   `kite_range:<e>`), plus **stay**. These are already *legal by construction* (overlap-checked
   via `CombatSystem.is_destination_clear`, clamped to the movement budget), so we inherit the
   fix for the "stuck moving onto an occupied cell" bug for free. For AoE we add **placement
@@ -127,7 +127,7 @@ tens, not thousands — trivially scoreable.
 Two practical rules:
 
 1. **Range is re-checked at the plan's positions**, using the same
-   [`range_check`](../src/spatial/range_check.py) helpers the engine uses (edge-to-edge for
+   [`range_check`](../../src/spatial/range_check.py) helpers the engine uses (edge-to-edge for
    attacks, nearest-point for spells) — so a plan that says "close to melee then swing" only
    offers the swing if the swing is actually in reach after the move.
 2. **Every plan is legal by construction on the *legality* the menu already guarantees**
@@ -140,7 +140,7 @@ Two practical rules:
 `[]` for non-single-target spells by design. So an AoE plan needs a small **placement search** —
 exactly the kind of helper the brief invites ("computing a position that hits the maximum number
 of targets"). It works only from data the agent may know (enemy positions, the spell's shape/size
-from `AOEProperties`, the geometry in [`derive_aoe_origin`](../src/spatial/range_check.py)):
+from `AOEProperties`, the geometry in [`derive_aoe_origin`](../../src/spatial/range_check.py)):
 
 - **Candidate origins:** each enemy's position, and the centroid of every enemy *cluster* (pairs
   or triples within the AoE's footprint). For CONE/LINE, candidate *directions* toward each enemy
@@ -161,7 +161,7 @@ Every feature reduces to a few expected-value estimates. These must **mirror the
 resolution** (the same parity discipline the metrics doc demands for C2), so the scorer's ranking
 matches what really happens. From the code:
 
-**Hit chance** ([`rolls.attack_roll`](../src/spells/blocks/rolls.py)): a d20, `hit = total >= AC`,
+**Hit chance** ([`rolls.attack_roll`](../../src/spells/blocks/rolls.py)): a d20, `hit = total >= AC`,
 with **nat-20 always hits** and **nat-1 always misses**. For attack bonus `B` vs armour class
 `AC`, on a straight roll:
 
@@ -185,7 +185,7 @@ Crucially, the engine **doubles dice (not flat mods) on a crit** (`damage.py` �
 E[dmg] = p_normal·(E_dice + flat) + p_crit·(2·E_dice + flat)
 ```
 
-**Save spells** ([`rolls.saving_throw`](../src/spells/blocks/rolls.py) + `damage` block's
+**Save spells** ([`rolls.saving_throw`](../../src/spells/blocks/rolls.py) + `damage` block's
 `save_result`): no crit on saves. `p_fail = P(d20 + save_bonus < DC)` against the caster's
 `spell_save_dc`; `E[dmg] = p_fail·full + p_save·(full//2 or 0)` per the spell's `on_success`.
 
@@ -304,6 +304,15 @@ exposure += can_reach · EV(e → me at P)           # e's best-attack EV vs my 
 This same lookahead feeds *offense* on allies' behalf (heal-urgency spikes for an ally whose
 exposure implies a likely drop) and *self-preservation* (retreat when own exposure ≫ own offense).
 
+> **Disengage gate (learned the hard way — §9 2026-09-17).** Exposure is a *sum* over reachable
+> enemies while engagement is a *max*, so in a multi-enemy melee the penalty outgrows the anchor and
+> a melee unit — once it has spent its action and has no offense term left — scores retreat above
+> holding, backpedalling out of its own fight every turn. This made the heuristic *lose* the
+> symmetric-melee scenario to the trivial `ScriptedAgent`. The cure is not a weight tweak but a plan
+> gate: a **healthy pure-melee unit is never offered retreat/kite plans** (`plan._may_disengage`); it
+> holds ground. Only a ranged unit, or one hurt *and* fast enough to actually outrun its pursuers,
+> may open range — fleeing an equal-speed enemy just forfeits a turn while it follows.
+
 ---
 
 ## 7. Target valuation — what "threat" actually means
@@ -358,7 +367,7 @@ nothing.
 ## 9. Playing with less than full information
 
 The scorer reads live entity state but **applies the `InformationPolicy` itself** on enemy facts
-(mirroring what [`_serialize_enemy`](../src/arena/observation.py) would hide), so it degrades
+(mirroring what [`_serialize_enemy`](../../src/arena/observation.py) would hide), so it degrades
 gracefully and stays usable under any policy (and so the regret metric can score hidden-info
 matches). In Phase A+B, `reveal_enemy_actions` gates enemy capabilities and doubles as the proxy
 for "do we know this enemy's defensive profile" (resistances have no dedicated policy flag):
@@ -440,8 +449,12 @@ Mirroring HEURISTIC_PLAN §7's "features before optimiser", but at the mechanism
    kill-securing) and is a far better yardstick — benchmarked against `ScriptedAgent` (a fast kiter
    wins 20/20). *(Phase B.)*
 3. ✅ **AoE placement, control, resources, the §8 ledger** — layered in. *(Phase C.)*
-4. **Expose `score`/`enumerate_plans` to the regret metric** (I1) — the payoff that makes the whole
-   scorer double as the benchmark's judge. *(Next, alongside the GA — Phase D.)*
+4. ✅ **Self-play GA over the weights** — `src/arena/heuristic/ga.py` evolves `HeuristicWeights`
+   against the scripted yardstick on the scenarios (fixed-opponent fitness, shared per-generation
+   seeds, parallel, fully logged; battles regenerate from weights + seed). *(Phase D — see
+   [HEURISTIC_PLAN.md](../archive/HEURISTIC_PLAN.md) §7.)*
+5. **Expose `score`/`enumerate_plans` to the regret metric** (I1) — the payoff that makes the whole
+   scorer double as the benchmark's judge. *(Next.)*
 
 Only then does the GA (HEURISTIC_PLAN §4) have a feature set worth optimising — because, as that doc
 rightly says, *the optimiser only weights what the features can express*, and this document is about

@@ -2,12 +2,14 @@
 
 import json
 import logging
+import random
 import time
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
+from src.utils import dice
 from src.combat.combat_system import CombatSystem
 from src.combat.event_data import HealingAppliedData
 from src.combat.events import EventType
@@ -219,50 +221,63 @@ async def handle_start_combat(
     if len(combatants_data) < 2:
         raise ValueError("Need at least 2 combatants to start combat")
 
-    for entry in combatants_data:
-        creature_path = (_CREATURES_DIR / entry["creature_path"]).resolve()
-        if not str(creature_path).startswith(str(_CREATURES_DIR.resolve())):
-            raise ValueError(f"Invalid creature path: {entry['creature_path']}")
-        if not creature_path.exists():
-            raise ValueError(f"Creature not found: {entry['creature_path']}")
+    # Seed this session's own RNG so the whole battle (ids, initiative, resolution) is
+    # reproducible and isolated from other sessions. Honour a client-supplied seed for
+    # replay; otherwise pick one and report it back so the battle can be reproduced.
+    seed = msg.get("seed")
+    if seed is None:
+        seed = random.randrange(2**31)
+    seed = int(seed)
+    combat.rng.seed(seed)
 
-        with creature_path.open() as f:
-            creature_data = json.load(f)
+    # Build entities and start combat under this session's RNG so entity ids (which feed
+    # hashing and tie-breaks) are seeded too, not drawn from ambient entropy.
+    with dice.using_rng(combat.rng):
+        for entry in combatants_data:
+            creature_path = (_CREATURES_DIR / entry["creature_path"]).resolve()
+            if not str(creature_path).startswith(str(_CREATURES_DIR.resolve())):
+                raise ValueError(f"Invalid creature path: {entry['creature_path']}")
+            if not creature_path.exists():
+                raise ValueError(f"Creature not found: {entry['creature_path']}")
 
-        stat_block = StatBlockLoader.from_dict(creature_data)
-        entity = Entity(stat_block=stat_block, team=entry.get("team"))
+            with creature_path.open() as f:
+                creature_data = json.load(f)
 
-        # Set position from frontend cell coords
-        pos = entry.get("position", {"x": 0, "y": 0})
-        bx, by, bz = frontend_to_backend(pos["x"], pos["y"])
-        entity.x, entity.y, entity.z = bx, by, bz
+            stat_block = StatBlockLoader.from_dict(creature_data)
+            entity = Entity(stat_block=stat_block, team=entry.get("team"))
 
-        # Map frontend ID to backend entity ID
-        frontend_id = entry.get("frontend_id", "")
-        id_map[frontend_id] = entity.entity_id
-        entity_lookup[entity.entity_id] = entity
+            # Set position from frontend cell coords
+            pos = entry.get("position", {"x": 0, "y": 0})
+            bx, by, bz = frontend_to_backend(pos["x"], pos["y"])
+            entity.x, entity.y, entity.z = bx, by, bz
 
-        combat.add_combatant(entity)
+            # Map frontend ID to backend entity ID
+            frontend_id = entry.get("frontend_id", "")
+            id_map[frontend_id] = entity.entity_id
+            entity_lookup[entity.entity_id] = entity
 
-    # Attach global spell registry
-    combat.spell_registry = ws.app.state.spell_registry
+            combat.add_combatant(entity)
 
-    # Install the global rules on this session's bus. Every rule is a block program,
-    # so loading it *is* installing it on the block engine — the one resolution path.
-    load_rules_from_directory(
-        str(_GLOBAL_RULES_DIR),
-        event_bus=combat.event_bus,
-        damage_processor=combat._damage_processor,
-    )
-    # The condition-rule catalogue, read by the `apply_condition` block to find a
-    # condition's reactive mechanics by name.
-    combat.condition_rules = ws.app.state.effect_registry
+        # Attach global spell registry
+        combat.spell_registry = ws.app.state.spell_registry
 
-    combat.start_combat()
+        # Install the global rules on this session's bus. Every rule is a block program,
+        # so loading it *is* installing it on the block engine — the one resolution path.
+        load_rules_from_directory(
+            str(_GLOBAL_RULES_DIR),
+            event_bus=combat.event_bus,
+            damage_processor=combat._damage_processor,
+        )
+        # The condition-rule catalogue, read by the `apply_condition` block to find a
+        # condition's reactive mechanics by name.
+        combat.condition_rules = ws.app.state.effect_registry
+
+        combat.start_combat()
 
     await _send(ws, {
         "type": "combat_started",
         "seq": seq,
+        "seed": seed,
         "id_map": id_map,
         "initiative_order": serialize_initiative_order(combat),
         "combat_state": serialize_combat_state(combat),
@@ -549,7 +564,10 @@ _HANDLERS = {
 @router.websocket("/ws/combat")
 async def combat_websocket(websocket: WebSocket) -> None:
     await websocket.accept()
-    combat = CombatSystem()
+    # Give the session a private RNG (a placeholder seed; handle_start_combat reseeds it
+    # from the client's seed or a fresh one). A private RNG keeps this session isolated
+    # from every other — reseeding it can never disturb another connection's rolls.
+    combat = CombatSystem(seed=random.randrange(2**31))
 
     id_map: dict[str, str] = {}            # frontend_id → entity_id
     entity_lookup: dict[str, Entity] = {}  # entity_id → Entity

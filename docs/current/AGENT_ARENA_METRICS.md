@@ -4,7 +4,7 @@
 > agent (LLM or scripted policy) plays 5e combat in the arena. This is a **design
 > document to scrutinise and trim**, not a build spec — right now more candidate metrics
 > are better; we will cut and sharpen later. Read alongside
-> [AGENT_ARENA_PLAN.md](AGENT_ARENA_PLAN.md) (the harness), [HEURISTIC_PLAN.md](HEURISTIC_PLAN.md)
+> [AGENT_ARENA_PLAN.md](AGENT_ARENA_PLAN.md) (the harness), [HEURISTIC_PLAN.md](../archive/HEURISTIC_PLAN.md)
 > (the yardstick opponent), and the 2026-09-15 diagnostic findings that motivate several of
 > these. The **batch runner that would aggregate these across many matches is deliberately
 > out of scope here** — this doc defines *what we measure*; a later doc defines *how we run
@@ -499,7 +499,7 @@ each choice."*
 
 Several metrics above are only meaningful in a scenario built to elicit the skill. Rather than bake
 in fixed maps, each is defined against an **abstract scenario shape**; the concrete rosters live in
-[scenarios.py](../src/arena/scenarios.py) and grow over time.
+[scenarios.py](../../src/arena/scenarios.py) and grow over time.
 
 | Metric | Skill under test | Abstract scenario shape |
 |---|---|---|
@@ -521,7 +521,7 @@ side — the pattern already used in `kiting`/`protect_squishy`.
 
 ## 12. Transcript fields each metric reads
 
-The current JSONL transcript (see [transcript.py](../src/arena/transcript.py)) already carries almost
+The current JSONL transcript (see [transcript.py](../../src/arena/transcript.py)) already carries almost
 everything. Record kinds and the fields the catalogue depends on:
 
 - **`match_start`** — `seed`, `teams`, `combatants[]` with full stat blocks (`max_hp`, `ac`,

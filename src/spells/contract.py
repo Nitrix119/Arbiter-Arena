@@ -3,7 +3,7 @@
 Every block type registers a :class:`BlockContract` alongside its handler. The
 contract is the single source of truth used by (a) the validator, to reject a bad
 program at load, (b) the evaluator, to know each block's shape, and (c) the
-generated ``docs/BLOCK_REFERENCE.md``.
+generated ``docs/current/BLOCK_REFERENCE.md``.
 
 The :class:`Field` declarations are the per-arg half: they name every arg a block
 accepts, its kind and domain, and whether it is required. Anything not declared is

@@ -8,7 +8,7 @@ The per-event field schema (``EVENT_DATA_CLASSES`` / ``event_fields``) is what a
 author's ``event.<field>`` references are checked against. Its load-time check for the
 retired ``triggers``/``effects`` shape is gone with that shape; the schema itself
 stays, and is the primitive the block-level version of that check (E6, still open for
-nested attributes) will build on. See docs/SPELL_SYSTEM_DESIGN.md §6.9.
+nested attributes) will build on. See docs/archive/SPELL_SYSTEM_DESIGN.md §6.9.
 """
 
 import glob

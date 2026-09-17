@@ -1,28 +1,92 @@
 """Dice rolling utilities.
 
-All randomness in the combat engine flows through the single module-level
-``_rng`` (a :class:`random.Random`).  Call :func:`seed_rng` to make an entire
-battle reproducible — for deterministic tests, replays, or debugging a
-specific sequence — without monkeypatching. Nothing else in ``src`` calls
-``random`` directly, so seeding here seeds the whole engine.
+All randomness in the combat engine flows through a single, context-scoped
+RNG (a :class:`random.Random`).  ``dice.py`` is the only module that touches
+``random``, so binding a seed here seeds the whole engine.
+
+The active RNG lives in a :class:`~contextvars.ContextVar`, so each battle can
+run under its own seeded RNG without the roll call sites (``roll_d20`` &c.)
+changing.  Two isolation styles compose:
+
+- :func:`seed_rng` reseeds the *currently bound* RNG in place — the simplest,
+  process-wide "make this reproducible" switch (and what tests use).
+- :func:`using_rng` binds a *fresh* RNG for the duration of a ``with`` block, so
+  a :class:`~src.combat.combat_system.CombatSystem` given its own seed is fully
+  isolated from every other battle in the process.  Because each asyncio task
+  copies the context, concurrent WebSocket sessions are isolated automatically.
 """
 
 import re
 import random
-from typing import List, Optional, Tuple
+import contextvars
+from contextlib import contextmanager
+from typing import Iterator, List, Optional, Tuple
 
-# Single shared RNG for the whole engine. Seed via seed_rng() for determinism.
-_rng = random.Random()
+# The engine's active RNG. A per-context default keeps today's non-deterministic
+# behaviour when nothing binds a seed. Bind a private RNG via using_rng().
+_current: contextvars.ContextVar[random.Random] = contextvars.ContextVar(
+    "dice_rng", default=random.Random()
+)
+
+
+def _rng() -> random.Random:
+    """Return the RNG bound in the current context."""
+    return _current.get()
+
+
+def current_rng() -> random.Random:
+    """Return the RNG currently bound in this context.
+
+    Useful for a battle that wants to *inherit* the ambient RNG (rather than
+    allocate a private seeded one) so existing seed-the-global callers keep
+    working unchanged.
+    """
+    return _current.get()
+
+
+def new_rng(seed: Optional[int] = None) -> random.Random:
+    """Construct a fresh, independent RNG.
+
+    Args:
+        seed: Integer seed for a reproducible stream, or ``None`` for system
+            entropy. The returned RNG is not bound anywhere — pass it to
+            :func:`using_rng` (or hold it on a battle) to make it active.
+    """
+    return random.Random(seed)
+
+
+@contextmanager
+def using_rng(rng: random.Random) -> Iterator[random.Random]:
+    """Bind *rng* as the active RNG for the duration of the ``with`` block.
+
+    Restores the previously bound RNG on exit, so nested/sequential binds do not
+    leak.  Re-binding the same RNG is harmless (idempotent).
+    """
+    token = _current.set(rng)
+    try:
+        yield rng
+    finally:
+        _current.reset(token)
 
 
 def seed_rng(seed: Optional[int] = None) -> None:
-    """Seed the shared dice RNG.
+    """Seed the currently bound RNG in place.
 
     Args:
         seed: Integer seed for a reproducible roll sequence, or ``None`` to
             reseed from system entropy (the default non-deterministic mode).
     """
-    _rng.seed(seed)
+    _current.get().seed(seed)
+
+
+def new_id() -> str:
+    """Return a fresh entity id drawn from the active RNG.
+
+    Seeded so that a battle run under a bound seed produces the same ids every
+    time (ids feed :class:`~src.models.entity.Entity` hashing and tie-breaks).
+    64 random bits keep collisions astronomically unlikely.
+    """
+    return f"{_rng().getrandbits(64):016x}"
 
 
 def roll_d20() -> int:
@@ -31,7 +95,7 @@ def roll_d20() -> int:
     Returns:
         Random value from 1-20
     """
-    return _rng.randint(1, 20)
+    return _rng().randint(1, 20)
 
 
 def roll_dice(num_dice: int, num_sides: int) -> int:
@@ -44,7 +108,7 @@ def roll_dice(num_dice: int, num_sides: int) -> int:
     Returns:
         Sum of all dice rolled
     """
-    return sum(_rng.randint(1, num_sides) for _ in range(num_dice))
+    return sum(_rng().randint(1, num_sides) for _ in range(num_dice))
 
 
 # Matches tokens like: +2d6, -1d8, +5, -3, 2d6 (leading token, no sign)

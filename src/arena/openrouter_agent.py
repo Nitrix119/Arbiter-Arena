@@ -5,7 +5,7 @@ Talks to OpenRouter's OpenAI-compatible Chat Completions API (its documented cli
 is shared with the Claude adapter through :mod:`src.arena.llm_common`; only the request and the
 tool-schema envelope differ. This lets us pit **free** models (e.g. NVIDIA Nemotron) against
 Claude or the scripted baseline — cheap experimentation, and a way to surface where weaker
-models fail. Wiring and the git-ignored key file are in ``docs/AGENT_ARENA_LLM_SETUP.md``.
+models fail. Wiring and the git-ignored key file are in ``docs/current/AGENT_ARENA_LLM_SETUP.md``.
 
 Note: not every free model supports function/tool calling. Pick a tool-capable one (OpenRouter's
 "Tools" filter). A model that can't will make no tool call — :func:`llm_common.decide_one_action`
@@ -67,7 +67,7 @@ class OpenRouterAgent(Agent):
             if openai is None:
                 raise ImportError(
                     "OpenRouterAgent needs the 'openai' package. Install it with "
-                    "`pip install -e \".[agents]\"` (see docs/AGENT_ARENA_LLM_SETUP.md)."
+                    "`pip install -e \".[agents]\"` (see docs/current/AGENT_ARENA_LLM_SETUP.md)."
                 )
             api_key = resolve_credential("OPENROUTER_API_KEY", "openrouter.key")
             client = openai.OpenAI(base_url=OPENROUTER_BASE_URL, api_key=api_key)

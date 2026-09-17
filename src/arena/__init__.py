@@ -7,5 +7,5 @@ issues chosen actions that the engine validates and applies.
 
 It is a **driver over the engine, not a second engine** — nothing here resolves
 combat itself; it assembles what an agent may know and may do, then calls the
-same ``CombatSystem`` methods the web layer uses. See ``docs/AGENT_ARENA_PLAN.md``.
+same ``CombatSystem`` methods the web layer uses. See ``docs/current/AGENT_ARENA_PLAN.md``.
 """

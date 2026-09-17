@@ -14,5 +14,5 @@ Layout:
 * :mod:`~src.arena.heuristic.score` — the weighted utility function + the weight genome.
 * :mod:`~src.arena.heuristic.agent` — :class:`HeuristicAgent`, the scoring policy.
 
-See ``docs/HEURISTIC_DECISION_MODEL.md`` for the design.
+See ``docs/current/HEURISTIC_DECISION_MODEL.md`` for the design.
 """

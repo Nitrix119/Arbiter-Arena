@@ -6,7 +6,7 @@
 > and why**; the code, once written, is the source of truth for what exists.
 >
 > Read this in full before working on the arena. For the engine seams it drives, read
-> [../CLAUDE.md](../CLAUDE.md) §3 (architecture) and the combat modules under `src/combat/`.
+> [../CLAUDE.md](../../CLAUDE.md) §3 (architecture) and the combat modules under `src/combat/`.
 > Keep this file current: as milestones land, update the status line in §6; when the
 > whole plan is delivered, prune the deferred sections rather than accumulating a changelog.
 
@@ -26,7 +26,7 @@ batch matches, info-hiding experiments, and watching battles are deferred (§6).
 **Primary purpose: LLM benchmarking** — "which model/prompt plays 5e combat better?"
 The intent shifted from manual/for-fun play to benchmarking as a novel application, so
 fairness, determinism, clean metrics, and provider-neutrality are first-order concerns.
-Decisions of intent are recorded in [AGENT_ARENA_DECISIONS.md](AGENT_ARENA_DECISIONS.md);
+Decisions of intent are recorded in [AGENT_ARENA_DECISIONS.md](../archive/AGENT_ARENA_DECISIONS.md);
 the important ones are folded into the sections below.
 
 ---
@@ -34,14 +34,14 @@ the important ones are folded into the sections below.
 ## 1. Why this exists
 
 Today every action is chosen by a human through the web client. The only "AI" is the
-naive "attack the first enemy" loop in [../examples/example_combat.py](../examples/example_combat.py).
+naive "attack the first enemy" loop in [../examples/example_combat.py](../../examples/example_combat.py).
 We want an **autonomous decision-maker**: on an entity's turn it reads the game state,
 sees its legal options and resources, and issues actions. Two such agents can then
 fight — Claude vs Claude, Claude vs another provider — to compare who plays 5e combat
 better. A first-class **information policy** lets us hide facts (enemy HP, AC, …) and
 measure how that changes play.
 
-**Locked-in decisions** (from [AGENT_ARENA_DECISIONS.md](AGENT_ARENA_DECISIONS.md)):
+**Locked-in decisions** (from [AGENT_ARENA_DECISIONS.md](../archive/AGENT_ARENA_DECISIONS.md)):
 - **Benchmarking is the point** (A1) — measure model skill; **neutral** system prompt
   (A2), no coaching, so we test the model's *own* tactics.
 - **Headless-first.** A pure-Python arena drives `CombatSystem` directly — no browser,
@@ -124,7 +124,7 @@ Match (two teams, seeded RNG)
 
 - **`observation.py`** — `build_observation(combat, entity, policy) -> dict`. The
   agent's sensory input from *one entity's* viewpoint. Reuses the field set of
-  [`serialize_combat_state`](../web/routers/combat.py) (hp, ac, resources, spell_slots,
+  [`serialize_combat_state`](../../web/routers/combat.py) (hp, ac, resources, spell_slots,
   conditions, position, team) but **headless**: positions stay in **backend feet** (no
   cell-swap — honest to the engine; the future web bridge applies the swap). Includes
   `self`, allies, enemies, round/turn, and an embedded **legal-options menu**. Runs each
@@ -148,7 +148,7 @@ Match (two teams, seeded RNG)
   - spells: each `entity.stat_block.known_spells` name →
     `combat.get_spell_for_entity(...)`, filtered by `can_afford` **and**
     `spell_slots.can_afford(level)`.
-  - targets: range-checked via [range_check.py](../src/spatial/range_check.py) so only
+  - targets: range-checked via [range_check.py](../../src/spatial/range_check.py) so only
     reachable targets are listed, each tagged with its `relation` (`self`/`ally`/`enemy`).
     A **weapon attack lists enemies only** (offering an ally invites a wasted, self-defeating
     action — a *menu-only* rule; the referee does not forbid a raw ally attack). A **spell
@@ -203,7 +203,7 @@ Match (two teams, seeded RNG)
   dropped (B3).
 
 - **`match.py`** — `MatchRunner`: build a `CombatSystem` from two rosters
-  ([StatBlockLoader](../src/loaders/stat_block_loader.py) + spell registry), seed the
+  ([StatBlockLoader](../../src/loaders/stat_block_loader.py) + spell registry), seed the
   RNG, assign **one `Agent` per team** (B1), loop `run_turn` on
   `combat.get_current_entity()` until `ENDED`. Win = last team standing; a hard **round
   cap** (start ~20, tune down once we see real fight lengths — tables run ~6–8 rounds)
@@ -356,7 +356,7 @@ observation only when revealed (default on; hide it for the info-asymmetry exper
 `action_space.py`, `tools.py`, `agent.py`, `turn_driver.py`, `transcript.py`, `match.py`,
 `setup.py`, `llm_common.py` (shared LLM prompt/loop), `llm_agent.py` (Claude),
 `openrouter_agent.py` (OpenRouter), `credentials.py` (git-safe key resolution).
-**New (docs/examples):** `docs/AGENT_ARENA_LLM_SETUP.md`, `examples/arena_match.py`,
+**New (docs/examples):** `docs/current/AGENT_ARENA_LLM_SETUP.md`, `examples/arena_match.py`,
 `examples/arena_llm_match.py`, `examples/arena_openrouter_match.py`.
 **New (tests, mirroring `tests/`):** `tests/arena/test_action_space.py`,
 `test_observation.py`, `test_tools.py`, `test_turn_driver.py`, `test_match.py`,
@@ -417,7 +417,7 @@ observation only when revealed (default on; hide it for the info-asymmetry exper
 
 ## 10. Open questions (for iteration, non-blocking)
 
-Resolved in [AGENT_ARENA_DECISIONS.md](AGENT_ARENA_DECISIONS.md): turn granularity (one
+Resolved in [AGENT_ARENA_DECISIONS.md](../archive/AGENT_ARENA_DECISIONS.md): turn granularity (one
 action at a time), agency (one agent per team), failure handling, resolution transparency,
 and scoring (log-all, win-rate + illegal-move-rate first). Still genuinely open:
 

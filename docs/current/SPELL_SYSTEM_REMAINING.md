@@ -4,7 +4,7 @@
 > the legacy code left to delete, the deliberate deviations and debts to **not lose**, the
 > awkwardness we accepted to respect the old system (each a candidate refinement), and the
 > design threads deferred until the rework lands. It deliberately omits the *history* of
-> now-resolved work — for that, read [SPELL_SYSTEM_PHASE3_PLAN.md](SPELL_SYSTEM_PHASE3_PLAN.md)
+> now-resolved work — for that, read [SPELL_SYSTEM_PHASE3_PLAN.md](../archive/SPELL_SYSTEM_PHASE3_PLAN.md)
 > (the phase-by-phase record). Deeper intent lives in
 > [SPELL_SYSTEM_VISION.md](SPELL_SYSTEM_VISION.md); the composite-damage gap has its own
 > note, [COMPOSITE_DAMAGE_DESIGN.md](COMPOSITE_DAMAGE_DESIGN.md).
@@ -137,9 +137,9 @@ Noticed while working; recorded so they aren't lost, but they predate the block 
 
 ## 6. Source-of-truth pointers
 
-- **Phase history / how each piece was built:** [SPELL_SYSTEM_PHASE3_PLAN.md](SPELL_SYSTEM_PHASE3_PLAN.md).
+- **Phase history / how each piece was built:** [SPELL_SYSTEM_PHASE3_PLAN.md](../archive/SPELL_SYSTEM_PHASE3_PLAN.md).
 - **Design intent & the block vocabulary:** [SPELL_SYSTEM_VISION.md](SPELL_SYSTEM_VISION.md),
-  [SPELL_SYSTEM_DESIGN.md](SPELL_SYSTEM_DESIGN.md).
+  [SPELL_SYSTEM_DESIGN.md](../archive/SPELL_SYSTEM_DESIGN.md).
 - **Codebase health / older enumerated issues (E-series):** [CODEBASE_REVIEW.md](CODEBASE_REVIEW.md).
 - **The code is the source of truth for _what exists_;** this file is the source of truth for
   _what's left_. When they disagree, trust the code and fix this file.

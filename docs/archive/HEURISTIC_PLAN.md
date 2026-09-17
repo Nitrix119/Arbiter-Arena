@@ -2,13 +2,13 @@
 
 > **Purpose.** Design notes for replacing the naive `ScriptedAgent` with a *good* — ideally
 > nasty — generic heuristic: the fixed, deterministic yardstick that LLMs are benchmarked
-> against (see [AGENT_ARENA_PLAN.md](AGENT_ARENA_PLAN.md), [AGENT_ARENA_DECISIONS.md](AGENT_ARENA_DECISIONS.md)).
+> against (see [AGENT_ARENA_PLAN.md](../current/AGENT_ARENA_PLAN.md), [AGENT_ARENA_DECISIONS.md](AGENT_ARENA_DECISIONS.md)).
 > This captures the plan and my reasoning; nothing here is built yet. Recorded at the user's
 > request as the end-of-session note for the heuristic work.
 >
 > **Companion:** this doc settles the *strategy* (scoring policy + GA); the precise *mechanism* —
 > what unit is scored, over what candidate set, with what EV math and factors — is worked out in
-> [HEURISTIC_DECISION_MODEL.md](HEURISTIC_DECISION_MODEL.md).
+> [HEURISTIC_DECISION_MODEL.md](../current/HEURISTIC_DECISION_MODEL.md).
 
 ---
 
@@ -41,7 +41,7 @@ A priority ladder can't be tuned or generalised. A **scoring function** can.
 `HeuristicAgent(Agent)` whose `decide()` does:
 
 1. **Enumerate candidate actions** from the observation's legal menu
-   ([`legal_actions`](../src/arena/action_space.py) already gives affordable, in-range
+   ([`legal_actions`](../../src/arena/action_space.py) already gives affordable, in-range
    attacks/spells + movement budget). Add a small, **discretised** set of move candidates
    (toward / away from each enemy; to melee standoff; to a ranged "preferred distance"; a
    flank) — movement is continuous feet, so we score a handful of sensible destinations rather
@@ -121,13 +121,20 @@ something already competent; the GA then searches for a nastier vector.
 
 ## 7. Build order
 
-1. **`HeuristicAgent` with hand-set weights** that already fix the known flaws: legal-only move
+1. ✅ **`HeuristicAgent` with hand-set weights** that already fix the known flaws: legal-only move
    candidates (kills the stuck-on-occupied bug), preferred-range positioning (kiting),
    threat-weighted targeting, kill-securing, resource conservation. This alone is a far better
    yardstick and unblocks `alpha_strike`. Keep `ScriptedAgent` as the *weak* baseline and
-   `RandomAgent` as the floor — a three-rung ladder.
-2. **Parameterise weights + a headless self-play GA harness** (reuses `run_match` + the batch
-   runner; seeded; logs champion weights to a file).
+   `RandomAgent` as the floor — a three-rung ladder. _(Built — `src/arena/heuristic/`, Phases A–C;
+   see [HEURISTIC_DECISION_MODEL.md](../current/HEURISTIC_DECISION_MODEL.md).)_
+2. ✅ **Parameterise weights + a headless self-play GA harness** — `src/arena/heuristic/ga.py`
+   (`python -m examples.arena_train_heuristic`). Fitness = an individual playing each scenario's
+   *skill* side against the fixed `ScriptedAgent` (O(pop × scenarios × seeds), not all-pairs);
+   generation-shared seeds for fairness; tournament + uniform crossover + Gaussian mutation +
+   elitism, `DEFAULT_WEIGHTS` seeded into gen 0; multiprocessing over individuals. Thorough JSONL
+   logging (every generation / individual / weights / seed / match outcome); battles regenerate
+   from `(weights, seed)` via `regenerate_match` (deterministic entity ids + seeded dice), so the
+   blow-by-blow is never logged.
 3. **Freeze a tuned "nasty" weight-set** as the default benchmark opponent; keep the GA harness
    for re-tuning as the engine grows.
 

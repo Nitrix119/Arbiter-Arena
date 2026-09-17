@@ -5,12 +5,12 @@ full before making changes. It is the source of truth for **how** we build here;
 the code is the source of truth for **what** currently exists.
 
 For the deeper design intent behind the spell/combat engine, read
-[docs/SPELL_SYSTEM_VISION.md](docs/SPELL_SYSTEM_VISION.md). For the current health
+[docs/current/SPELL_SYSTEM_VISION.md](docs/current/SPELL_SYSTEM_VISION.md). For the current health
 of the codebase and the open repair roadmap, read
-[docs/CODEBASE_REVIEW.md](docs/CODEBASE_REVIEW.md). For **what's genuinely left in the
+[docs/current/CODEBASE_REVIEW.md](docs/current/CODEBASE_REVIEW.md). For **what's genuinely left in the
 spell/combat rework** — remaining deletions, carried deviations to not lose, and known
 awkwardness worth refining — read
-[docs/SPELL_SYSTEM_REMAINING.md](docs/SPELL_SYSTEM_REMAINING.md).
+[docs/current/SPELL_SYSTEM_REMAINING.md](docs/current/SPELL_SYSTEM_REMAINING.md).
 
 ---
 
@@ -39,7 +39,7 @@ usable as a library or through a FastAPI web app (`web/`) with a browser JS clie
 (`web/static/js/`). **Creatures, spells, and rules are JSON data** — most content is
 added without touching Python.
 
-The ambition (see [the vision doc](docs/SPELL_SYSTEM_VISION.md)): a **massively
+The ambition (see [the vision doc](docs/current/SPELL_SYSTEM_VISION.md)): a **massively
 flexible, generic engine** that can express the vast, messy diversity of D&D combat
 through composable, data-defined effects rather than per-spell special-casing.
 
@@ -107,7 +107,7 @@ Non-negotiable. Every change should be justifiable against these.
   form (`bonus_to_hit` + `damage`), from which `AttackResolver._default_program` builds the
   implied `[attack_roll, damage…]`; it may author a `program` instead when it needs more.
   Never add a second resolution path.
-- **The authoring reference is generated.** `docs/BLOCK_REFERENCE.md` is rendered from the
+- **The authoring reference is generated.** `docs/current/BLOCK_REFERENCE.md` is rendered from the
   block `REGISTRY` (`python -m src.spells.reference`) and drift-tested, so it cannot fall
   behind the code. Adding a block means writing its docstring and contract, then regenerating.
 - **`src/rules` is data; `src/spells` is the engine.** `src/rules` defines a rule (`Rule`),
@@ -194,12 +194,12 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
    resolution paths into one"). Quantify when you can (lines/files/paths/errors deleted). This
    is a first-class part of the plan and the commit message, not an afterthought — it is how
    this modular engine keeps its flexibility. If a change *adds* debt, say so and justify it as
-   a deliberate trade, and record follow-up in [CODEBASE_REVIEW.md](docs/CODEBASE_REVIEW.md).
+   a deliberate trade, and record follow-up in [CODEBASE_REVIEW.md](docs/current/CODEBASE_REVIEW.md).
 4. **Work test-first** per [§4](#4-test-driven-development-tdd).
 5. **Keep the tree green.** Run the formatter, linter, and full suite before declaring a
    task done. If tests fail or a step was skipped, say so with the output.
 6. **Don't expand scope silently.** Note adjacent problems (in
-   [CODEBASE_REVIEW.md](docs/CODEBASE_REVIEW.md)); don't fold unrelated fixes in.
+   [CODEBASE_REVIEW.md](docs/current/CODEBASE_REVIEW.md)); don't fold unrelated fixes in.
 7. **Update docs with code.** Behaviour/command/structure changes update this file, the
    README, and the relevant guide in the same change.
 8. **Capture lessons.** When a non-obvious mistake is found and fixed, append to
@@ -221,8 +221,17 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
 | Lint | `flake8 src/ web/` |
 | Type-check | `mypy src/` |
 
-- **RNG:** one shared `random.Random` in `src/utils/dice.py`; call `dice.seed_rng(seed)`
-  for reproducible battles. `dice.py` is the only module that touches `random`.
+- **RNG:** all randomness flows through a single **context-scoped** `random.Random` in
+  `src/utils/dice.py` (a `contextvars.ContextVar`), so each battle can own its own seed
+  without any roll call site changing. `dice.py` is the only module that touches `random`.
+  - `CombatSystem(seed=…)` gives a battle its **own** private, seeded RNG — reproducible and
+    isolated from every other battle in the process (concurrent web sessions included). No
+    seed → the battle **inherits the ambient** RNG, so `dice.seed_rng(n)` still seeds a whole
+    single-battle run process-wide (back-compat). The instance's methods bind their RNG
+    (`dice.using_rng`) so `combat.rng` is authoritative regardless of caller.
+  - Entity ids come from the seeded RNG too (`entity_id = dice.new_id()`), so a seeded run
+    reproduces ids (which feed `Entity` hashing/tie-breaks). Build entities *under* the seed
+    (`with dice.using_rng(dice.new_rng(seed)): …`) when you need id reproducibility.
 
 ---
 
@@ -233,10 +242,10 @@ An agent should know where a new file belongs without guessing — read the tree
 content). Note `tests/` mirrors the engine; ignore `build/lib/` (stale untracked copy).
 `src/arena/` is the headless agent-vs-agent harness (LLM benchmarking) — a *driver* over
 the engine, not part of it; it depends on `src/combat`/`src/models`, never the reverse. See
-[docs/AGENT_ARENA_PLAN.md](docs/AGENT_ARENA_PLAN.md). `src/arena/heuristic/` is the
+[docs/current/AGENT_ARENA_PLAN.md](docs/current/AGENT_ARENA_PLAN.md). `src/arena/heuristic/` is the
 utility-scoring `HeuristicAgent` — the arena's strong, tunable yardstick opponent (a pure,
 read-only consumer of the engine; scores whole-turn plans by expected value). See
-[docs/HEURISTIC_DECISION_MODEL.md](docs/HEURISTIC_DECISION_MODEL.md).
+[docs/current/HEURISTIC_DECISION_MODEL.md](docs/current/HEURISTIC_DECISION_MODEL.md).
 
 **Content invariants:**
 
@@ -262,6 +271,28 @@ leave a brief note here.
 - **What went wrong:** the mistake or surprise.
 - **Rule going forward:** the concrete, testable rule.
 ```
+
+### 2026-09-17 — A richer policy lost to a trivial one because a penalty had no counter-force
+- **Context:** Benchmarking the utility-scoring `HeuristicAgent` against the weak `ScriptedAgent`
+  yardstick. On the symmetric 2v2 melee scenario (`alpha_strike`) the heuristic won only ~35%,
+  *worse* than scripted-vs-scripted's ~50-55% side baseline — the sophisticated agent lost to the
+  dumb one.
+- **What went wrong:** the exposure penalty (expected incoming damage at a position) is a **sum over
+  every enemy that can reach you**, while the engagement reward that keeps a unit in the fight is a
+  **max over enemies**. In a multi-enemy melee the sum dwarfs the max, so *after a melee unit spent
+  its action attacking* — with no offense term left to anchor it — retreating (exposure→0) always
+  outscored holding, and units backpedalled out of their own melee every turn, bleeding tempo. A
+  low-HP self-preservation clause made it worse: cornered units fled a fight they couldn't escape.
+  None of the unit tests caught it because they scored single decisions in 1v1s, where one enemy's
+  exposure is small enough that engaging still wins.
+- **Rule going forward:** when a scoring term *penalises the very thing a unit must do to be useful*
+  (here, be in melee range), there must be a counter-force of comparable magnitude, or the action
+  must not be offered at all. The fix gates disengage plans: a healthy pure-melee unit is never
+  offered retreat/kite plans (it holds ground); only a ranged unit, or one hurt *and* able to
+  actually outrun its pursuers, may open range. **And benchmark every heuristic against the trivial
+  baseline on the scenario built to test it** — "beats Random" is not "beats a three-line if/elif."
+  A policy that loses to the scripted agent on the scenario meant to showcase it is the loudest
+  possible signal of a scoring bug.
 
 ### 2026-09-03 — A hand-written schema needs a machine-checked link to the code it describes
 - **Context:** Building the per-field block schema (`BlockContract.fields`) that lets the loader

@@ -3,7 +3,7 @@
 The first concrete "brain" for the arena: it implements the provider-neutral
 :class:`~src.arena.agent.Agent` contract by asking a Claude model, via tool use, for its
 next action. Wiring, credentials, cost, and how to run a live match are in
-``docs/AGENT_ARENA_LLM_SETUP.md``. The provider-neutral prompt/notes/loop logic lives in
+``docs/current/AGENT_ARENA_LLM_SETUP.md``. The provider-neutral prompt/notes/loop logic lives in
 :mod:`src.arena.llm_common`; this module holds only the Anthropic-specific request.
 
 **Design decisions worth reviewing** (they shape what we're measuring):
@@ -58,7 +58,7 @@ class LLMAgent(Agent):
             if anthropic is None:
                 raise ImportError(
                     "LLMAgent needs the 'anthropic' package. Install it with "
-                    "`pip install -e \".[agents]\"` (see docs/AGENT_ARENA_LLM_SETUP.md)."
+                    "`pip install -e \".[agents]\"` (see docs/current/AGENT_ARENA_LLM_SETUP.md)."
                 )
             client = anthropic.Anthropic()
         self._client = client
