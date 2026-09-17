@@ -9,7 +9,7 @@ policy change plus a batch run — no engine edits.
 
 Position is never hidden in v1: the engine needs it for range and overlap
 checks, and both agents can see the battlefield. A future "fog of war" is a
-larger, separate design (see ``docs/AGENT_ARENA_PLAN.md`` §10).
+larger, separate design (see ``docs/current/AGENT_ARENA_PLAN.md`` §10).
 """
 
 from dataclasses import dataclass

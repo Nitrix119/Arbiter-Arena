@@ -32,5 +32,5 @@ def resolve_credential(env_var: str, keyfile_name: str) -> str:
 
     raise RuntimeError(
         f"No credential found for {env_var}. Set the {env_var} environment variable, or put "
-        f"the key in {keyfile} (git-ignored). See docs/AGENT_ARENA_LLM_SETUP.md."
+        f"the key in {keyfile} (git-ignored). See docs/current/AGENT_ARENA_LLM_SETUP.md."
     )

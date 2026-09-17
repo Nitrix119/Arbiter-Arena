@@ -1,7 +1,7 @@
 # Spell System Design — From Vision to Implementation
 
 > **Status: design agreed, implementation not yet started (2026-08-22).** This document takes the
-> intent in [SPELL_SYSTEM_VISION.md](SPELL_SYSTEM_VISION.md) and makes it concrete: it pins the
+> intent in [SPELL_SYSTEM_VISION.md](../current/SPELL_SYSTEM_VISION.md) and makes it concrete: it pins the
 > *current* mechanics down to the function level, specifies **precisely how you add a new spell and a
 > new block ("hook") today and under the target model**, and enumerates the major challenges with a
 > resolution for each. The design decisions in [SPELL_SYSTEM_DECISIONS.md](SPELL_SYSTEM_DECISIONS.md)
@@ -11,7 +11,7 @@
 > Everything else here is grounded in the code as it exists on 2026-08-22 and is meant to be
 > implementable against.
 >
-> Read the vision doc first for the *why*. Read [CODEBASE_REVIEW.md](CODEBASE_REVIEW.md) §3–§5 for
+> Read the vision doc first for the *why*. Read [CODEBASE_REVIEW.md](../current/CODEBASE_REVIEW.md) §3–§5 for
 > the health context (what's sound, what's a wiring gap, the E-numbered debts). This doc is the
 > bridge between them.
 
@@ -41,7 +41,7 @@ updated to assume them. Summarised here so the doc is self-contained.
 | **Migration safety** | **Dual-run old vs new over the seeded 22-spell conformance corpus**, assert identical results before deleting any old path. | §6.2 / §6.10. |
 | **Guide generation** | Stage 1 **generates the authoring guide tables from the schema** (single source of truth). | §7 stage 1. |
 | **Visual editor** | **Not a goal.** Schema is a validation/docs contract only; pay no editor cost speculatively. | §8. |
-| **Entity lifecycle / summoning** | **Designed** (2026-08-24, [ENTITY_LIFECYCLE_DECISIONS.md](ENTITY_LIFECYCLE_DECISIONS.md)): two mechanisms (real combatants via an `entity_lifecycle` family vs positioned effect-emitters for hazards); fixed-statblock summons first, referenced by name; own-initiative (5e RAW); lifetime-scope-owned with a death/dismissal split and an inert-vs-removed state; controller-driven; Simulacrum/command/horde-init deferred. | §6.12 (full), §7 prereqs, §8. |
+| **Entity lifecycle / summoning** | **Designed** (2026-08-24, [ENTITY_LIFECYCLE_DECISIONS.md](../current/ENTITY_LIFECYCLE_DECISIONS.md)): two mechanisms (real combatants via an `entity_lifecycle` family vs positioned effect-emitters for hazards); fixed-statblock summons first, referenced by name; own-initiative (5e RAW); lifetime-scope-owned with a death/dismissal split and an inert-vs-removed state; controller-driven; Simulacrum/command/horde-init deferred. | §6.12 (full), §7 prereqs, §8. |
 
 ---
 
@@ -71,7 +71,7 @@ survive, not an abstraction.
 
 A spell is a JSON file in `examples/spells/` with an `effects` array. There is exactly one rename on
 the way in: `StatBlockLoader` copies `action_data["effects"]` into `SpellAction.pipeline_effects`
-verbatim ([`src/loaders/stat_block_loader.py:325`](../src/loaders/stat_block_loader.py#L325)). The
+verbatim ([`src/loaders/stat_block_loader.py:325`](../../src/loaders/stat_block_loader.py#L325)). The
 array is **not validated element-by-element** — malformed steps survive loading and fail (or
 silently no-op) at run time. `web/app.py` scans `examples/spells/` and `rules/entity_effects/` into
 process-global registries at startup.
@@ -81,16 +81,16 @@ linking step — the list of dicts is handed straight to the interpreter.
 
 ### 2.2 The interpreter: `EffectPipeline.run`
 
-[`src/combat/effect_pipeline.py`](../src/combat/effect_pipeline.py) is the interpreter.
+[`src/combat/effect_pipeline.py`](../../src/combat/effect_pipeline.py) is the interpreter.
 `SpellResolver.resolve` pre-rolls any `roll_once` damage steps once
-([`spell_resolver.py:74`](../src/combat/spell_resolver.py#L74)), then calls `EffectPipeline.run`
+([`spell_resolver.py:74`](../../src/combat/spell_resolver.py#L74)), then calls `EffectPipeline.run`
 **once per defender** — that per-target loop *is* the AoE fan-out. Inside `run`:
 
 - A single **ephemeral `context` dict** is seeded with ~12 defaulted keys (`hit`, `save_success`,
   `damage_dealt`, `damage_rolled`, `attack_total`, …) so expression evaluation never hits an
-  uninitialised name ([`effect_pipeline.py:121`](../src/combat/effect_pipeline.py#L121)).
+  uninitialised name ([`effect_pipeline.py:121`](../../src/combat/effect_pipeline.py#L121)).
 - Steps are walked in order and dispatched by a hard-coded **`if/elif` ladder on `step["type"]`**
-  ([`effect_pipeline.py:171-201`](../src/combat/effect_pipeline.py#L171-L201)). An unknown type logs
+  ([`effect_pipeline.py:171-201`](../../src/combat/effect_pipeline.py#L171-L201)). An unknown type logs
   a warning and is skipped — no error.
 - Event emission is **positional and implicit**: `SPELL_HIT` is emitted lazily just before the first
   non-roll step; `DAMAGE_DEALT` is emitted just before the first `add_entity_effect` step (so a
@@ -116,7 +116,7 @@ Longer-lived / reactive behaviour is **not** expressible as pipeline steps. It l
 entity effects**: separate JSON files in `rules/entity_effects/` loaded as `Rule`s that subscribe to
 `EventBus` triggers, gated by `condition` / per-effect `on` / per-effect `when`, whose `effects`
 array dispatches to a *different* registry — `BUILTIN_EFFECTS` in
-[`src/rules/effects.py`](../src/rules/effects.py) (18 handlers: `ApplyCondition`, `HealTarget`,
+[`src/rules/effects.py`](../../src/rules/effects.py) (18 handlers: `ApplyCondition`, `HealTarget`,
 `DealDamage`, `GrantAction`, `ModifyDamage`, `ForceConcentrationCheck`, `GrantTemporaryHP`,
 `AddModifier`, …).
 
@@ -136,7 +136,7 @@ complaint:
 1. **The pipeline literally reaches across into the other registry.** `_handle_apply_condition` and
    `_handle_add_modifier` construct a synthetic `on_apply`-shaped dict and a **stub `SPELL_HIT`
    event**, then invoke `rule_engine._effect_registry["ApplyCondition"]` /`["AddModifier"]`
-   ([`effect_pipeline.py:536-605`](../src/combat/effect_pipeline.py#L536-L605)). The pipeline step is
+   ([`effect_pipeline.py:536-605`](../../src/combat/effect_pipeline.py#L536-L605)). The pipeline step is
    a thin adapter over the rule handler — the duplication is already half-collapsed, by hand, at a
    fragile seam.
 2. **A spell with a lifetime is two files.** Vampiric Touch's attack/damage/heal live in
@@ -148,7 +148,7 @@ complaint:
 ### 2.4 The expression sandbox (shared by both vocabularies — the one thing that *is* unified)
 
 Every expression string in either place runs through
-[`src/rules/expressions.py`](../src/rules/expressions.py): `ast.parse(mode="eval")` → walk against a
+[`src/rules/expressions.py`](../../src/rules/expressions.py): `ast.parse(mode="eval")` → walk against a
 **node whitelist** (`ALLOWED_NODES`) → reject any `_`-prefixed name/attribute → allow only direct
 calls to `SAFE_BUILTINS` (`max, min, abs, int, round, bool, len, hasattr`) → `compile` and cache →
 `eval(code, {"__builtins__": {}}, ctx)`. Validation and compilation are memoised by expression
@@ -162,11 +162,11 @@ There is no first-class lifetime. Concentration is three cooperating conventions
 - On apply, `_handle_add_entity_effect` drops the previous concentration by calling
   `caster.concentration_target.remove_effect(caster.concentrating_on)` **before** applying the new
   one (order matters, or the new effect's teardown races the old)
-  ([`effect_pipeline.py:490-503`](../src/combat/effect_pipeline.py#L490-L503)).
+  ([`effect_pipeline.py:490-503`](../../src/combat/effect_pipeline.py#L490-L503)).
 - The caster stores `concentrating_on` (effect name) + `concentration_target` (entity).
 - On a failed CON save, the global `force_concentration_check` handler clears those fields and calls
   `remove_effect`, which also strips linked `StatModifier`s and granted actions tagged with that
-  `source_effect` ([`effects.py:149`](../src/rules/effects.py#L149)).
+  `source_effect` ([`effects.py:149`](../../src/rules/effects.py#L149)).
 
 This works, but "what a spell granted" is reconstructed from a name-tag convention (`source_effect`),
 not owned by a lifetime object.
@@ -273,7 +273,7 @@ repeat actions), step 2 forks into two files, and this is the friction the visio
   currently fakes three `1d4+1` darts as a single `3d4+3` blob against one target. A true
   "N independent attack rolls, assign each to a chosen target" spell cannot be authored.
 - **Upcasting.** `higher_level_scaling` is prose only (an explicit TODO in
-  [`src/models/action.py`](../src/models/action.py)). To make a spell hit harder at a higher slot you
+  [`src/models/action.py`](../../src/models/action.py)). To make a spell hit harder at a higher slot you
   copy the file and edit the dice — there is no slot parameter reaching a `damage` formula.
 - **Rider that references "this attack's damage" later.** Works only because the rider re-subscribes
   to `DAMAGE_DEALT` and reads `event.total`; you cannot capture the *casting* context.
@@ -340,7 +340,7 @@ This is a real gap (review §4.7). Today it takes edits in **three** places and 
    position, mutate `defender.x/y/z`. Decide and document the context it writes (e.g.
    `context.pushed_ft`).
 2. **Dispatch.** Add `elif step_type == "forced_movement": self._handle_forced_movement(...)` to the
-   ladder in `run` ([`effect_pipeline.py:171-201`](../src/combat/effect_pipeline.py#L171-L201)).
+   ladder in `run` ([`effect_pipeline.py:171-201`](../../src/combat/effect_pipeline.py#L171-L201)).
 3. **Docs.** Add a section to `SPELL_DEFINITION_GUIDE.md` (fields, defaults, context written) — by
    hand, and it *will* drift from the code (the guide and code are two sources of truth today).
 4. **Execution test.** Per the 2026-08-08 lesson, a test that *runs the pipeline* and asserts the
@@ -354,7 +354,7 @@ implementation, a *second* field shape, a *second* place to document. That is th
 ### 5.3 Today: adding an event (worked example — an on-death trigger)
 
 1. Add `ENTITY_DIES` (already exists) or a new member to `EventType`
-   ([`src/combat/events.py`](../src/combat/events.py)).
+   ([`src/combat/events.py`](../../src/combat/events.py)).
 2. Define its event-data payload in `event_data.py` and **emit it from the one place the state
    transition happens** (e.g. `DamageProcessor` when HP hits 0). Emit *after* the state change so
    subscribers see the final state, and beware re-entrancy (§6.4).
@@ -366,9 +366,9 @@ implementation, a *second* field shape, a *second* place to document. That is th
 1. Thread the cast-time slot level from the WebSocket handler / `SpellResolver.resolve` into
    `EffectPipeline.run`.
 2. Seed it into the `context` dict at the top of `run`
-   ([`effect_pipeline.py:121`](../src/combat/effect_pipeline.py#L121)) so it survives into
+   ([`effect_pipeline.py:121`](../../src/combat/effect_pipeline.py#L121)) so it survives into
    `_make_eval_ctx`, which already copies every non-`_` key into the expression namespace
-   ([`effect_pipeline.py:676-699`](../src/combat/effect_pipeline.py#L676-L699)).
+   ([`effect_pipeline.py:676-699`](../../src/combat/effect_pipeline.py#L676-L699)).
 3. Now `"formula": "8d6"` can become a block that scales by `slot_level` — but note the *formula*
    itself is a dice string, not an expression, so upcasting needs a block-level modifier, not just a
    context name (this is exactly why upcasting is "context name **and** block", §5.1).
@@ -460,7 +460,7 @@ concentration disposes the old scope atomically before creating the new one.
 ### 6.4 Ordering and re-entrancy
 
 **The standalone bug — RESOLVED (2026-08-22).** `inject_pipeline_damage_step` (the
-`AddDamageToAttackHit` handler, [`effects.py:286`](../src/rules/effects.py#L286)) **appended a step to
+`AddDamageToAttackHit` handler, [`effects.py:286`](../../src/rules/effects.py#L286)) **appended a step to
 `action.pipeline_effects` while `run` was iterating that very list**, relying on Python list-iteration
 picking up the appended element in the same pass. Weapon attacks were shielded because
 `AttackResolver` runs on a `copy.copy` of the action with a freshly-built step list — but **spells run
@@ -470,7 +470,7 @@ the first's injected step too). Fixed test-first: `EffectPipeline.run` now itera
 of the steps and, after each step, drains any freshly-injected steps into that local copy while
 **truncating the shared list back to its original length** — the injection still executes this run but
 never persists. Covered by
-[`tests/rules/entity_effects/test_inject_pipeline_step.py`](../tests/rules/entity_effects/test_inject_pipeline_step.py)
+[`tests/rules/entity_effects/test_inject_pipeline_step.py`](../../tests/rules/entity_effects/test_inject_pipeline_step.py)
 (restore-length, no-compound-across-casts, no-leak-across-AoE-targets). *This was fixed independently
 of the rework because it was a real correctness defect, not just a design smell.*
 
@@ -607,7 +607,7 @@ blocks is safe where handing spell authors real Python never would be.
 
 ### 6.12 Entity lifecycle & summoning (designed — 2026-08-24)
 
-Ratified in [ENTITY_LIFECYCLE_DECISIONS.md](ENTITY_LIFECYCLE_DECISIONS.md). Vision §4's taxonomy
+Ratified in [ENTITY_LIFECYCLE_DECISIONS.md](../current/ENTITY_LIFECYCLE_DECISIONS.md). Vision §4's taxonomy
 quietly assumes every block acts on the existing caster/defender pair; a large class of spells
 (**the *Summon X* line, Conjure Animals, Animate Dead**, and the exotic tail) *creates combatants*
 and reaches outside the pair. This is the design for that; it is the sharpest test of whether "add one
@@ -808,6 +808,6 @@ conformance-corpus migration, schema-generated docs, and "no visual editor" — 
 
 ---
 
-_See also: [SPELL_SYSTEM_VISION.md](SPELL_SYSTEM_VISION.md) (the intent), [CODEBASE_REVIEW.md](CODEBASE_REVIEW.md)
-§3–§5 (health, gaps, E-debts), [CLAUDE.md](../CLAUDE.md) §3–§4 (architecture & TDD rules), and the
-current authoring guide [examples/spells/SPELL_DEFINITION_GUIDE.md](../examples/spells/SPELL_DEFINITION_GUIDE.md)._
+_See also: [SPELL_SYSTEM_VISION.md](../current/SPELL_SYSTEM_VISION.md) (the intent), [CODEBASE_REVIEW.md](../current/CODEBASE_REVIEW.md)
+§3–§5 (health, gaps, E-debts), [CLAUDE.md](../../CLAUDE.md) §3–§4 (architecture & TDD rules), and the
+current authoring guide [examples/spells/SPELL_DEFINITION_GUIDE.md](../../examples/spells/SPELL_DEFINITION_GUIDE.md)._

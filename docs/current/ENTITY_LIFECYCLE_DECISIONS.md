@@ -1,6 +1,6 @@
 # Summoning & Entity Lifecycle — Problems & Open Decisions
 
-> **Purpose.** [SPELL_SYSTEM_DESIGN.md](SPELL_SYSTEM_DESIGN.md) §6.12 flags summoning / entity
+> **Purpose.** [SPELL_SYSTEM_DESIGN.md](../archive/SPELL_SYSTEM_DESIGN.md) §6.12 flags summoning / entity
 > creation as the one block family that reaches *outside* the caster/defender pair and stresses the
 > roster, initiative, lifetime, and determinism at once — the sharpest test of "add one block absorbs
 > all of 5e." This document explains each problem in enough detail to decide against, and asks the
@@ -13,11 +13,11 @@
 > diverge freely.
 >
 > **Grounding (current code facts this doc relies on):**
-> - Entity identity is a random `uuid.uuid4()` ([entity.py:27](../src/models/entity.py#L27)) — **not**
+> - Entity identity is a random `uuid.uuid4()` ([entity.py:27](../../src/models/entity.py#L27)) — **not**
 >   seed-stable.
 > - `CombatSystem.add_combatant` exists and appends to `combatants` + `InitiativeTracker`, which keeps
->   a **sorted list indexed by a positional `current_turn_index`** ([initiative.py](../src/combat/initiative.py)).
-> - A `team` faction field exists ([entity.py:33](../src/models/entity.py#L33); `None` = hostile to
+>   a **sorted list indexed by a positional `current_turn_index`** ([initiative.py](../../src/combat/initiative.py)).
+> - A `team` faction field exists ([entity.py:33](../../src/models/entity.py#L33); `None` = hostile to
 >   all) plus `is_player_controlled`.
 > - **There is no autonomous AI turn loop yet** (CODEBASE_REVIEW §2) — every action is driven
 >   externally.
@@ -309,7 +309,7 @@ any specific summon spell you want to use as the forcing function for the design
 
 ---
 
-_Feeds [SPELL_SYSTEM_DESIGN.md](SPELL_SYSTEM_DESIGN.md) §6.12 (the frontier note) and §7 (design task
+_Feeds [SPELL_SYSTEM_DESIGN.md](../archive/SPELL_SYSTEM_DESIGN.md) §6.12 (the frontier note) and §7 (design task
 before stage 4). Once answered, I'll turn these into an `entity_lifecycle` block-family design section
 in the design doc, and note any prerequisites (seed-stable ids, pointer-safe initiative insertion,
 lifetime scopes) that must land first._

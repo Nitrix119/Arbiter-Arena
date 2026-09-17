@@ -10,7 +10,7 @@
 > arity type-checking, module tree) — still all in force. The deeper design rationale lives in
 > [SPELL_SYSTEM_DESIGN.md](SPELL_SYSTEM_DESIGN.md); ratified decisions in
 > [SPELL_SYSTEM_DECISIONS.md](SPELL_SYSTEM_DECISIONS.md) and
-> [ENTITY_LIFECYCLE_DECISIONS.md](ENTITY_LIFECYCLE_DECISIONS.md).
+> [ENTITY_LIFECYCLE_DECISIONS.md](../current/ENTITY_LIFECYCLE_DECISIONS.md).
 
 ---
 
@@ -29,7 +29,7 @@
 > **weapon attacks** (`AttackResolver` folded — one path for weapons and spells). The suite is green
 > (**735 tests**); `mypy src/` sits at a steady 44
 > pre-existing errors (one is `src/spells/blocks/damage.py:82`, a benign register-signature variance, not
-> from the new work); Black is pinned `==23.12.1` (see §9 in [CLAUDE.md](../CLAUDE.md) — do **not** run a
+> from the new work); Black is pinned `==23.12.1` (see §9 in [CLAUDE.md](../../CLAUDE.md) — do **not** run a
 > newer Black on modified files; the dev env resolves Black 26.x).
 
 ### 0.1 What runs on the new engine now — **all 23 shipped spells**
@@ -316,7 +316,7 @@ coverage (Magic Missile, Scorching Ray, Eldritch Blast, and every AoE spell come
 
 **What shipped (and the one scoping call):**
 
-- **`LifetimeScope` + `RevokeHandle`** ([src/models/lifetime.py](../src/models/lifetime.py)) — a scope
+- **`LifetimeScope` + `RevokeHandle`** ([src/models/lifetime.py](../../src/models/lifetime.py)) — a scope
   owns an ordered list of revoke closures; `dispose()` runs them in reverse, once (idempotent); a grant
   made after dispose is revoked immediately. `LifetimeKind` = `CONCENTRATION`/`ROUNDS`/`INSTANT`. It's a
   **pure domain primitive** (placed in `models`, not `spells`) so `Entity` holds it with no
@@ -329,7 +329,7 @@ coverage (Magic Missile, Scorching Ray, Eldritch Blast, and every AoE spell come
   first-class lifetime; starting a new one disposes the prior atomically. The legacy string fields
   (`concentrating_on`/`concentration_target`) still work — `_dispose_current_concentration` tears down
   whichever is present, so legacy spells are unchanged (parity).
-- **`lifetime` wrapper block** ([blocks/lifetime.py](../src/spells/blocks/lifetime.py)) — opens a fresh
+- **`lifetime` wrapper block** ([blocks/lifetime.py](../../src/spells/blocks/lifetime.py)) — opens a fresh
   scope, makes it `Invocation.active_scope` while its `then` runs (grants register their handles into
   it via `blocks/state.py`'s `_own`), then binds it: `kind: concentration` → the caster's concentration;
   otherwise → the caster's `lifetimes`. Grants **outside** a lifetime stay instantaneous/permanent.
@@ -344,7 +344,7 @@ coverage (Magic Missile, Scorching Ray, Eldritch Blast, and every AoE spell come
 `add_entity_effect`, whose fold into blocks is **4.3's** job, so 4.2 could **not** route a shipped JSON
 spell onto the new engine without doing 4.3's work. 4.2 therefore delivers the *mechanism*, proven
 **end-to-end through the real evaluator + `Entity` + the actual global concentration rule** (not just
-unit tests): [tests/test_block_lifetime.py](../tests/test_block_lifetime.py) runs a native "Shield of
+unit tests): [tests/test_block_lifetime.py](../../tests/test_block_lifetime.py) runs a native "Shield of
 Faith" program (`lifetime{concentration}{ add_modifier ac+2 }`), then drives real damage through
 `DamageProcessor` + the concentration rule and asserts the failed CON save disposes the scope and
 revokes the buff — plus atomic replacement and the outside-a-lifetime permanence case. **Shield of Faith
@@ -378,7 +378,7 @@ The largest Phase-2 item, done in reviewable **sub-slices**, each independently 
 (The `BUILTIN_EFFECTS` deletion once bundled here is promoted to [§4.7](#47-phase-29--retiring-builtin_effects-the-core-rules-migration).)
 
 - **4.3a — trigger-block foundation ✅ DONE (2026-08-29).** The `trigger` block
-  ([blocks/triggers.py](../src/spells/blocks/triggers.py)): args `event` (an `EventType` name), a
+  ([blocks/triggers.py](../../src/spells/blocks/triggers.py)): args `event` (an `EventType` name), a
   firing guard `when` (a **distinct key from the evaluator's install-time `condition`** — the collision
   was the first bug: `run_block` was evaluating a trigger's guard at install time against a context with
   no event, so the trigger never subscribed), an optional `target` expression, and a `then` body. On
@@ -388,12 +388,12 @@ The largest Phase-2 item, done in reviewable **sub-slices**, each independently 
   On fire it builds a **fresh `Invocation` carrying the event's data** (`Invocation.event_data`, exposed
   as `event.<field>` and `entity`/`caster` via `eval_context`), checks `when`, binds `target`, and runs
   `then`. A module-level **depth guard** (`_MAX_TRIGGER_DEPTH`) bounds re-entrant firings.
-  Proven in [tests/test_block_triggers.py](../tests/test_block_triggers.py): a Vampiric-Touch-style heal
+  Proven in [tests/test_block_triggers.py](../../tests/test_block_triggers.py): a Vampiric-Touch-style heal
   rider fires on `DAMAGE_DEALT`, is gated by `when`, and **unsubscribes when its concentration lifetime
   is disposed**; the depth guard blocks at the cap. Full suite green (667). *No content migrated and
   `BUILTIN_EFFECTS` untouched yet — that's 4.3b/4.3c.*
 - **4.3b-1 — the entity-effect fold, state-only case ✅ DONE (2026-08-29).** New
-  [src/spells/fold.py](../src/spells/fold.py) translates a foldable `add_entity_effect` step into a
+  [src/spells/fold.py](../../src/spells/fold.py) translates a foldable `add_entity_effect` step into a
   `lifetime{ … }` block: `on_apply` grants → state blocks (via an `_ACTION_TO_BLOCK` map:
   AddModifier/ApplyCondition/GrantTemporaryHP/HealTarget/DealDamage), `concentration`/duration → the
   lifetime kind. The adapter's `to_program`/`can_run_on_blocks` take a `rule_lookup` (`name -> Rule`)
@@ -405,7 +405,7 @@ The largest Phase-2 item, done in reviewable **sub-slices**, each independently 
   Haste, Armor of Agathys, Charm Person all stay on legacy for now. `Entity.begin_concentration` now
   mirrors the scope onto the legacy `concentrating_on`/`concentration_target` display fields (the scope
   stays authoritative for teardown), so consumers reading them are consistent. Tests:
-  [tests/test_entity_effect_fold.py](../tests/test_entity_effect_fold.py) (routing boundary, fold shape,
+  [tests/test_entity_effect_fold.py](../../tests/test_entity_effect_fold.py) (routing boundary, fold shape,
   end-to-end cast + concentration break through the real router). Full suite green (673).
 - **4.3b-2a — the trigger side, first fold ✅ DONE (2026-08-29).** `fold._triggers_from_rule` now
   translates a referenced rule's reactive `triggers`/`effects` into `trigger` blocks (one per event),
@@ -473,7 +473,7 @@ with the full challenge/solution write-up. Haste and Charm Person also stay on l
 ### 4.4 Entity lifecycle / summoning
 
 - The `entity_lifecycle` family — design §6.12, decisions in
-  [ENTITY_LIFECYCLE_DECISIONS.md](ENTITY_LIFECYCLE_DECISIONS.md). Depends on 4.2 + 4.3. Prerequisites
+  [ENTITY_LIFECYCLE_DECISIONS.md](../current/ENTITY_LIFECYCLE_DECISIONS.md). Depends on 4.2 + 4.3. Prerequisites
   first: **seed-stable entity IDs**, **pointer-safe initiative insert/remove + roll-off tiebreak**, a
   **"downed but present" state** distinct from "removed", and an **`ENTITY_DIES` + dismissal event**
   pair. Positioned effect-emitters (Moonbeam, Spiritual Weapon) are the sibling mechanism (ride 4.1 +

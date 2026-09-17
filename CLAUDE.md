@@ -5,12 +5,12 @@ full before making changes. It is the source of truth for **how** we build here;
 the code is the source of truth for **what** currently exists.
 
 For the deeper design intent behind the spell/combat engine, read
-[docs/SPELL_SYSTEM_VISION.md](docs/SPELL_SYSTEM_VISION.md). For the current health
+[docs/current/SPELL_SYSTEM_VISION.md](docs/current/SPELL_SYSTEM_VISION.md). For the current health
 of the codebase and the open repair roadmap, read
-[docs/CODEBASE_REVIEW.md](docs/CODEBASE_REVIEW.md). For **what's genuinely left in the
+[docs/current/CODEBASE_REVIEW.md](docs/current/CODEBASE_REVIEW.md). For **what's genuinely left in the
 spell/combat rework** — remaining deletions, carried deviations to not lose, and known
 awkwardness worth refining — read
-[docs/SPELL_SYSTEM_REMAINING.md](docs/SPELL_SYSTEM_REMAINING.md).
+[docs/current/SPELL_SYSTEM_REMAINING.md](docs/current/SPELL_SYSTEM_REMAINING.md).
 
 ---
 
@@ -39,7 +39,7 @@ usable as a library or through a FastAPI web app (`web/`) with a browser JS clie
 (`web/static/js/`). **Creatures, spells, and rules are JSON data** — most content is
 added without touching Python.
 
-The ambition (see [the vision doc](docs/SPELL_SYSTEM_VISION.md)): a **massively
+The ambition (see [the vision doc](docs/current/SPELL_SYSTEM_VISION.md)): a **massively
 flexible, generic engine** that can express the vast, messy diversity of D&D combat
 through composable, data-defined effects rather than per-spell special-casing.
 
@@ -107,7 +107,7 @@ Non-negotiable. Every change should be justifiable against these.
   form (`bonus_to_hit` + `damage`), from which `AttackResolver._default_program` builds the
   implied `[attack_roll, damage…]`; it may author a `program` instead when it needs more.
   Never add a second resolution path.
-- **The authoring reference is generated.** `docs/BLOCK_REFERENCE.md` is rendered from the
+- **The authoring reference is generated.** `docs/current/BLOCK_REFERENCE.md` is rendered from the
   block `REGISTRY` (`python -m src.spells.reference`) and drift-tested, so it cannot fall
   behind the code. Adding a block means writing its docstring and contract, then regenerating.
 - **`src/rules` is data; `src/spells` is the engine.** `src/rules` defines a rule (`Rule`),
@@ -194,12 +194,12 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
    resolution paths into one"). Quantify when you can (lines/files/paths/errors deleted). This
    is a first-class part of the plan and the commit message, not an afterthought — it is how
    this modular engine keeps its flexibility. If a change *adds* debt, say so and justify it as
-   a deliberate trade, and record follow-up in [CODEBASE_REVIEW.md](docs/CODEBASE_REVIEW.md).
+   a deliberate trade, and record follow-up in [CODEBASE_REVIEW.md](docs/current/CODEBASE_REVIEW.md).
 4. **Work test-first** per [§4](#4-test-driven-development-tdd).
 5. **Keep the tree green.** Run the formatter, linter, and full suite before declaring a
    task done. If tests fail or a step was skipped, say so with the output.
 6. **Don't expand scope silently.** Note adjacent problems (in
-   [CODEBASE_REVIEW.md](docs/CODEBASE_REVIEW.md)); don't fold unrelated fixes in.
+   [CODEBASE_REVIEW.md](docs/current/CODEBASE_REVIEW.md)); don't fold unrelated fixes in.
 7. **Update docs with code.** Behaviour/command/structure changes update this file, the
    README, and the relevant guide in the same change.
 8. **Capture lessons.** When a non-obvious mistake is found and fixed, append to
@@ -242,10 +242,10 @@ An agent should know where a new file belongs without guessing — read the tree
 content). Note `tests/` mirrors the engine; ignore `build/lib/` (stale untracked copy).
 `src/arena/` is the headless agent-vs-agent harness (LLM benchmarking) — a *driver* over
 the engine, not part of it; it depends on `src/combat`/`src/models`, never the reverse. See
-[docs/AGENT_ARENA_PLAN.md](docs/AGENT_ARENA_PLAN.md). `src/arena/heuristic/` is the
+[docs/current/AGENT_ARENA_PLAN.md](docs/current/AGENT_ARENA_PLAN.md). `src/arena/heuristic/` is the
 utility-scoring `HeuristicAgent` — the arena's strong, tunable yardstick opponent (a pure,
 read-only consumer of the engine; scores whole-turn plans by expected value). See
-[docs/HEURISTIC_DECISION_MODEL.md](docs/HEURISTIC_DECISION_MODEL.md).
+[docs/current/HEURISTIC_DECISION_MODEL.md](docs/current/HEURISTIC_DECISION_MODEL.md).
 
 **Content invariants:**
 

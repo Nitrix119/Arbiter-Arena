@@ -2,7 +2,7 @@
 
 > **Purpose.** The decisions about the agent framework where I most want *your* input before
 > building further, collated so you can answer in one pass. Companion to
-> [AGENT_ARENA_PLAN.md](AGENT_ARENA_PLAN.md) (the architecture) — this is the "vision &
+> [AGENT_ARENA_PLAN.md](../current/AGENT_ARENA_PLAN.md) (the architecture) — this is the "vision &
 > intent" layer that shapes how the pieces behave. Where I have a view it's marked
 > **Recommendation**; otherwise options are laid out neutrally.
 >
@@ -255,7 +255,7 @@ should treat as hard.
 
 ---
 
-_Companion to [AGENT_ARENA_PLAN.md](AGENT_ARENA_PLAN.md). Once answered, I'll fold the decisions
+_Companion to [AGENT_ARENA_PLAN.md](../current/AGENT_ARENA_PLAN.md). Once answered, I'll fold the decisions
 into the plan doc's relevant sections and use them to build the next slice (tools/executor →
 agent interface → turn driver → match runner), leaving the live LLM step for when you've set up
 a key._

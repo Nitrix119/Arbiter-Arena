@@ -6,7 +6,7 @@
 
 The heuristic (ScriptedAgent) is the fixed yardstick; only the LLM side varies, so results
 compare models into the same fight. Needs the relevant provider set up — see
-docs/AGENT_ARENA_LLM_SETUP.md. Free OpenRouter models cost ~nothing.
+docs/current/AGENT_ARENA_LLM_SETUP.md. Free OpenRouter models cost ~nothing.
 """
 
 import argparse

@@ -6,11 +6,11 @@
 > the unification — written so a fresh session can take over with only this file and the code. It succeeds
 > [SPELL_SYSTEM_PHASE2_PLAN.md](SPELL_SYSTEM_PHASE2_PLAN.md), which is now a completed historical record
 > (read it for how the block engine, the fold, and the global-rule install were built). Deeper intent lives
-> in [SPELL_SYSTEM_VISION.md](SPELL_SYSTEM_VISION.md) and [SPELL_SYSTEM_DESIGN.md](SPELL_SYSTEM_DESIGN.md).
+> in [SPELL_SYSTEM_VISION.md](../current/SPELL_SYSTEM_VISION.md) and [SPELL_SYSTEM_DESIGN.md](SPELL_SYSTEM_DESIGN.md).
 >
 > **This document is now mostly a phase *record*.** For the concise, current view of what remains — the last
 > deletions, carried deviations to not lose, and known awkwardness worth refining — start with
-> [SPELL_SYSTEM_REMAINING.md](SPELL_SYSTEM_REMAINING.md).
+> [SPELL_SYSTEM_REMAINING.md](../current/SPELL_SYSTEM_REMAINING.md).
 
 ---
 
@@ -102,7 +102,7 @@ reactive rider (Colossus) as holder-scoped block triggers on the shared bus via
 `src/spells/entity_effects.install_entity_effect`, returning without filing an `EffectInstance`.
 
 **Done — conditions wired to actually apply (2026-08-31):** the `apply_condition` block
-([src/spells/blocks/state.py](../src/spells/blocks/state.py)) now, after adding the marker, looks up the
+([src/spells/blocks/state.py](../../src/spells/blocks/state.py)) now, after adding the marker, looks up the
 condition's reactive rule (`inv.env.rule_engine.effect_registry`, keyed by `ConditionType.value`) and
 installs it as holder-scoped triggers **owned by a lifetime scope** — an enclosing scope (a concentration
 spell) if present, else a rounds scope on the target keyed to the condition's `duration`, else a permanent
@@ -111,7 +111,7 @@ so expiry (`tick_lifetimes`), concentration loss (`end_concentration`), and disp
 → `scope.dispose()`) tear the mechanics down with the condition. The marker's `rounds_remaining` is left
 `None` so `_tick_durations` doesn't double-count. Degrades to marker-only when unwired. A `bindings` field
 carries Charmed-style `instance_fields`. The whole condition library is now live in production; covered by
-[tests/test_condition_wiring.py](../tests/test_condition_wiring.py). Suite green (738).
+[tests/test_condition_wiring.py](../../tests/test_condition_wiring.py). Suite green (738).
 
 **Done — the general repoint (2026-08-31):** `install_entity_effect` now owns its triggers with a
 `LifetimeScope` on `entity.lifetimes` keyed to `rule.name`. A `duration_rounds` rule expires on the
@@ -119,7 +119,7 @@ holder's turn via `Entity.tick_lifetimes`; a rule with no duration is a permanen
 disposes the scope by name (`Entity.remove_effect` now handles both the block scope and the legacy
 string-tags). So **every cleanly-foldable entity effect applied via `apply_effect` with a damage_processor
 now installs on the block engine** — durations and removal included (proven with the poison DoT,
-[tests/test_block_entity_effects.py](../tests/test_block_entity_effects.py)). `instance_fields` → `bindings`
+[tests/test_block_entity_effects.py](../../tests/test_block_entity_effects.py)). `instance_fields` → `bindings`
 was already handled. **§3 is complete.** What stays on legacy dispatch: an effect with an untranslatable
 action, or one applied without a damage_processor.
 
@@ -140,7 +140,7 @@ removal (the removed path must have a block equivalent already green).
 
 - **✅ Standalone lifetime clock (2026-08-31).** The `TURN_END` lifetime tick is off
   `RuleEngine._tick_durations` and onto a self-contained subscriber
-  ([src/combat/lifetime_clock.py](../src/combat/lifetime_clock.py) `install_lifetime_clock`), installed once
+  ([src/combat/lifetime_clock.py](../../src/combat/lifetime_clock.py) `install_lifetime_clock`), installed once
   per battle by `CombatSystem.start_combat`. `_tick_durations` no longer calls `Entity.tick_lifetimes` (it
   now ticks only the legacy effect-instance/condition-marker durations), so the block engine's
   duration/concentration clock no longer depends on the legacy rule engine — that inverted dependency is
@@ -150,7 +150,7 @@ removal (the removed path must have a block equivalent already green).
   are gone. `SpellResolver.resolve` now has **one path** — the block engine — with `can_run_on_blocks`
   flipped from a silent router (fall back to legacy) into a **loud validator** (raise on a spell the block
   engine can't express). The one non-legacy coupling — `effective_damage_formula`, which the block engine
-  imported from the pipeline module — was rehomed to [src/spells/scaling.py](../src/spells/scaling.py). The
+  imported from the pipeline module — was rehomed to [src/spells/scaling.py](../../src/spells/scaling.py). The
   five parity harnesses became block-only tests (the two behaviours whose only oracle was the pipeline —
   save-honours-disadvantage and temp-HP-from-an-expression — got block-engine tests first). Suite 734 green;
   `mypy src/` down to 41 (the pipeline's own errors went with it).
@@ -171,24 +171,24 @@ The native read path, a load-time block validator, and three migrated spells lan
 What shipped:
 
 - **Native read path.** `Action`/`SpellAction` gained a `program` field
-  ([src/models/action.py](../src/models/action.py)). A spell is *native* when `program` is non-empty
+  ([src/models/action.py](../../src/models/action.py)). A spell is *native* when `program` is non-empty
   (parsed by `src.spells.block.parse_program`, run directly), *legacy* when only `pipeline_effects` is
   (still adapter-translated). The loader reads either
-  ([src/loaders/stat_block_loader.py](../src/loaders/stat_block_loader.py)); `SpellResolver.resolve`
+  ([src/loaders/stat_block_loader.py](../../src/loaders/stat_block_loader.py)); `SpellResolver.resolve`
   branches on `action.program`, and the legacy `can_run_on_blocks` loud-validator now guards **only** the
-  legacy branch ([src/combat/spell_resolver.py](../src/combat/spell_resolver.py)). Fan-out is auto-detected
+  legacy branch ([src/combat/spell_resolver.py](../../src/combat/spell_resolver.py)). Fan-out is auto-detected
   from the program (`evaluator._has_set_consumer`), so native AoE authors an explicit `for_each_target`.
-- **Load-time block validator.** [src/spells/validate.py](../src/spells/validate.py) `validate_program`
+- **Load-time block validator.** [src/spells/validate.py](../../src/spells/validate.py) `validate_program`
   elevates the runtime arity linter (`lint.py`) to the loader boundary and adds: unknown-block, missing
   **required arg**, and bad `context.X`-ref checks. `BlockContract` gained a general `required_args`
-  ([src/spells/contract.py](../src/spells/contract.py)), annotated on the core blocks (damage→formula/type,
+  ([src/spells/contract.py](../../src/spells/contract.py)), annotated on the core blocks (damage→formula/type,
   saving_throw→attribute/dc, trigger→event, the state blocks). Registry-driven, no `if/elif` on type.
 - **Three spells migrated (parity-gated).** Fire Bolt (single-target), Fireball (AoE, explicit
   `for_each_target` + `roll_once`), and **Vampiric Touch inlined into one file** — its granted repeatable
   action and concentration heal-rider are now a native `lifetime{ grant_action, trigger }`, absorbing and
   **deleting** `rules/entity_effects/vampiric_touch.json`. Proven native-==-legacy field-for-field under
-  five seeds each by [tests/test_native_program.py](../tests/test_native_program.py); validator unhappy
-  paths by [tests/test_validate_program.py](../tests/test_validate_program.py). Suite **757 green**;
+  five seeds each by [tests/test_native_program.py](../../tests/test_native_program.py); validator unhappy
+  paths by [tests/test_validate_program.py](../../tests/test_validate_program.py). Suite **757 green**;
   `mypy src/` steady at 41.
 
 ### 5b. Full spell-corpus migration — ✅ DONE (2026-09-02)
@@ -198,7 +198,7 @@ The remaining **20 spells** are now native `program`s — the whole shipped corp
 
 - **Guardrail first.** A snapshot parity harness freezes each spell's pre-migration legacy shape in
   `tests/legacy_snapshots/*.json` (effects + the referenced entity-effect rule for persistent spells);
-  [tests/test_native_corpus_parity.py](../tests/test_native_corpus_parity.py) resolves each migrated
+  [tests/test_native_corpus_parity.py](../../tests/test_native_corpus_parity.py) resolves each migrated
   spell's native program and its folded snapshot under four seeds and asserts identical result fields, with
   a sentinel that fails until every spell is native. `test_block_parity.py`'s corpus smoke tests are now
   native-aware (`parse_program` when `program` is set).
@@ -240,7 +240,7 @@ on the block engine in **library/`CombatSystem`** usage, not only under the web 
   §4.7 repoint retires). `RuleEngine._native_rules` tracks them for inspection.
 - **Value vs. expression bindings.** `apply_effect(instance_fields={"charmer": <Entity>})` passes resolved
   **values**, whereas a native trigger's `bindings` are **expressions**; `_capture_bindings`
-  ([blocks/triggers.py](../src/spells/blocks/triggers.py)) now passes a non-string binding straight through and
+  ([blocks/triggers.py](../../src/spells/blocks/triggers.py)) now passes a non-string binding straight through and
   only `evaluate`s strings, so both contracts work.
 - **Test fallout** (all repointed, not faked): ~35 tests drove crit/concentration/refill/conditions through the
   legacy dispatch. Fixes: concentration/refill/crit tests rely on `load_from_directory` auto-installing natives;
@@ -287,15 +287,15 @@ The rule content — `rules/global/*`, `rules/entity_effects/conditions/*`, and 
 the last live consumer of `fold.rule_to_trigger_blocks` (the `action`-verb `Rule` shape, folded to trigger
 blocks at install time). This slice builds the native read path and migrates a pilot, mirroring §5a:
 
-- **Native read path.** `Rule` gained a `program` field ([src/rules/rule.py](../src/rules/rule.py)); a rule
+- **Native read path.** `Rule` gained a `program` field ([src/rules/rule.py](../../src/rules/rule.py)); a rule
   is *native* when it carries a block `program` and then leaves `triggers`/`effects` empty (so it is never on
   the legacy dispatch). `RuleLoader.from_dict` reads either shape and validates a native program via
   `spells.validate.validate_program` at the loader boundary (the `program` analogue of the legacy E6 field
   check). The three install seams branch native-or-fold: `install_global_rules`
-  ([global_rules.py](../src/spells/global_rules.py), `block_eligible` now also passes any native rule),
-  `install_entity_effect` ([entity_effects.py](../src/spells/entity_effects.py)), and the condition rider
-  install ([blocks/state.py](../src/spells/blocks/state.py)).
-- **Parity guardrail.** [tests/test_native_rules_parity.py](../tests/test_native_rules_parity.py) freezes each
+  ([global_rules.py](../../src/spells/global_rules.py), `block_eligible` now also passes any native rule),
+  `install_entity_effect` ([entity_effects.py](../../src/spells/entity_effects.py)), and the condition rider
+  install ([blocks/state.py](../../src/spells/blocks/state.py)).
+- **Parity guardrail.** [tests/test_native_rules_parity.py](../../tests/test_native_rules_parity.py) freezes each
   migrated rule's pre-migration legacy shape under `tests/legacy_snapshots_rules/` and asserts the live native
   `program` parses to exactly the fold's output (with the args each seam passes), plus a sentinel that fails
   until every pilot rule is native.
@@ -328,7 +328,7 @@ blocks at install time). This slice builds the native read path and migrates a p
 - **Upcasting framework** — count/multiplicative scaling (extra darts, summon counts, durations); a
   dedicated design the user has an idea for. [[upcasting-framework-pending]]
 - **Entity lifecycle / summoning** — the `entity_lifecycle` family; prerequisites in
-  [ENTITY_LIFECYCLE_DECISIONS.md](ENTITY_LIFECYCLE_DECISIONS.md) (seed-stable IDs, pointer-safe initiative,
+  [ENTITY_LIFECYCLE_DECISIONS.md](../current/ENTITY_LIFECYCLE_DECISIONS.md) (seed-stable IDs, pointer-safe initiative,
   "downed but present", `ENTITY_DIES`/dismissal). Positioned emitters (Moonbeam, Spiritual Weapon) ride the
   existing iterators/lifetimes.
 - **Meta / `cast_spell`** — a block that invokes the resolver on another spell (Wish, Contingency) +
@@ -336,7 +336,7 @@ blocks at install time). This slice builds the native read path and migrates a p
 - **Multi-component damage / per-entry resistance** — one `damage` block currently = one type, and the
   resistance/immunity/vulnerability rules gate on `damage_list[0]` and scale the whole packet (wrong for a
   composite hit). A true fix is a first-class "damage packet" wrapping typed components, applying each
-  defender modifier per type. Full write-up: [COMPOSITE_DAMAGE_DESIGN.md](COMPOSITE_DAMAGE_DESIGN.md).
+  defender modifier per type. Full write-up: [COMPOSITE_DAMAGE_DESIGN.md](../current/COMPOSITE_DAMAGE_DESIGN.md).
   [[damage-typing-per-entry-resistance]]
 
 ---

@@ -1,6 +1,6 @@
 """The block reference doc is generated from the registry and must not drift.
 
-docs/BLOCK_REFERENCE.md is rendered from the live block REGISTRY (each handler's
+docs/current/BLOCK_REFERENCE.md is rendered from the live block REGISTRY (each handler's
 docstring + its BlockContract), so the authoring docs cannot fall behind the code
 the loader validates against. If this fails, regenerate with:
 

@@ -1,8 +1,8 @@
 # Wiring up the LLM agent
 
 How to run the arena with a real model. Two adapters exist —
-[`LLMAgent`](../src/arena/llm_agent.py) (**Claude**, §1–6) and
-[`OpenRouterAgent`](../src/arena/openrouter_agent.py) (**OpenRouter**, incl. free models, §7).
+[`LLMAgent`](../../src/arena/llm_agent.py) (**Claude**, §1–6) and
+[`OpenRouterAgent`](../../src/arena/openrouter_agent.py) (**OpenRouter**, incl. free models, §7).
 Everything else (scripted agents, matches, transcripts) runs offline; **only these adapters call
 out to a model and spend tokens.**
 
@@ -104,7 +104,7 @@ LLMAgent(
 
 ## 7. OpenRouter (free & other models)
 
-`OpenRouterAgent` ([`src/arena/openrouter_agent.py`](../src/arena/openrouter_agent.py)) is the
+`OpenRouterAgent` ([`src/arena/openrouter_agent.py`](../../src/arena/openrouter_agent.py)) is the
 second adapter — it reaches any model on [OpenRouter](https://openrouter.ai) via their
 OpenAI-compatible API, including **free** ones (e.g. NVIDIA Nemotron). It shares all
 prompt/notes/loop logic with the Claude adapter (`llm_common`); only the request differs. Great

@@ -25,7 +25,7 @@ from . import blocks as _blocks  # noqa: F401  (registers the block catalogue)
 from .contract import UNIVERSAL_FIELDS, Field, TargetArity
 from .registry import REGISTRY, BlockRegistry
 
-BLOCK_REFERENCE_PATH = "docs/BLOCK_REFERENCE.md"
+BLOCK_REFERENCE_PATH = "docs/current/BLOCK_REFERENCE.md"
 
 _HEADER = (
     "<!-- GENERATED FILE — DO NOT EDIT BY HAND.\n"
