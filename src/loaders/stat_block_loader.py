@@ -2,8 +2,31 @@
 
 import json
 import re
-from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
+
+from src.models import (
+    AbilityScores,
+    StatBlock,
+    AttackAction,
+    SpellAction,
+    Damage,
+    DamageType,
+    Action,
+    ActionType,
+    ActionCost,
+    RangeType,
+    SpellRange,
+    TargetingType,
+    AOEShape,
+    AOEProperties,
+    CastingTimeType,
+    CastingTime,
+    DurationUnit,
+    Duration,
+    SpellComponents,
+)
+from src.models.creature_size import CreatureSize
+from src.models.stat_block import DEFAULT_RESOURCE_DEFAULTS
 
 # Full-match validator for damage formulas. Accepts one or more terms, each a
 # dice term (NdM) or flat modifier (N), joined by + / -, e.g. "3d8+6",
@@ -39,32 +62,6 @@ def _parse_damage_types(values: Any, field_name: str) -> list:
     Accepts case-insensitive names (e.g. ``"fire"`` or ``"FIRE"``).
     """
     return [_enum_lookup(DamageType, raw, field_name) for raw in (values or [])]
-
-
-from src.models import (
-    AbilityScores,
-    StatBlock,
-    AttackAction,
-    SpellAction,
-    Damage,
-    DamageType,
-    Action,
-    ActionType,
-    ActionCost,
-    RangeType,
-    SpellRange,
-    TargetingType,
-    AOEShape,
-    AOEProperties,
-    CastingTimeType,
-    CastingTime,
-    DurationUnit,
-    Duration,
-    SpellComponents,
-)
-from src.models.creature_size import CreatureSize
-from src.models.spell_slots import SpellSlots
-from src.models.stat_block import DEFAULT_RESOURCE_DEFAULTS
 
 
 class StatBlockLoader:

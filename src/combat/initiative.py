@@ -1,6 +1,6 @@
 """Initiative and turn order management."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 from src.models.entity import Entity

@@ -24,6 +24,7 @@ next action. Wiring, credentials, cost, and how to run a live match are in
 * **Neutral prompt (A2)** and **notes scratchpad (B3)** — both in :mod:`llm_common`.
 """
 
+from types import ModuleType
 from typing import Any, Dict, List, Optional
 
 from src.arena.agent import Agent
@@ -33,6 +34,8 @@ from src.arena.llm_common import (
 )  # noqa: F401 (re-export)
 from src.arena.tools import ToolCall
 
+# Declared Optional up front so the ImportError fallback below type-checks.
+anthropic: Optional[ModuleType]
 try:  # optional dependency — only this module needs it (pip install -e ".[agents]")
     import anthropic
 except ImportError:  # pragma: no cover - exercised via the missing-dep message

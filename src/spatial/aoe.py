@@ -13,11 +13,10 @@ shape.  Shapes are:
 
 from __future__ import annotations
 
-import math
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Tuple
 
-from .geometry import BoundingBox, Point3D, Vector3D
+from .geometry import Point3D, Vector3D
 
 if TYPE_CHECKING:
     from src.models.entity import Entity

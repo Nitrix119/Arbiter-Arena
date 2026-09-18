@@ -49,10 +49,13 @@ class TurnManager:
         self._event_bus.emit(
             EventType.ROUND_START, RoundEventData(round_num=self.round)
         )
+        current = self._initiative_tracker.get_current_entity()
+        # Combat cannot start without combatants, so initiative is never empty.
+        assert current is not None, "Cannot start a turn with an empty initiative order"
         self._event_bus.emit(
             EventType.TURN_START,
             TurnEventData(
-                entity=self._initiative_tracker.get_current_entity(),
+                entity=current,
                 round_num=self.round,
                 turn_num=self.turn,
             ),
@@ -65,6 +68,8 @@ class TurnManager:
             True if combat should continue, False if <=1 combatant alive.
         """
         current = self._initiative_tracker.get_current_entity()
+        # Combat cannot start without combatants, so initiative is never empty.
+        assert current is not None, "Cannot end a turn with an empty initiative order"
         self._event_bus.emit(
             EventType.TURN_END,
             TurnEventData(entity=current, round_num=self.round, turn_num=self.turn),
@@ -107,6 +112,9 @@ class TurnManager:
                     EventType.ROUND_START, RoundEventData(round_num=self.round)
                 )
 
+        # The loop above only exits on a non-skipping entity; next_turn() returns
+        # None only for an empty initiative order, which cannot occur here.
+        assert next_entity is not None, "Cannot start a turn with no next entity"
         self._event_bus.emit(
             EventType.TURN_START,
             TurnEventData(entity=next_entity, round_num=self.round, turn_num=self.turn),

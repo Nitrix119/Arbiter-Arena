@@ -8,7 +8,6 @@ the :class:`~src.models.entity.Entity` wrapper instead.
 from dataclasses import dataclass, field
 from typing import Dict, List
 
-from typing import Optional
 from .ability import AbilityScores
 from .skill import Skill, STANDARD_SKILLS
 from .action import Action

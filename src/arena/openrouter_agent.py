@@ -13,6 +13,7 @@ retries once, then fails loudly, which is exactly how a flaw surfaces.
 """
 
 import json
+from types import ModuleType
 from typing import Any, Dict, List, Optional
 
 from src.arena.agent import Agent
@@ -20,6 +21,8 @@ from src.arena.credentials import resolve_credential
 from src.arena.llm_common import SYSTEM_PROMPT, decide_one_action
 from src.arena.tools import ToolCall
 
+# Declared Optional up front so the ImportError fallback below type-checks.
+openai: Optional[ModuleType]
 try:  # optional dependency — only this module needs it (pip install -e ".[agents]")
     import openai
 except ImportError:  # pragma: no cover - exercised via the missing-dep message

@@ -1,6 +1,6 @@
 import bisect
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from .event_data import EventData
 from .events import EventType
@@ -20,7 +20,7 @@ class EventBus:
     same priority fire in subscription order (FIFO).
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Each entry is (-priority, insertion_order, handler).
         # Sorted ascending so that the *highest* priority (most negative
         # negated value) comes first; ties broken by insertion order.
@@ -54,7 +54,10 @@ class EventBus:
             ]
 
     def emit(
-        self, event_type: EventType, data: EventData = None, **kwargs
+        self,
+        event_type: EventType,
+        data: Optional[Union[EventData, Dict[str, Any]]] = None,
+        **kwargs: Any,
     ) -> CombatEvent:
         """Fire an event with typed EventData or legacy **kwargs.
 

@@ -45,7 +45,9 @@ class EventData:
         return getattr(self, key, default)
 
     def keys(self) -> list:
-        result = [f.name for f in fields(self)]
+        # Every concrete subclass is a @dataclass; the base itself is not, so
+        # mypy cannot see that `self` satisfies DataclassInstance here.
+        result = [f.name for f in fields(self)]  # type: ignore[arg-type]
         for k in self.__dict__:
             if k not in result and not k.startswith("_"):
                 result.append(k)

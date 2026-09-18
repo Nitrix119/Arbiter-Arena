@@ -30,7 +30,10 @@ class Entity:
     entity_id: str = field(default_factory=dice.new_id)
     initiative_roll: Optional[int] = None
     is_player_controlled: bool = False
-    current_hp: Optional[int] = None  # None → set to max in __post_init__
+    # Declared ``int`` because ``__post_init__`` always resolves it; the ``None``
+    # default only means "start at the stat block's maximum" and never survives
+    # construction. (mypy cannot express "Optional in, non-Optional after init".)
+    current_hp: int = None  # type: ignore[assignment]
     temporary_hp: int = 0
     conditions: List[Condition] = field(default_factory=list)
     team: Optional[str] = None  # faction/team identifier; None = hostile to everyone
@@ -48,7 +51,9 @@ class Entity:
     granted_actions: List[Action] = field(
         default_factory=list
     )  # Temporary actions from effects
-    resources: Optional[ActionResources] = None
+    # As with ``current_hp``: ``__post_init__`` always builds these from the stat
+    # block's resource defaults, so they are never ``None`` after construction.
+    resources: ActionResources = None  # type: ignore[assignment]
     spell_slots: Optional[SpellSlots] = None
     legendary_actions: Optional[LegendaryActions] = None
     x: float = 0.0
