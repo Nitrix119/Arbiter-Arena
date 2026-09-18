@@ -1,0 +1,22 @@
+[flake8]
+# Match Black rather than fight it. Black is the formatting authority
+# (CLAUDE.md §5); flake8 catches what Black cannot.
+#
+# 88 matches [tool.black] in pyproject.toml. Previously flake8 defaulted to 79
+# while Black formatted to 88, which produced ~460 phantom E501s and taught
+# everyone to ignore the whole check.
+max-line-length = 88
+# E501 is deliberately NOT ignored. Black wraps code but never comments or
+# docstrings, so prose is the author's responsibility; the tree was brought to
+# zero E501 so this can be enforced rather than aspirational. Use
+# `# noqa: E501` with a reason only for a genuinely unwrappable line.
+#
+# E203 (whitespace before ':') and W503 (line break before binary operator)
+# contradict Black's output by design; both are off in every Black+flake8 setup.
+extend-ignore = E203, W503
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    build,
+    training

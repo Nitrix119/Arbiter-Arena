@@ -171,6 +171,15 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
 
 - Let the **formatter and linter** be the authority: `black`, `flake8`, `mypy`
   ([§7](#7-stack--commands)). Keep changed files clean.
+- **88 characters, enforced.** Black is pinned `==26.5.1` and both it and flake8 are configured
+  to 88 in-repo (`[tool.black]`, `.flake8`), so every environment and CI agree. `black` will not
+  wrap comments or docstrings — **wrapping prose is your job**. The tree is at zero E501 and CI
+  holds that line; do not reintroduce one, and reach for `# noqa: E501` only for a genuinely
+  unwrappable line (a long URL, an unsplittable literal), with a reason.
+- **`mypy src/` is clean (0 errors) — keep it that way.** Prefer narrowing that names the real
+  invariant over a blanket `# type: ignore`; where an ignore is unavoidable, scope it to the code
+  (`[arg-type]`) and comment why. _(Why: the 2026-09-19 sweep found a live bug — float movement
+  costs spent against an int budget — hiding behind what looked like a typing nit.)_
 - **Type annotations** throughout; prefer named structures (`NamedTuple`/dataclass) over
   bare positional tuples for anything with more than two fields.
 - **Comments explain _why_, not _what_.** Delete commented-out code — it belongs in git
@@ -385,6 +394,15 @@ leave a brief note here.
   newer Black, **do not run it on modified files**; hand-match the surrounding style instead, and
   keep the commit to the functional change. (E501 is not enforced here — the tree has ~460 lines
   >79 chars; match neighbours, not flake8's default width.)
+- _(2026-09-19 — **superseded, deliberately.** The 23.12.1 pin stopped holding: fresh envs kept
+  resolving a modern Black, so `black --check` was permanent noise and the pin protected nothing.
+  Taken via exactly the escape hatch this entry names — one standalone whole-repo reformat
+  (`7c5b85c`), machine-verified behaviour-neutral (AST identical, string constants identical,
+  docstring diffs trailing-whitespace only). Black is now pinned `==26.5.1`, and `[tool.black]`
+  plus `.flake8` pin line length to **88** in-repo so no environment can disagree again.
+  **E501 is now enforced**: all 246 over-length lines were wrapped and flake8 is clean, so the
+  rule holds from a green baseline. The lesson itself stands — never bump Black incidentally; do
+  it alone, verified, and re-pin exactly.)_
 
 ### 2026-08-08 — A structure-only test passed while the feature crashed
 - **Context:** Reviewing the spell pipeline; the `grant_temporary_hp` step was documented
