@@ -1,10 +1,12 @@
 """Main combat simulation system."""
 
+import functools
 import math
 from dataclasses import dataclass, field
-from typing import List, NamedTuple, Optional, Tuple
+from typing import Any, Callable, List, NamedTuple, Optional, Tuple, TypeVar
 from enum import Enum
 
+from src.utils import dice
 from src.models.entity import Entity
 from src.models.action import Action, AttackAction, SpellAction
 from .spell_registry import SpellRegistry
@@ -29,6 +31,28 @@ from .attack_resolver import AttackResolver
 from .spell_resolver import SpellResolver
 from .turn_manager import TurnManager
 
+
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def _with_rng(method: _F) -> _F:
+    """Run *method* with this ``CombatSystem``'s RNG bound as the active one.
+
+    Makes ``self.rng`` authoritative for any dice rolled while the method runs —
+    even when a caller (a test, a library user) invokes the method directly with
+    no surrounding :func:`~src.utils.dice.using_rng` block — so a battle given
+    its own seed is deterministic regardless of entry point. The context-var
+    bind also isolates concurrent asyncio sessions. Re-binding the same RNG on a
+    nested call is a harmless no-op.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self: "CombatSystem", *args: Any, **kwargs: Any) -> Any:
+        with dice.using_rng(self.rng):
+            return method(self, *args, **kwargs)
+
+    return wrapper  # type: ignore[return-value]
 
 
 class SpellTargetResult(NamedTuple):
@@ -77,8 +101,17 @@ class CombatSystem:
     Delegates to focused collaborators for specific concerns.
     """
 
-    def __init__(self) -> None:
-        """Initialize a new combat encounter."""
+    def __init__(self, seed: Optional[int] = None) -> None:
+        """Initialize a new combat encounter.
+
+        Args:
+            seed: When given, this battle gets its own private, seeded RNG so it
+                replays bit-for-bit and stays isolated from every other battle in
+                the process. When ``None`` (the default), the battle inherits the
+                ambient RNG bound in the current context — preserving the legacy
+                "seed the global via :func:`dice.seed_rng`" behaviour.
+        """
+        self.rng = dice.new_rng(seed) if seed is not None else dice.current_rng()
         self.state: CombatState = CombatState.SETUP
         self.initiative_tracker: InitiativeTracker = InitiativeTracker()
         self.combatants: List[Entity] = []
@@ -159,6 +192,7 @@ class CombatSystem:
         """Current turn number within the round."""
         return self._turn_manager.turn if self._turn_manager else 0
 
+    @_with_rng
     def add_combatant(self, entity: Entity, initiative_modifier: int = 0) -> None:
         """Add an entity to combat.
 
@@ -172,6 +206,7 @@ class CombatSystem:
         self.combatants.append(entity)
         self.initiative_tracker.add_entity(entity, initiative_modifier)
 
+    @_with_rng
     def start_combat(self) -> None:
         """Begin combat with all added entities."""
         if self.state != CombatState.SETUP:
@@ -200,6 +235,7 @@ class CombatSystem:
                         "Combat started!")
         self._turn_manager.start()
 
+    @_with_rng
     def resolve_attack(self, attacker: Entity, defender: Entity,
                        action: AttackAction) -> Tuple[bool, int]:
         """Resolve an attack roll and damage.
@@ -235,6 +271,7 @@ class CombatSystem:
             self._log_action(attacker, log_msg)
         return hit, total_damage, roll_detail
 
+    @_with_rng
     def resolve_spell(
         self,
         caster: Entity,
@@ -336,6 +373,7 @@ class CombatSystem:
             for i, (hit, damage, _, roll_detail, healing, healed) in enumerate(results)
         ]
 
+    @_with_rng
     def resolve_legendary_action(
         self,
         entity: Entity,
@@ -427,6 +465,7 @@ class CombatSystem:
         self._log_action(entity, f"uses {action.name}")
         return None
 
+    @_with_rng
     def end_turn(self, entity_id: Optional[str] = None) -> None:
         """End the current entity's turn and advance to the next.
 
@@ -607,6 +646,32 @@ class CombatSystem:
         entity.y = new_y
         entity.z = new_z
 
+    def is_destination_clear(
+        self,
+        moving: Entity,
+        new_x: float,
+        new_y: float,
+        new_z: float = 0.0,
+    ) -> bool:
+        """Return True if placing *moving* at the new position overlaps no alive entity.
+
+        Read-only: the authoritative occupancy test used both to validate a move
+        (:meth:`_check_movement_overlap`) and to generate legal move destinations. Dead
+        entities (corpses) do not block movement and are skipped.
+        """
+        s = moving.stat_block.size.size_ft
+        half = s / 2.0
+        new_bbox = BoundingBox(
+            min_corner=Point3D(new_x - half, new_y, new_z - half),
+            max_corner=Point3D(new_x + half, new_y + s, new_z + half),
+        )
+        for other in self.get_alive_entities():
+            if other is moving:
+                continue
+            if new_bbox.overlaps(other.bounding_box):
+                return False
+        return True
+
     def _check_movement_overlap(
         self,
         moving: Entity,
@@ -616,7 +681,8 @@ class CombatSystem:
     ) -> None:
         """Raise ValueError if placing *moving* at the new position overlaps any alive entity.
 
-        Dead entities (corpses) do not block movement and are skipped.
+        Names the blocking entity for the error message; the boolean test lives in
+        :meth:`is_destination_clear`.
         """
         s = moving.stat_block.size.size_ft
         half = s / 2.0

@@ -3,7 +3,7 @@
 > **Status: design note / open problem, not a plan.** Captures a known correctness gap
 > and a sketched direction to refine later. The gap **predates** the block-system rework
 > (it lives in the damage-modifier rules themselves, not the migration), so it is recorded
-> here rather than fixed inline. See also [SPELL_SYSTEM_PHASE3_PLAN.md](SPELL_SYSTEM_PHASE3_PLAN.md)
+> here rather than fixed inline. See also [SPELL_SYSTEM_PHASE3_PLAN.md](../archive/SPELL_SYSTEM_PHASE3_PLAN.md)
 > §6 ("Multi-component damage / per-entry resistance") and the recurring
 > `damage-typing-per-entry-resistance` note.
 

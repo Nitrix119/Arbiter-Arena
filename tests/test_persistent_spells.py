@@ -233,7 +233,7 @@ class TestHaste:
     def test_duration_expires_on_the_casters_turns(self):
         """Accepted deviation: the 10-round clock lives on the caster's concentration
         scope, so it ticks on the *caster's* turns, not the ally's
-        (a carried deviation — see docs/SPELL_SYSTEM_REMAINING.md §2)."""
+        (a carried deviation — see docs/current/SPELL_SYSTEM_REMAINING.md §2)."""
         caster, ally = _cleric(), _cleric()
         bus, engine, resolver = self._setup(caster, ally)
         resolver.resolve(caster, [ally], _spell("haste"))

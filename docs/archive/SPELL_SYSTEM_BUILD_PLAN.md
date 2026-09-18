@@ -38,9 +38,9 @@ Delivered, all on the **existing** flat pipeline, deliberately as additions that
 **What the base still is, mechanically** (the thing we are about to replace):
 
 - `EffectPipeline.run` is a **flat loop** with a hard-coded `if/elif` ladder on `step["type"]`
-  ([`effect_pipeline.py`](../src/combat/effect_pipeline.py)). One ephemeral context. No nesting.
+  ([`effect_pipeline.py`](../../src/combat/effect_pipeline.py)). One ephemeral context. No nesting.
 - **Two effect vocabularies** still exist: the pipeline step types *and* `BUILTIN_EFFECTS`
-  ([`effects.py`](../src/rules/effects.py)), bridged by synthetic stub events. A lifetime-bearing
+  ([`effects.py`](../../src/rules/effects.py)), bridged by synthetic stub events. A lifetime-bearing
   spell is still two files (spell JSON + entity-effect JSON).
 - Fan-out (AoE and now `multi_target`) lives in `SpellResolver`, outside the pipeline.
 
@@ -310,7 +310,7 @@ each is independently shippable and testable.
 
 ### 4.4 Entity lifecycle / summoning
 - The `entity_lifecycle` block family (design §6.12, decisions in
-  [ENTITY_LIFECYCLE_DECISIONS.md](ENTITY_LIFECYCLE_DECISIONS.md)). Depends on 4.2 (lifetimes) and 4.3
+  [ENTITY_LIFECYCLE_DECISIONS.md](../current/ENTITY_LIFECYCLE_DECISIONS.md)). Depends on 4.2 (lifetimes) and 4.3
   (triggers/work-queue). Prerequisites to land first: seed-stable entity IDs, pointer-safe initiative
   insert/remove + roll-off tiebreak, a "downed but present" state distinct from "removed", and an
   `ENTITY_DIES` + dismissal event pair.
@@ -399,5 +399,5 @@ shape-routing. That is the smallest slice that puts the new system "in play" whi
 observable behaviour — the safe beachhead everything else builds from.
 
 _See also: [SPELL_SYSTEM_DESIGN.md](SPELL_SYSTEM_DESIGN.md) (full design + completed-stage notes),
-[SPELL_SYSTEM_VISION.md](SPELL_SYSTEM_VISION.md) (intent), [ENTITY_LIFECYCLE_DECISIONS.md](ENTITY_LIFECYCLE_DECISIONS.md)
+[SPELL_SYSTEM_VISION.md](../current/SPELL_SYSTEM_VISION.md) (intent), [ENTITY_LIFECYCLE_DECISIONS.md](../current/ENTITY_LIFECYCLE_DECISIONS.md)
 (summoning), [SPELL_SYSTEM_DECISIONS.md](SPELL_SYSTEM_DECISIONS.md) (block-model decisions)._

@@ -31,7 +31,7 @@ The design doc is explicitly pre-commitment. Before anything else I need to know
 
 ### A2. Should the one live bug be fixed independently, now? ⛳
 §6.4 flags a real defect, not just a design smell: `inject_pipeline_damage_step`
-([effects.py:286](../src/rules/effects.py#L286)) appends to `action.pipeline_effects` mid-iteration
+([effects.py:286](../../src/rules/effects.py#L286)) appends to `action.pipeline_effects` mid-iteration
 **and mutates the shared `SpellAction`**, so a second cast can double-inject. This exists today,
 independent of any redesign.
 
@@ -259,5 +259,5 @@ function — name the spell that must work and it'll shape the block set).
 ---
 
 _Source: [SPELL_SYSTEM_DESIGN.md](SPELL_SYSTEM_DESIGN.md) (§3 target model, §6 challenges, §7 roadmap,
-§8 open questions) and [SPELL_SYSTEM_VISION.md](SPELL_SYSTEM_VISION.md) §8. Once answered, I'll fold
+§8 open questions) and [SPELL_SYSTEM_VISION.md](../current/SPELL_SYSTEM_VISION.md) §8. Once answered, I'll fold
 the decisions back into the design doc and, if greenlit, draft the stage-1 plan._

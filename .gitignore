@@ -97,12 +97,25 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
 .venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Secrets — never commit API keys/credentials
+*.pem
+secrets/
+.anthropic/
+
+# Arena match transcripts (local run artifacts)
+*.jsonl
+llm_match.jsonl
+match.jsonl
+# ...but the playback page ships a committed demo match under static/matches.
+!web/static/matches/*.jsonl
 
 # Spyder project settings
 .spyderproject

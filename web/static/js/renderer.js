@@ -25,11 +25,26 @@ function drawOneToken(token) {
     const infoHover = token === state.infoHoveredToken;
     const red = token.team === 2;
 
+    // Playback marks defeated combatants with `dead`; live-battle tokens never set
+    // it, so this branch is inert there. Draw them faded rather than removing them.
+    const savedAlpha = ctx.globalAlpha;
+    if (token.dead) ctx.globalAlpha = savedAlpha * 0.28;
+
     if (infoHover) {
         ctx.beginPath();
         ctx.arc(sx, sy, sr + 5, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(255, 240, 150, 0.50)";
         ctx.lineWidth   = 1.5;
+        ctx.stroke();
+    }
+
+    // Playback rings the current actor via `token.highlight`; never set on the live
+    // battle page, so this is inert there.
+    if (token.highlight) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(218, 165, 32, 0.95)";
+        ctx.lineWidth   = 2.5;
         ctx.stroke();
     }
 
@@ -55,6 +70,8 @@ function drawOneToken(token) {
         ctx.textAlign    = "left";
         ctx.textBaseline = "top";
     }
+
+    ctx.globalAlpha = savedAlpha;
 }
 
 // Returns the effective range in feet for any action (attack or spell).
@@ -252,16 +269,20 @@ function renderFloatingLabels() {
         ctx.roundRect(sx - tw / 2, sy - th / 2, tw, th, th / 2);
         ctx.fill();
 
-        ctx.fillStyle = lbl.hit
-            ? `rgba(115, 210, 85,  ${alpha})`
-            : `rgba(210, 85,  85,  ${alpha})`;
+        ctx.fillStyle = lbl.color
+            ? `rgba(${lbl.color}, ${alpha})`
+            : lbl.hit
+                ? `rgba(115, 210, 85,  ${alpha})`
+                : `rgba(210, 85,  85,  ${alpha})`;
         ctx.fillText(lbl.text, sx, sy);
     }
     ctx.restore();
 }
 
-export function spawnFloatingLabel(wx, wy, text, hit, scale = 1.0) {
-    state.floatingLabels.push({ text, wx, wy, hit, scale, t0: performance.now() });
+// `color` (optional) is an "r, g, b" string that overrides the hit/miss colouring —
+// used by playback for crit/fumble labels. Omitted by the live battle page.
+export function spawnFloatingLabel(wx, wy, text, hit, scale = 1.0, color = null) {
+    state.floatingLabels.push({ text, wx, wy, hit, scale, color, t0: performance.now() });
     _ensureFloatLoop();
 }
 
