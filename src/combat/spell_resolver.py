@@ -128,7 +128,8 @@ class SpellResolver:
             roll_mode = ""  # advantage/disadvantage label already logged by pipeline
             log_msg = (
                 f"cast {action.name} at {defender.name}. "
-                f"Spell attack{roll_mode}: {result.attack_roll}+...={result.attack_total}"
+                f"Spell attack{roll_mode}: {result.attack_roll}"
+                f"+...={result.attack_total}"
                 f" vs AC {defender.ac}. {hit_str}"
             )
             roll_detail: Optional[dict] = {

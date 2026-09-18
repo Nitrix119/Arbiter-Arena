@@ -434,7 +434,8 @@ class StatBlockLoader:
         if action.recharge:
             base["recharge"] = action.recharge
 
-        # Serialize cost (omit if all zeros — the default is derived by the Action class)
+        # Serialize cost (omit if all zeros — the default is derived by the
+        # Action class)
         from src.models.action_resources import NO_COST
 
         if action.cost != NO_COST:

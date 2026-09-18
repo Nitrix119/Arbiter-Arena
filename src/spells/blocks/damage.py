@@ -157,7 +157,9 @@ REGISTRY.register(
                         "per_slot_above",
                         "int",
                         required=True,
-                        description="Threshold slot level; dice are added per level above it.",
+                        description=(
+                            "Threshold slot level; dice are added per level above it."
+                        ),
                     ),
                     Field(
                         "add_dice",

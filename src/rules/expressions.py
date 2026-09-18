@@ -82,7 +82,8 @@ def _validate_ast(expr: str) -> None:
 
         if node_type not in ALLOWED_NODES:
             raise ValueError(
-                f"Invalid expression {expr!r}: disallowed node type '{node_type.__name__}'"
+                f"Invalid expression {expr!r}: disallowed node type "
+                f"'{node_type.__name__}'"
             )
 
         if isinstance(node, ast.Attribute) and node.attr.startswith("_"):

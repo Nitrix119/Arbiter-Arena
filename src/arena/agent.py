@@ -4,11 +4,12 @@ An :class:`Agent` controls a **team** (B1): the turn driver invokes it for which
 its creatures is currently active, so the ``observation``'s ``self`` rotates. Each call
 returns exactly **one** action (B2) — the driver loops until the agent ends its turn.
 
-The contract is **provider-neutral** (E4): an agent receives a plain-dict observation and
-a list of plain-JSON tool schemas, and returns a plain :class:`~src.arena.tools.ToolCall`.
-An LLM adapter is one implementation; the deterministic agents here are baselines and test
-fixtures. An agent may keep a small, capped ``notes`` string across its turns — a scratchpad
-memory (B3) the deterministic agents don't use but an LLM agent will.
+The contract is **provider-neutral** (E4): an agent receives a plain-dict observation
+and a list of plain-JSON tool schemas, and returns a plain
+:class:`~src.arena.tools.ToolCall`. An LLM adapter is one implementation; the
+deterministic agents here are baselines and test fixtures. An agent may keep a small,
+capped ``notes`` string across its turns — a scratchpad memory (B3) the deterministic
+agents don't use but an LLM agent will.
 """
 
 import math
@@ -26,18 +27,20 @@ from src.arena.tools import (
 
 
 class NoToolCallError(RuntimeError):
-    """An agent could not produce a tool call for its turn (e.g. the model returned prose).
+    """An agent could not produce a tool call for its turn (e.g. the model returned
+    prose).
 
-    The turn driver treats this like an illegal action — counted against the failure budget
-    and fed back — rather than a crash, so one flaky model response can't abort a whole match.
+    The turn driver treats this like an illegal action — counted against the failure
+    budget and fed back — rather than a crash, so one flaky model response can't abort
+    a whole match.
     """
 
 
 class Agent(ABC):
     """Base class: decides one action from an observation.
 
-    Subclasses implement :meth:`decide`. ``notes`` is an optional scratchpad the agent may
-    carry between its own turns (capped at :data:`MAX_NOTES_CHARS`).
+    Subclasses implement :meth:`decide`. ``notes`` is an optional scratchpad the agent
+    may carry between its own turns (capped at :data:`MAX_NOTES_CHARS`).
     """
 
     MAX_NOTES_CHARS = 500
@@ -90,12 +93,13 @@ def _pick_target(
 def _move_option_toward(
     observation: Dict[str, Any], enemy_id: str
 ) -> Optional[ToolCall]:
-    """A ``move`` ToolCall taking the legal ``toward_melee`` option for *enemy_id*, if any.
+    """A ``move`` ToolCall taking the legal ``toward_melee`` option for *enemy_id*, if
+    any.
 
-    The option comes from :func:`~src.arena.action_space.move_candidates`, so it is already
-    overlap-checked against every creature — closing to melee never lands on a third body
-    (unlike computing a raw standoff). Returns ``None`` when no such legal option exists
-    (e.g. already in reach, or fully boxed in).
+    The option comes from :func:`~src.arena.action_space.move_candidates`, so it is
+    already overlap-checked against every creature — closing to melee never lands on a
+    third body (unlike computing a raw standoff). Returns ``None`` when no such legal
+    option exists (e.g. already in reach, or fully boxed in).
     """
     want = f"toward_melee:{enemy_id}"
     for move in observation["legal_actions"].get("moves", []):
@@ -116,7 +120,9 @@ def _attacks_on_enemies(observation: Dict[str, Any], enemy_ids: set) -> List[tup
 
 
 def _spells_on_enemies(observation: Dict[str, Any], enemy_ids: set) -> List[tuple]:
-    """All ``(spell, enemy_target_view)`` pairs for single-target spells with a reachable enemy."""
+    """All ``(spell, enemy_target_view)`` pairs for single-target spells with a
+    reachable enemy.
+    """
     enemy_by_id = {e["entity_id"]: e for e in observation["enemies"]}
     pairs = []
     for sp in observation["legal_actions"]["spells"]:
@@ -134,9 +140,9 @@ def _spells_on_enemies(observation: Dict[str, Any], enemy_ids: set) -> List[tupl
 class RandomAgent(Agent):
     """Picks uniformly among legal actions — a sanity floor.
 
-    Candidates are every affordable attack/single-target spell against a reachable enemy,
-    a step toward a random enemy when movement remains, and ``end_turn``. Deterministic
-    when given a seeded ``rng``.
+    Candidates are every affordable attack/single-target spell against a reachable
+    enemy, a step toward a random enemy when movement remains, and ``end_turn``.
+    Deterministic when given a seeded ``rng``.
     """
 
     def __init__(
@@ -179,9 +185,9 @@ class RandomAgent(Agent):
 class ScriptedAgent(Agent):
     """A deterministic heuristic: hit the weakest reachable enemy, else close, else end.
 
-    Priority each call: (1) attack the lowest-HP reachable enemy; (2) failing that, cast a
-    single-target spell at one; (3) failing that, move toward the nearest enemy; (4) end the
-    turn. A fixed skill benchmark for LLM agents to be measured against.
+    Priority each call: (1) attack the lowest-HP reachable enemy; (2) failing that, cast
+    a single-target spell at one; (3) failing that, move toward the nearest enemy; (4)
+    end the turn. A fixed skill benchmark for LLM agents to be measured against.
     """
 
     def decide(

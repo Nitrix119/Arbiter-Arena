@@ -274,8 +274,9 @@ async def handle_start_combat(
         # Attach global spell registry
         combat.spell_registry = ws.app.state.spell_registry
 
-        # Install the global rules on this session's bus. Every rule is a block program,
-        # so loading it *is* installing it on the block engine — the one resolution path.
+        # Install the global rules on this session's bus. Every rule is a block
+        # program, so loading it *is* installing it on the block engine — the one
+        # resolution path.
         load_rules_from_directory(
             str(_GLOBAL_RULES_DIR),
             event_bus=combat.event_bus,

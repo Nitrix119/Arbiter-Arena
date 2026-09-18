@@ -1,15 +1,17 @@
 """Reusable benchmark scenarios — an LLM side vs the deterministic heuristic.
 
 Each :class:`Scenario` builds a **fresh, unstarted** ``CombatSystem`` (via
-:func:`~src.arena.setup.build_combat`, so the global rules are installed) and names which team
-the LLM controls and which the heuristic controls. Fresh entities are built on every call so a
-batch of seeded matches never shares mutated state. Positions are backend feet.
+:func:`~src.arena.setup.build_combat`, so the global rules are installed) and names
+which team the LLM controls and which the heuristic controls. Fresh entities are built
+on every call so a batch of seeded matches never shares mutated state. Positions are
+backend feet.
 
-Design (session notes, 2026-09): the heuristic (:class:`~src.arena.agent.ScriptedAgent`) only
-advances-and-attacks, so it always controls a plain **melee** side; the LLM controls the side
-whose good play needs the skill under test. For an asymmetric scenario the LLM side and the
-reason are recorded in ``Scenario.llm_rationale``. Only weapon attacks are used (no spells), so
-these need no spell registry.
+Design (session notes, 2026-09): the heuristic
+(:class:`~src.arena.agent.ScriptedAgent`) only advances-and-attacks, so it always
+controls a plain **melee** side; the LLM controls the side whose good play needs the
+skill under test. For an asymmetric scenario the LLM side and the reason are recorded in
+``Scenario.llm_rationale``. Only weapon attacks are used (no spells), so these need no
+spell registry.
 """
 
 from dataclasses import dataclass
@@ -134,40 +136,48 @@ def _build_protect_squishy() -> CombatSystem:
 SCENARIOS: Dict[str, Scenario] = {
     "kiting": Scenario(
         name="kiting",
-        description="Kiting duel: a fast, fragile archer vs a heavy melee bruiser, 40 ft apart.",
+        description=(
+            "Kiting duel: a fast, fragile archer vs a heavy melee bruiser, 40 ft apart."
+        ),
         llm_team="a",
         heuristic_team="b",
         llm_rationale=(
-            "LLM = the archer (team a): kiting is the skill — shoot, then retreat past the "
-            "bruiser's reach so it never lands a blow. The bruiser's optimal line is simply "
-            "'close and swing', which the heuristic plays faithfully. Signal: HP taken by the "
-            "archer (a skilled model wins nearly untouched; a naive one stands and trades)."
+            "LLM = the archer (team a): kiting is the skill — shoot, then retreat past "
+            "the bruiser's reach so it never lands a blow. The bruiser's optimal line "
+            "is simply 'close and swing', which the heuristic plays faithfully. "
+            "Signal: HP taken by the archer (a skilled model wins nearly untouched; a "
+            "naive one stands and trades)."
         ),
         build=_build_kiting,
     ),
     "alpha_strike": Scenario(
         name="alpha_strike",
-        description="Alpha-strike: identical 2v2 melee fighters — only the controller differs.",
+        description=(
+            "Alpha-strike: identical 2v2 melee fighters — only the controller differs."
+        ),
         llm_team="a",
         heuristic_team="b",
         llm_rationale=(
-            "Symmetric roster, so LLM = team a by convention. Tests coordination with equal "
-            "pieces: concentrate both attacks to drop one enemy a turn early (halving its "
-            "return damage) vs the heuristic's cruder lowest-HP targeting. Signal: win-rate "
-            "above 50% against the mirror heuristic."
+            "Symmetric roster, so LLM = team a by convention. Tests coordination with "
+            "equal pieces: concentrate both attacks to drop one enemy a turn early "
+            "(halving its return damage) vs the heuristic's cruder lowest-HP "
+            "targeting. Signal: win-rate above 50% against the mirror heuristic."
         ),
         build=_build_alpha_strike,
     ),
     "protect_squishy": Scenario(
         name="protect_squishy",
-        description="Protect the squishy: a tank + fragile archer vs two melee raiders.",
+        description=(
+            "Protect the squishy: a tank + fragile archer vs two melee raiders."
+        ),
         llm_team="a",
         heuristic_team="b",
         llm_rationale=(
-            "LLM = the mixed duo (team a): the skill is role play — interpose the tank, keep "
-            "the archer back and shooting, don't let the raiders reach it. The raiders just "
-            "advance and swing, which the heuristic plays faithfully. Signal: did the archer "
-            "survive / stay untouched, and did team a win comfortably."
+            "LLM = the mixed duo (team a): the skill is role play — interpose the "
+            "tank, keep the archer back and shooting, don't let the raiders reach it. "
+            "The raiders just advance and swing, which the heuristic plays faithfully. "
+            "Signal: did the archer survive / stay untouched, and did team a win "
+            "comfortably."
         ),
         build=_build_protect_squishy,
     ),

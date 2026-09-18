@@ -1,21 +1,22 @@
-"""Compute benchmark metrics from a recorded match transcript — the first, no-engine-work slice.
+"""Compute benchmark metrics from a recorded match transcript — the first,
+no-engine-work slice.
 
-Everything here reads a match's JSONL transcript (see :mod:`src.arena.transcript`) and never
-re-runs a model: the log already carries per-action results, per-turn ground-truth snapshots,
-and the roster's stat blocks. The metrics are intentionally **un-normalised** — raw counts and
-fractions — so we can first check they tell the story we know the logs contain, and calibrate
-ranges later.
+Everything here reads a match's JSONL transcript (see :mod:`src.arena.transcript`) and
+never re-runs a model: the log already carries per-action results, per-turn ground-truth
+snapshots, and the roster's stat blocks. The metrics are intentionally
+**un-normalised** — raw counts and fractions — so we can first check they tell the story
+we know the logs contain, and calibrate ranges later.
 
 Two kinds of metric, kept firmly apart:
 
-* **Global (per team).** Always computable and always applicable — conformance (illegal / no-tool
-  / forfeit), damage dealt and taken, overkill, the match outcome.
-* **Scenario-scoped.** Only meaningful for a *specific subject* in a *specific scenario* — kiting
-  adherence for the ranged unit, protected-unit survival for the fragile one. These **never
-  auto-apply**: a scoped metric is computed only when a known scenario declares it *and* its
-  subject resolves **uniquely** by role. Otherwise it is reported as *not applicable* (with a
-  reason) rather than measured on a unit that should not be tracked — the failure mode that would
-  silently muddy the signal.
+* **Global (per team).** Always computable and always applicable — conformance
+  (illegal / no-tool / forfeit), damage dealt and taken, overkill, the match outcome.
+* **Scenario-scoped.** Only meaningful for a *specific subject* in a *specific
+  scenario* — kiting adherence for the ranged unit, protected-unit survival for the
+  fragile one. These **never auto-apply**: a scoped metric is computed only when a known
+  scenario declares it *and* its subject resolves **uniquely** by role. Otherwise it is
+  reported as *not applicable* (with a reason) rather than measured on a unit that
+  should not be tracked — the failure mode that would silently muddy the signal.
 """
 
 import json
@@ -97,8 +98,9 @@ class Turn:
         return self.end_cause != "agent"
 
 
-# Mirror of the turn driver's guards (src/arena/turn_driver.py) so we can reconstruct *why* a
-# turn ended from the logged action stream — the transcript does not record it directly.
+# Mirror of the turn driver's guards (src/arena/turn_driver.py) so we can reconstruct
+# *why* a turn ended from the logged action stream — the transcript does not record it
+# directly.
 _MAX_CONSECUTIVE_FAILURES = 3
 _MAX_TOTAL_FAILURES = 5
 _MAX_ACTIONS_PER_TURN = 20
@@ -107,9 +109,9 @@ _MAX_ACTIONS_PER_TURN = 20
 def _end_cause(actions: List[dict]) -> str:
     """Replay the failure-budget logic over a turn's actions to classify how it ended.
 
-    ``agent`` — the agent ended its own turn (a successful ``end_turn``). ``budget`` — the driver
-    force-ended after 3 consecutive or 5 total failed calls. ``cap`` — the per-turn action cap.
-    ``skip`` — a downed actor took no action.
+    ``agent`` — the agent ended its own turn (a successful ``end_turn``). ``budget`` —
+    the driver force-ended after 3 consecutive or 5 total failed calls. ``cap`` — the
+    per-turn action cap. ``skip`` — a downed actor took no action.
     """
     if not actions:
         return "skip"
@@ -139,9 +141,9 @@ def _end_cause(actions: List[dict]) -> str:
 def group_turns(records: List[dict]) -> List[Turn]:
     """Split the record stream into per-turn groups.
 
-    A turn runs from a ``turn_start`` to the next ``turn_end``. A downed actor is skipped by the
-    driver and logs a bare ``turn_end`` (no ``turn_start``, no actions) — captured here as a
-    zero-action ``skip`` turn so the counts stay honest.
+    A turn runs from a ``turn_start`` to the next ``turn_end``. A downed actor is
+    skipped by the driver and logs a bare ``turn_end`` (no ``turn_start``, no actions) —
+    captured here as a zero-action ``skip`` turn so the counts stay honest.
     """
     turns: List[Turn] = []
     cur_id: Optional[str] = None
@@ -171,8 +173,9 @@ def hp_timeline(
 ) -> Dict[str, List[int]]:
     """Per-entity HP over the match: max HP, then its HP at each ``turn_end`` snapshot.
 
-    Ground truth straight from the ungated snapshots, so it captures every source of HP loss (not
-    only logged attack damage). Used for damage-taken and for scoped survival/HP-taken metrics.
+    Ground truth straight from the ungated snapshots, so it captures every source of HP
+    loss (not only logged attack damage). Used for damage-taken and for scoped
+    survival/HP-taken metrics.
     """
     timelines: Dict[str, List[int]] = {eid: [c.max_hp] for eid, c in roster.items()}
     for te in _of_kind(records, "turn_end"):
@@ -188,7 +191,9 @@ def _final_hp(timeline: List[int]) -> int:
 
 
 def _hp_lost(timeline: List[int]) -> int:
-    """Total HP lost = sum of downward steps (ignores healing add-back) = damage taken."""
+    """Total HP lost = sum of downward steps (ignores healing add-back) = damage
+    taken.
+    """
     return sum(max(0, timeline[i - 1] - timeline[i]) for i in range(1, len(timeline)))
 
 
@@ -198,7 +203,9 @@ def _hp_lost(timeline: List[int]) -> int:
 
 
 def _action_damage(result: dict) -> List[Tuple[str, int]]:
-    """(target_id, damage) pairs an action dealt — one for an attack, many for a spell."""
+    """(target_id, damage) pairs an action dealt — one for an attack, many for a
+    spell.
+    """
     if not result.get("ok"):
         return []
     if result.get("action") == "attack" and result.get("target_id") is not None:
@@ -266,13 +273,15 @@ class MatchReport:
 # Scenario scopes — the applicability declarations
 # ---------------------------------------------------------------------------
 
-# A scenario is the *only* thing that authorises a scoped metric, and it names the metric plus the
-# role rule that resolves its subject. Resolution must be UNIQUE or the metric declines to apply.
-# (Kept as an explicit table, not inferred, precisely so a metric never fires on the wrong unit.)
+# A scenario is the *only* thing that authorises a scoped metric, and it names the
+# metric plus the role rule that resolves its subject. Resolution must be UNIQUE or the
+# metric declines to apply. (Kept as an explicit table, not inferred, precisely so a
+# metric never fires on the wrong unit.)
 _SCENARIO_SCOPES: Dict[str, List[Tuple[str, str]]] = {
     "kiting": [("kiting_adherence", "unique_ranged")],
     "protect_squishy": [("protected_survival", "unique_fragile")],
-    "alpha_strike": [],  # coordination is a global (focus-fire) metric, added in a later slice
+    # coordination is a global (focus-fire) metric, added in a later slice
+    "alpha_strike": [],
 }
 
 
@@ -281,8 +290,9 @@ def _resolve_subject(
 ) -> Tuple[Optional[Combatant], str]:
     """Resolve a scoped metric's subject by role, requiring uniqueness.
 
-    Returns ``(combatant, "")`` on a unique match, or ``(None, reason)`` when the role matches
-    zero or more than one combatant — in which case the metric declines rather than guess.
+    Returns ``(combatant, "")`` on a unique match, or ``(None, reason)`` when the role
+    matches zero or more than one combatant — in which case the metric declines rather
+    than guess.
     """
     if role == "unique_ranged":
         cands = [c for c in roster.values() if c.is_ranged]
@@ -297,7 +307,8 @@ def _resolve_subject(
         return cands[0], ""
     return (
         None,
-        f"{label} is not unique ({len(cands)} candidates); not tracking to avoid a false signal",
+        f"{label} is not unique ("
+        f"{len(cands)} candidates); not tracking to avoid a false signal",
     )
 
 
@@ -307,12 +318,16 @@ def _resolve_subject(
 
 
 def _melee_reach_between(a: Combatant, b: Combatant) -> float:
-    """Centre-to-centre distance at which *b* can melee-attack *a* (edge reach + both half-sizes)."""
+    """Centre-to-centre distance at which *b* can melee-attack *a* (edge reach + both
+    half-sizes).
+    """
     return b.max_attack_range_ft + a.size_ft / 2 + b.size_ft / 2
 
 
 def _positions_by_turn(records: List[dict]) -> List[Dict[str, dict]]:
-    """Each ``turn_end`` snapshot as ``{entity_id: {"hp":…, "x":…, "z":…, "alive":…}}``."""
+    """Each ``turn_end`` snapshot as
+    ``{entity_id: {"hp":…, "x":…, "z":…, "alive":…}}``.
+    """
     frames = []
     for te in _of_kind(records, "turn_end"):
         frame = {}
@@ -333,9 +348,10 @@ def _kiting_adherence(
 ) -> Dict[str, object]:
     """How well a ranged subject stayed out of melee — the kiting signal.
 
-    ``frac_out_of_melee``: of the snapshots where the subject was alive, the fraction where the
-    nearest melee enemy could not reach it. ``rounds_in_melee``: how many it spent reachable.
-    ``hp_taken`` / ``final_hp``: the outcome ("wins nearly untouched" vs "stands and trades").
+    ``frac_out_of_melee``: of the snapshots where the subject was alive, the fraction
+    where the nearest melee enemy could not reach it. ``rounds_in_melee``: how many it
+    spent reachable. ``hp_taken`` / ``final_hp``: the outcome ("wins nearly untouched"
+    vs "stands and trades").
     """
     melee_enemies = [
         c for c in roster.values() if c.team != subject.team and not c.is_ranged
@@ -375,10 +391,11 @@ def _kiting_adherence(
 def _protected_survival(
     subject: Combatant, records: List[dict], roster: Dict[str, Combatant]
 ) -> Dict[str, object]:
-    """Whether the protected unit lived and how much it was hurt — the true objective signal.
+    """Whether the protected unit lived and how much it was hurt — the true objective
+    signal.
 
-    (This is the metric that would have caught the 2026-09-15 false positive: a *won* match in
-    which the unit that was supposed to be protected died.)
+    (This is the metric that would have caught the 2026-09-15 false positive: a *won*
+    match in which the unit that was supposed to be protected died.)
     """
     timeline = hp_timeline(records, roster)[subject.entity_id]
     final = _final_hp(timeline)
@@ -404,8 +421,9 @@ _SCOPED_COMPUTERS = {
 def compute_report(records: List[dict], scenario: Optional[str] = None) -> MatchReport:
     """Compute the full metric report for one match transcript.
 
-    *scenario* (when given and known) authorises this match's scenario-scoped metrics; omit it (or
-    pass an unknown name) and only the global, always-applicable metrics are produced.
+    *scenario* (when given and known) authorises this match's scenario-scoped metrics;
+    omit it (or pass an unknown name) and only the global, always-applicable metrics are
+    produced.
     """
     roster = build_roster(records)
     start = _first(records, "match_start")
@@ -464,8 +482,9 @@ def _final_standings(
 ) -> Tuple[Dict[str, float], Dict[str, List[str]]]:
     """Per-team surviving-HP fraction and survivor names, from the last snapshot.
 
-    Derived here rather than read from ``match_end`` because the transcript's ``match_end`` record
-    carries only winner/reason/rounds; the final ``turn_end`` snapshot is the ground truth.
+    Derived here rather than read from ``match_end`` because the transcript's
+    ``match_end`` record carries only winner/reason/rounds; the final ``turn_end``
+    snapshot is the ground truth.
     """
     ends = _of_kind(records, "turn_end")
     cur: Dict[str, int] = {}

@@ -1,14 +1,15 @@
 """Build an agent's view of the battle — its sensory input for one turn.
 
-``build_observation`` produces a plain ``dict`` (JSON-serializable) from *one entity's*
-point of view: itself and its allies in full, each enemy filtered through the
-:class:`~src.arena.information_policy.InformationPolicy`, the battle's round/turn state, and
-the entity's legal-action menu (:func:`~src.arena.action_space.legal_actions`).
+``build_observation`` produces a plain ``dict`` (JSON-serializable) from *one
+entity's* point of view: itself and its allies in full, each enemy filtered through
+the :class:`~src.arena.information_policy.InformationPolicy`, the battle's round/turn
+state, and the entity's legal-action menu
+(:func:`~src.arena.action_space.legal_actions`).
 
-Positions are reported in **backend feet** ``(x, y, z)`` — the engine's own coordinates — so
-the observation is honest to the model the engine runs. The web layer's cell-coordinate swap
-is a presentation concern that a future web spectator bridge applies; it does not belong in
-the agent's view.
+Positions are reported in **backend feet** ``(x, y, z)`` — the engine's own
+coordinates — so the observation is honest to the model the engine runs. The web
+layer's cell-coordinate swap is a presentation concern that a future web spectator
+bridge applies; it does not belong in the agent's view.
 """
 
 from typing import TYPE_CHECKING, Any, Dict, Optional
@@ -195,9 +196,9 @@ def serialize_stat_block(entity: Entity) -> Dict[str, Any]:
 def snapshot_state(combat: "CombatSystem") -> Dict[str, Any]:
     """Return a neutral, **ungated** full-state snapshot of *combat* for the transcript.
 
-    Unlike :func:`build_observation` (one agent's policy-filtered view), this is ground
-    truth — every combatant in full — so replay and scoring have complete data regardless
-    of what any agent was allowed to see. Positions are in backend feet.
+    Unlike :func:`build_observation` (one agent's policy-filtered view), this is
+    ground truth — every combatant in full — so replay and scoring have complete data
+    regardless of what any agent was allowed to see. Positions are in backend feet.
     """
     current = combat.get_current_entity()
     return {

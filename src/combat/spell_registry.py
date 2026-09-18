@@ -31,7 +31,8 @@ class SpellRegistry:
             self._spells[spell.name] = spell
 
     def register(self, spell: SpellAction) -> None:
-        """Register a single spell, overwriting any previous entry with the same name."""
+        """Register a single spell, overwriting any previous entry with the
+        same name."""
         self._spells[spell.name] = spell
 
     def get(self, name: str) -> SpellAction:

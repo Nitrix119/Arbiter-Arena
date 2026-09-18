@@ -24,19 +24,24 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class HeuristicWeights:
-    """The genome: how much each factor counts. All features are ~O(1) and dimensionless.
+    """The genome: how much each factor counts. All features are ~O(1) and
+    dimensionless.
 
     Attributes:
         damage: weight on threat-weighted progress toward removing a target.
         kill: weight on securing an expected-lethal blow (removing a whole actor now).
         exposure: weight on expected incoming damage at the plan's end position.
         engagement: weight on ending in position to strike a high-threat enemy (the
-            range-aware gradient that makes melee units close and ranged units hold range).
+            range-aware gradient that makes melee units close and ranged units hold
+            range).
         friendly_fire: penalty on expected AoE damage to allies (fraction of their HP).
-        control: weight on the conditions a spell would impose (severity × threat × p_apply).
+        control: weight on the conditions a spell would impose (severity × threat ×
+            p_apply).
         resource: penalty for spending a scarce spell slot (scaled by slot level).
-        aggression: divides the exposure fear — higher is braver (holds ground/advances).
-        end_turn_threshold: minimum score improvement over standing pat to bother acting.
+        aggression: divides the exposure fear — higher is braver (holds
+            ground/advances).
+        end_turn_threshold: minimum score improvement over standing pat to bother
+            acting.
     """
 
     damage: float = 1.0

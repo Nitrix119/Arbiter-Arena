@@ -1,9 +1,9 @@
 """Safe API-credential resolution for arena adapters.
 
-Keeps API keys out of code, logs, and Git. A key is read from an environment variable if
-set, otherwise from a git-ignored file under ``secrets/``. Only the running process ever
-reads it — the value never passes through a command line or gets printed, so an agent (human
-or Claude) can launch a match without the key entering its view.
+Keeps API keys out of code, logs, and Git. A key is read from an environment variable
+if set, otherwise from a git-ignored file under ``secrets/``. Only the running process
+ever reads it — the value never passes through a command line or gets printed, so an
+agent (human or Claude) can launch a match without the key entering its view.
 """
 
 import os
@@ -15,9 +15,9 @@ _SECRETS_DIR = Path(__file__).resolve().parents[2] / "secrets"
 def resolve_credential(env_var: str, keyfile_name: str) -> str:
     """Return a credential from ``$<env_var>``, else from ``secrets/<keyfile_name>``.
 
-    The environment variable wins. Otherwise the git-ignored key file is read and its first
-    non-empty, non-``#`` line (stripped) is returned. Raises :class:`RuntimeError` naming both
-    options if neither is present.
+    The environment variable wins. Otherwise the git-ignored key file is read and its
+    first non-empty, non-``#`` line (stripped) is returned. Raises
+    :class:`RuntimeError` naming both options if neither is present.
     """
     env_value = os.environ.get(env_var)
     if env_value and env_value.strip():
@@ -31,6 +31,8 @@ def resolve_credential(env_var: str, keyfile_name: str) -> str:
                 return line
 
     raise RuntimeError(
-        f"No credential found for {env_var}. Set the {env_var} environment variable, or put "
-        f"the key in {keyfile} (git-ignored). See docs/current/AGENT_ARENA_LLM_SETUP.md."
+        f"No credential found for {env_var}. Set the {env_var} environment "
+        f"variable, or put "
+        f"the key in {keyfile} (git-ignored). See "
+        f"docs/current/AGENT_ARENA_LLM_SETUP.md."
     )

@@ -78,8 +78,9 @@ def resolve(
 ) -> InvocationResult:
     """Resolve a per-target block program for one caster/target pair.
 
-    Returns an :class:`InvocationResult`. For set-targeted spells (AoE, multi-target) use
-    :func:`resolve_program`, which fans out over the target set.
+    Returns an :class:`InvocationResult`. For set-targeted spells (AoE,
+    multi-target) use :func:`resolve_program`, which fans out over the target
+    set.
     """
     if slot_level is None:
         slot_level = getattr(action, "spell_level", 0) or 0

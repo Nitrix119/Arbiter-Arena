@@ -1,22 +1,25 @@
 """A self-play genetic algorithm that tunes :class:`HeuristicWeights`.
 
-The genome is a weight vector; fitness is how well a :class:`HeuristicAgent` carrying it
-plays the *skill* side of the benchmark scenarios (:data:`~src.arena.scenarios.SCENARIOS`)
-against the fixed :class:`~src.arena.agent.ScriptedAgent` yardstick. Evaluating against a
-**fixed** opponent (not every other individual) keeps a generation O(pop × scenarios ×
-seeds), not O(pop²) — the efficiency the all-pairs duel would lose — and anchors fitness to
-an absolute reference (HEURISTIC_PLAN §5).
+The genome is a weight vector; fitness is how well a :class:`HeuristicAgent` carrying
+it plays the *skill* side of the benchmark scenarios
+(:data:`~src.arena.scenarios.SCENARIOS`) against the fixed
+:class:`~src.arena.agent.ScriptedAgent` yardstick. Evaluating against a **fixed**
+opponent (not every other individual) keeps a generation O(pop × scenarios × seeds),
+not O(pop²) — the efficiency the all-pairs duel would lose — and anchors fitness to an
+absolute reference (HEURISTIC_PLAN §5).
 
 Design choices baked in here (all tunable via :class:`GAConfig`):
 
-* **Fairness by shared seeds.** Every individual in a generation is evaluated on the *same*
-  list of seeds, drawn fresh each generation from the GA's own RNG — a paired comparison
-  (low variance), and new seeds each generation so weights generalise rather than overfit.
-* **Reproducible battles.** Each match assigns deterministic entity ids and seeds the dice,
-  so ``(weights, scenario, seed)`` fully determines the battle — the exact fight can be
-  regenerated (:func:`regenerate_match`) without logging its blow-by-blow.
-* **Parallel.** Individuals are evaluated across processes (the engine is fast and the GIL
-  would otherwise bottleneck); ``processes <= 1`` runs serially (used by the test suite).
+* **Fairness by shared seeds.** Every individual in a generation is evaluated on the
+  *same* list of seeds, drawn fresh each generation from the GA's own RNG — a paired
+  comparison (low variance), and new seeds each generation so weights generalise rather
+  than overfit.
+* **Reproducible battles.** Each match assigns deterministic entity ids and seeds the
+  dice, so ``(weights, scenario, seed)`` fully determines the battle — the exact fight
+  can be regenerated (:func:`regenerate_match`) without logging its blow-by-blow.
+* **Parallel.** Individuals are evaluated across processes (the engine is fast and the
+  GIL would otherwise bottleneck); ``processes <= 1`` runs serially (used by the test
+  suite).
 * **Thorough logging.** Every generation, every individual's full weight vector and
   fitness, and every match's seed and outcome are written to a JSONL log. Blow-by-blow
   battle logs are *not* logged — they regenerate from weights + seed.
@@ -45,8 +48,8 @@ if TYPE_CHECKING:
     from src.arena.transcript import Transcript
 
 # Per-gene ranges for random initialisation and mutation clamping. Must name exactly the
-# fields of HeuristicWeights — tests/arena/test_heuristic_ga.py checks that, so a new weight
-# without a bound here is caught rather than silently un-evolved.
+# fields of HeuristicWeights — tests/arena/test_heuristic_ga.py checks that, so a new
+# weight without a bound here is caught rather than silently un-evolved.
 WEIGHT_BOUNDS: Dict[str, Tuple[float, float]] = {
     "damage": (0.0, 3.0),
     "kill": (0.0, 3.0),
@@ -98,7 +101,8 @@ def crossover(
 def mutate(
     weights: HeuristicWeights, rng: random.Random, *, rate: float, sigma: float
 ) -> HeuristicWeights:
-    """Gaussian mutation: perturb each gene with probability *rate*, clamped to its bound."""
+    """Gaussian mutation: perturb each gene with probability *rate*, clamped to its
+    bound."""
     out: Dict[str, float] = {}
     for name, (lo, hi) in WEIGHT_BOUNDS.items():
         value = getattr(weights, name)
@@ -123,7 +127,8 @@ def _play(
     scenario = SCENARIOS[scenario_name]
     # Build entities under the seed so their ids are reproducible too (ids feed Entity
     # hashing and tie-breaks). run_match then reseeds combat.rng for the roll stream, so
-    # ``(weights, scenario, seed)`` fully determines the fight — no id-stabilising patch.
+    # ``(weights, scenario, seed)`` fully determines the fight — no id-stabilising
+    # patch.
     with dice.using_rng(dice.new_rng(seed)):
         combat = scenario.build()
     agents: Dict[Optional[str], Agent] = {
@@ -168,7 +173,8 @@ def _match_score(match: Dict[str, object]) -> float:
 def evaluate(
     weights: HeuristicWeights, scenario_names: List[str], seeds: List[int]
 ) -> Tuple[float, List[Dict[str, object]]]:
-    """Play every ``(scenario, seed)`` and return ``(mean fitness, per-match records)``."""
+    """Play every ``(scenario, seed)`` and return ``(mean fitness, per-match
+    records)``."""
     matches = [
         _match_record(weights, name, seed) for name in scenario_names for seed in seeds
     ]
@@ -179,7 +185,8 @@ def evaluate(
 def _evaluate_task(
     args: Tuple[HeuristicWeights, List[str], List[int]],
 ) -> Tuple[float, List[Dict[str, object]]]:
-    """Top-level worker (picklable) so a process Pool can map individuals across cores."""
+    """Top-level worker (picklable) so a process Pool can map individuals across
+    cores."""
     weights, scenario_names, seeds = args
     return evaluate(weights, scenario_names, seeds)
 
@@ -194,8 +201,8 @@ def regenerate_match(
     """Replay the exact battle a logged ``(weights, scenario, seed)`` produced.
 
     Because ids are stabilised and the dice are seeded, this reproduces the recorded
-    outcome — pass a :class:`~src.arena.transcript.Transcript` to capture the blow-by-blow
-    that the GA log deliberately omits.
+    outcome — pass a :class:`~src.arena.transcript.Transcript` to capture the
+    blow-by-blow that the GA log deliberately omits.
     """
     return _play(weights, scenario_name, seed, transcript=transcript)
 
@@ -236,10 +243,10 @@ class GAResult:
 def run_ga(config: GAConfig, *, log_path: Optional[str] = None) -> GAResult:
     """Evolve weights for ``config.generations`` and return the best-ever individual.
 
-    Logs every generation, individual (full weights + fitness), and match (seed + outcome)
-    to a JSONL file. The champion is the best individual by its own generation's fitness;
-    because elites are re-evaluated on each generation's fresh seeds, a champion earns its
-    place on new dice rather than lucky ones.
+    Logs every generation, individual (full weights + fitness), and match (seed +
+    outcome) to a JSONL file. The champion is the best individual by its own
+    generation's fitness; because elites are re-evaluated on each generation's fresh
+    seeds, a champion earns its place on new dice rather than lucky ones.
     """
     rng = random.Random(config.ga_seed)
     population = _init_population(config, rng)
@@ -298,7 +305,8 @@ def _next_generation(
     config: GAConfig,
     rng: random.Random,
 ) -> List[HeuristicWeights]:
-    """Elitism + tournament selection + crossover + mutation. ``evaluated`` is sorted desc."""
+    """Elitism + tournament selection + crossover + mutation. ``evaluated`` is sorted
+    desc."""
     nxt: List[HeuristicWeights] = [
         weights for weights, _, _ in evaluated[: config.elitism]
     ]

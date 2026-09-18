@@ -54,7 +54,9 @@ TOOLS: List[Dict[str, Any]] = [
             "properties": {
                 "action_name": {
                     "type": "string",
-                    "description": "The attack's name, exactly as listed in your options.",
+                    "description": (
+                        "The attack's name, exactly as listed in your options."
+                    ),
                 },
                 "defender_id": {
                     "type": "string",
@@ -68,7 +70,8 @@ TOOLS: List[Dict[str, Any]] = [
         "name": TOOL_CAST_SPELL,
         "description": (
             "Cast a spell you know. Single-target/self spells take `target_ids`; "
-            "area spells take a `target_point` (in feet) you aim at. Optionally cast at "
+            "area spells take a `target_point` (in feet) you aim at. "
+            "Optionally cast at "
             "a higher `slot_level` to upcast."
         ),
         "input_schema": {
@@ -76,12 +79,16 @@ TOOLS: List[Dict[str, Any]] = [
             "properties": {
                 "spell_name": {
                     "type": "string",
-                    "description": "The spell's name, exactly as listed in your options.",
+                    "description": (
+                        "The spell's name, exactly as listed in your options."
+                    ),
                 },
                 "target_ids": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "entity_id(s) to target (single-target/self spells).",
+                    "description": (
+                        "entity_id(s) to target (single-target/self spells)."
+                    ),
                 },
                 "target_point": {
                     "type": "object",
@@ -106,8 +113,10 @@ TOOLS: List[Dict[str, Any]] = [
         "name": TOOL_MOVE,
         "description": (
             "Move on the battlefield. Either pass an `option_id` from your legal move "
-            "options (a named, already-legal destination), OR give raw `x`/`z` in feet for a "
-            "bespoke spot. Costs movement equal to the straight-line distance; you cannot "
+            "options (a named, already-legal destination), OR give raw `x`/`z` in "
+            "feet for a "
+            "bespoke spot. Costs movement equal to the straight-line distance; "
+            "you cannot "
             "move onto another creature."
         ),
         "input_schema": {
@@ -115,8 +124,10 @@ TOOLS: List[Dict[str, Any]] = [
             "properties": {
                 "option_id": {
                     "type": "string",
-                    "description": "id of a move option from your legal options; resolves to "
-                    "its destination. Omit if giving raw x/z.",
+                    "description": (
+                        "id of a move option from your legal options; resolves to "
+                        "its destination. Omit if giving raw x/z."
+                    ),
                 },
                 "x": {
                     "type": "number",
@@ -135,7 +146,9 @@ TOOLS: List[Dict[str, Any]] = [
     },
     {
         "name": TOOL_END_TURN,
-        "description": "End your turn, passing to the next combatant. Take this when done acting.",
+        "description": (
+            "End your turn, passing to the next combatant. Take this when done acting."
+        ),
         "input_schema": {"type": "object", "properties": {}},
     },
 ]
@@ -168,9 +181,9 @@ def _gate_roll(
 ) -> Optional[Dict[str, Any]]:
     """Reshape a resolver's ``roll_detail`` into an actor-facing roll, gating C3 fields.
 
-    To-hit rolls (carry ``ac``) expose the actor's own d20/bonus/total; the target ``ac``
-    only under ``reveal_enemy_ac``. Save rolls (carry ``dc``) expose the actor's own
-    ``save_dc`` and the outcome; the target's save-roll value only under
+    To-hit rolls (carry ``ac``) expose the actor's own d20/bonus/total; the target
+    ``ac`` only under ``reveal_enemy_ac``. Save rolls (carry ``dc``) expose the
+    actor's own ``save_dc`` and the outcome; the target's save-roll value only under
     ``reveal_enemy_ac`` (treated as the target's defensive internals).
     """
     if roll_detail is None:

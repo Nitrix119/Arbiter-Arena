@@ -8,7 +8,8 @@ the arena's read-only helpers (``legal_actions``, ``move_candidates``, ``range_c
 Layout:
 
 * :mod:`~src.arena.heuristic.estimate` — deterministic expected-value primitives (the
-  twins of the engine's dice rollers): hit chance, expected damage, save-fail probability.
+  twins of the engine's dice rollers): hit chance, expected damage, save-fail
+  probability.
 * :mod:`~src.arena.heuristic.plan` — bounded turn-plan enumeration.
 * :mod:`~src.arena.heuristic.features` — feature extractors + threat valuation.
 * :mod:`~src.arena.heuristic.score` — the weighted utility function + the weight genome.

@@ -93,7 +93,8 @@ class TurnManager:
             return False
 
         # Skip entities whose conditions prevent acting (unconscious, stunned, etc.).
-        # Guard against the degenerate case where every remaining entity is incapacitated.
+        # Guard against the degenerate case where every remaining entity is
+        # incapacitated.
         skips = 0
         max_skips = len(self._combatants)
         while next_entity is not None and _should_skip(next_entity):

@@ -179,7 +179,9 @@ REGISTRY.register(
                 "int",
                 required=True,
                 sentinels=("use_caster_dc",),
-                description="Flat DC, or 'use_caster_dc' for the caster's spell save DC.",
+                description=(
+                    "Flat DC, or 'use_caster_dc' for the caster's spell save DC."
+                ),
             ),
         ),
         writes=("save_roll", "save_dc", "save_success"),

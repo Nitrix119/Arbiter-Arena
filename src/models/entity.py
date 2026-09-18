@@ -392,7 +392,8 @@ class Entity:
 
     @property
     def spell_save_dc(self) -> int:
-        """Computed spell save DC: 8 + proficiency + spellcasting ability mod + bonuses."""
+        """Computed spell save DC: 8 + proficiency + spellcasting ability mod
+        + bonuses."""
         ability = self.stat_block.spellcasting_ability
         base_mod = self.get_ability_modifier(ability) if ability else 0
         base = 8 + self.stat_block.proficiency_bonus + base_mod
@@ -402,7 +403,8 @@ class Entity:
 
     @property
     def spell_attack_bonus(self) -> int:
-        """Computed spell attack bonus: proficiency + spellcasting ability mod + bonuses."""
+        """Computed spell attack bonus: proficiency + spellcasting ability mod
+        + bonuses."""
         ability = self.stat_block.spellcasting_ability
         base_mod = self.get_ability_modifier(ability) if ability else 0
         base = self.stat_block.proficiency_bonus + base_mod
@@ -412,7 +414,8 @@ class Entity:
 
     @property
     def spellcasting_modifier(self) -> int:
-        """Raw ability modifier for the entity's spellcasting ability, or 0 if non-caster."""
+        """Raw ability modifier for the entity's spellcasting ability, or 0 if
+        non-caster."""
         ability = self.stat_block.spellcasting_ability
         return self.get_ability_modifier(ability) if ability else 0
 

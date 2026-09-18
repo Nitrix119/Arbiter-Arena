@@ -10,7 +10,8 @@ class StatModifier:
     The ``stat`` field is an open string namespace; any value is valid.
     Convention for built-in stats:
         "ac"                       — Armor Class
-        "saving_throw.<ability>"   — saving throw for a specific ability (e.g. "saving_throw.wisdom")
+        "saving_throw.<ability>"   — saving throw for a specific ability
+                                     (e.g. "saving_throw.wisdom")
         "saving_throw.all"         — applies to all saving throws
         "spell_attack_bonus"       — spell attack roll bonus
         "spell_save_dc"            — spell save DC bonus

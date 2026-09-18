@@ -108,7 +108,8 @@ class AttackResolver:
 
         log_msg = (
             f"attacked {defender.name} with {action.name}. "
-            f"Attack{roll_mode}: {result.attack_roll}+{action.bonus_to_hit}={result.attack_total}"
+            f"Attack{roll_mode}: {result.attack_roll}"
+            f"+{action.bonus_to_hit}={result.attack_total}"
             f" vs AC {defender.ac}. {hit_str}"
         )
         roll_detail = {

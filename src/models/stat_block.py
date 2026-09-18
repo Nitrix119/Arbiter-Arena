@@ -35,7 +35,8 @@ class StatBlock:
         skills: Dictionary of skills with proficiency
         actions: List of available combat actions
         saving_throws: Ability scores with saving throw proficiency
-        resource_defaults: Per-turn action economy defaults (actions, bonus_actions, reactions, speed)
+        resource_defaults: Per-turn action economy defaults
+            (actions, bonus_actions, reactions, speed)
     """
 
     name: str

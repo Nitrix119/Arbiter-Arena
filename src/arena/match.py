@@ -1,10 +1,11 @@
 """Run a full match: two teams, one agent per side, until a winner or the round cap.
 
-``run_match`` takes a prepared (but unstarted) :class:`CombatSystem` — combatants added,
-spell registry set if needed — plus one :class:`~src.arena.agent.Agent` per team. It seeds
-the RNG (for a reproducible battle), starts combat, and drives turns until the combat ends
-or a **round cap** stops a runaway match, deciding the latter on remaining team-HP fraction
-(E1). Everything is logged to the optional :class:`~src.arena.transcript.Transcript`.
+``run_match`` takes a prepared (but unstarted) :class:`CombatSystem` — combatants
+added, spell registry set if needed — plus one :class:`~src.arena.agent.Agent` per
+team. It seeds the RNG (for a reproducible battle), starts combat, and drives turns
+until the combat ends or a **round cap** stops a runaway match, deciding the latter on
+remaining team-HP fraction (E1). Everything is logged to the optional
+:class:`~src.arena.transcript.Transcript`.
 
 Building the combat (loading creatures, positioning, teams) is the caller's job — this
 keeps the runner decoupled from content loading; see ``examples/arena_match.py``.
@@ -34,7 +35,8 @@ class MatchResult:
     """Outcome of a match.
 
     ``winner`` is the winning team's name, or ``None`` for a draw. ``reason`` is
-    ``"last_standing"`` (a team was wiped out) or ``"round_cap"`` (decided on HP fraction).
+    ``"last_standing"`` (a team was wiped out) or ``"round_cap"`` (decided on HP
+    fraction).
     """
 
     winner: Optional[str]
@@ -49,8 +51,8 @@ def _reroll_initiative(combat: "CombatSystem") -> None:
 
     Initiative is rolled at ``add_combatant`` time — before ``run_match`` can apply its
     seed — so a seeded match must re-roll it here for the seed to govern turn order too.
-    Re-adds entities in stable combatant-insertion order so the result depends only on the
-    seed, not on the (random) entity ids or a prior initiative sort.
+    Re-adds entities in stable combatant-insertion order so the result depends only on
+    the seed, not on the (random) entity ids or a prior initiative sort.
     """
     tracker = combat.initiative_tracker
     tracker.initiative_order.clear()
@@ -111,7 +113,8 @@ def run_match(
     round_cap: int = DEFAULT_ROUND_CAP,
     transcript: Optional[Transcript] = None,
 ) -> MatchResult:
-    """Run *combat* (unstarted) to completion with one *agent* per team; return the result.
+    """Run *combat* (unstarted) to completion with one *agent* per team; return the
+    result.
 
     Args:
         combat: Prepared CombatSystem — combatants added, registry set, not yet started.

@@ -1,20 +1,22 @@
 """Assemble the set of actions an entity may legally take right now.
 
-Nothing in the engine assembles this today: :meth:`CombatSystem.get_affordable_actions`
-reads only ``stat_block.actions`` (missing ``granted_actions``) and does not range-check,
-check spell slots, or expand ``known_spells`` into castable spells. This module fills that
-gap by combining the existing pieces —
+Nothing in the engine assembles this today:
+:meth:`CombatSystem.get_affordable_actions` reads only ``stat_block.actions`` (missing
+``granted_actions``) and does not range-check, check spell slots, or expand
+``known_spells`` into castable spells. This module fills that gap by combining the
+existing pieces —
 
 * attacks/abilities from ``stat_block.actions`` + ``granted_actions``, filtered by
   :meth:`Entity.can_afford`;
-* spells from ``stat_block.known_spells``, resolved through the combat's spell registry and
-  filtered by action-economy cost *and* remaining spell slots;
+* spells from ``stat_block.known_spells``, resolved through the combat's spell
+  registry and filtered by action-economy cost *and* remaining spell slots;
 * targets from :meth:`CombatSystem.get_alive_entities`, each range-checked via
   :mod:`src.spatial.range_check`;
 * the remaining movement budget.
 
-The result is a **hint**, embedded in an agent's observation so it can see its options; the
-engine's ``resolve_*`` methods remain the authority that actually enforces legality.
+The result is a **hint**, embedded in an agent's observation so it can see its
+options; the engine's ``resolve_*`` methods remain the authority that actually
+enforces legality.
 """
 
 import math
@@ -300,9 +302,9 @@ def move_candidates(combat: "CombatSystem", entity: Entity) -> List[MoveOption]:
 
     For each enemy (ordered by ``entity_id`` for deterministic replays): close to melee
     standoff, retreat at full speed, and — for an entity with a ranged attack — a
-    ``kite_range`` point as far back as possible while staying within weapon range. Every
-    option is affordable and overlap-clear (see :func:`_clear_option_along`); an agent may
-    still move to a raw coordinate instead. Read-only.
+    ``kite_range`` point as far back as possible while staying within weapon range.
+    Every option is affordable and overlap-clear (see :func:`_clear_option_along`); an
+    agent may still move to a raw coordinate instead. Read-only.
     """
     budget = entity.resources.movement
     if budget < 1:

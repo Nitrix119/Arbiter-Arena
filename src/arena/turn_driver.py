@@ -53,7 +53,8 @@ def run_turn(
     transcript: Optional[Transcript] = None,
     max_actions: int = MAX_ACTIONS_PER_TURN,
 ) -> TurnOutcome:
-    """Run *actor*'s whole turn under *agent*'s control; return a :class:`TurnOutcome`."""
+    """Run *actor*'s whole turn under *agent*'s control; return a
+    :class:`TurnOutcome`."""
     executor = executor or ToolExecutor(combat)
 
     if not actor.is_alive():  # a downed creature takes no turn
@@ -66,8 +67,9 @@ def run_turn(
     consecutive = 0
     failures = 0
     actions = 0
-    # Rejected actions since the last successful one — fed back so the agent learns *why*
-    # a move was refused and can self-correct within the turn (cleared on any success).
+    # Rejected actions since the last successful one — fed back so the agent learns
+    # *why* a move was refused and can self-correct within the turn (cleared on any
+    # success).
     rejections: List[Dict[str, Any]] = []
 
     while True:

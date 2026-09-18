@@ -31,7 +31,8 @@ _HEADER = (
     "<!-- GENERATED FILE — DO NOT EDIT BY HAND.\n"
     "     Regenerate with:  python -m src.spells.reference\n"
     "     Source of truth:  the block REGISTRY (src/spells/blocks/*.py).\n"
-    "     A drift test (tests/test_block_reference_doc.py) fails if this is stale. -->\n"
+    "     A drift test (tests/test_block_reference_doc.py) fails if this is"
+    " stale. -->\n"
 )
 
 _ARITY_BLURB = {
@@ -168,7 +169,8 @@ def generate_block_reference(registry: BlockRegistry = REGISTRY) -> str:
             flags.append("installs reactions (subscribes handlers to future events)")
         if c.mutates_event:
             flags.append(
-                "event modifier (mutates the in-flight event; only meaningful inside a `trigger`)"
+                "event modifier (mutates the in-flight event; only meaningful"
+                " inside a `trigger`)"
             )
         if flags:
             rows.append(("Category", "; ".join(flags)))

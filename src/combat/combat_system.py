@@ -473,7 +473,8 @@ class CombatSystem:
             ):
                 if not entity.spell_slots.can_afford(action.spell_level):
                     raise ValueError(
-                        f"{entity.name} has no level-{action.spell_level} spell slots remaining"
+                        f"{entity.name} has no level-{action.spell_level} "
+                        f"spell slots remaining"
                     )
                 entity.spell_slots.spend(action.spell_level)
 
@@ -720,7 +721,8 @@ class CombatSystem:
         new_y: float,
         new_z: float,
     ) -> None:
-        """Raise ValueError if placing *moving* at the new position overlaps any alive entity.
+        """Raise ValueError if placing *moving* at the new position overlaps
+        any alive entity.
 
         Names the blocking entity for the error message; the boolean test lives in
         :meth:`is_destination_clear`.

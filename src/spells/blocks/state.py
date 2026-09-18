@@ -69,13 +69,15 @@ def _condition_rule(inv: Invocation, ctype: ConditionType):
 
 
 def _install_condition_rider(inv, rule, conditioned, bindings, scope) -> None:
-    """Subscribe a condition's reactive rule as triggers held by *conditioned*, into *scope*.
+    """Subscribe a condition's reactive rule as triggers held by *conditioned*,
+    into *scope*.
 
     Runs the rule's native ``program`` (its trigger blocks) on a child invocation whose
     **caster and target are the conditioned entity**, so each rider's default
-    ``holder: "caster"`` binds ``entity``/``event.caster`` to that entity — the same
-    convention :func:`src.spells.entity_effects.install_entity_effect` uses, and the
-    reason the condition rule files need no baked ``holder``. Works regardless of whether
+    ``holder: "caster"`` binds ``entity``/``event.caster`` to that entity — the
+    same convention :func:`src.spells.entity_effects.install_entity_effect`
+    uses, and the reason the condition rule files need no baked ``holder``.
+    Works regardless of whether
     the spell conditioned its target or itself. The child's ``active_scope`` is *scope*,
     so each trigger registers its own unsubscribe as a handle the scope owns — disposing
     the scope (on expiry, concentration loss, or dispel) tears the mechanics down with

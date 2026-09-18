@@ -125,7 +125,9 @@ REGISTRY.register(
             "multiplier",
             "expr",
             required=True,
-            description="Scale matching damage by this (0.5 resist, 0 immune, 2 vulnerable).",
+            description=(
+                "Scale matching damage by this (0.5 resist, 0 immune, 2 vulnerable)."
+            ),
         ),
         Field(
             "damage_type",
