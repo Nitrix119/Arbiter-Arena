@@ -170,16 +170,62 @@ focused Claude Code work block. Phase 3 overlaps Phase 2's background runs on pu
 | Buffer | Sat 10 – Tue 13 Oct | — | — |
 
 ### Phase 0 — Decide & consolidate (≈1–2 sessions)
-- [ ] Decide on the condition definitions (§3.1), including whether C2+M is in the final run.
-- [ ] Choose two models, check tool support, top up OpenRouter if using free models.
-- [ ] Check whether any scenario exercises AoE, and decide whether to keep the expressivity question.
-- [ ] Decide the licence (keep PolyForm NC and call it "source-available", or move to MIT/Apache-2.0).
-- [ ] Decide the name (keep, or neutral name plus "SRD 5.1-compatible" and a non-affiliation note).
+- [x] Decide on the condition definitions (§3.1), including whether C2+M is in the final run.
+      _(C2+M is **in** — 4 conditions. See the decisions log below.)_
+- [~] Choose two models, check tool support, top up OpenRouter if using free models.
+      _(Top-up done; throughput unconstrained. Slate tentative; tool support still to preflight.)_
+- [x] Check whether any scenario exercises AoE, and decide whether to keep the expressivity question.
+- [x] Decide the licence (keep PolyForm NC and call it "source-available", or move to MIT/Apache-2.0).
+- [~] Decide the name (keep, or neutral name plus "SRD 5.1-compatible" and a non-affiliation note).
 - [ ] Review, then merge `feat/agent-arena` and `feat/deterministic-rng` to `main`.
       Bump to `0.2.0` per the branch workflow.
 - [ ] Add GitHub Actions: `pytest`, `black --check` (pinned 23.12.1), `flake8`, on 3.11/3.13.
 - [ ] Create branch `feat/interface-study`.
 - [ ] Fill in `docs/PREREGISTRATION.md` from §3 as a draft. Freeze it in Phase 2.
+
+#### Phase 0 decisions log (2026-09-19)
+
+**Licence → Apache-2.0.** PolyForm NC was chosen early and arbitrarily; it is not OSI-approved and
+works against a study whose value is that strangers can clone and re-run it. Apache-2.0 for the
+patent grant and because it is the norm for research harnesses. Implementation (LICENSE, headers,
+`NOTICE`, SRD attribution) lands in Phase 3.
+
+**Name → change it.** "D&D Auto-Battler" is both a Wizards trademark risk and no longer accurate —
+this is a benchmark harness, not an auto-battler. Direction: a neutral name plus an "SRD
+5.1-compatible" descriptor and a non-affiliation note. Exact name still open; it is a Phase 3
+deliverable, not a blocker.
+
+**AoE / expressivity → keep the question, and build the support.** Finding: **no scenario uses any
+spell at all** — `src/arena/scenarios.py` is weapon-attacks-only by design, so movement is currently
+the sole discretised axis, and it is discretised because free movement was hurting a cheap model.
+That makes C3's expressivity cost nearly invisible as things stand. Decision: design a proper AoE
+schema and give it to the interfaces that should have it, with a **neutral candidate generator** —
+sweep a moderate-resolution grid of aim points and keep one representative per distinct *set of
+targets hit* (there is never a reason to offer two points that hit the same creatures). This keeps
+§3.1's rule that the menu must not smuggle in `HeuristicAgent`'s AoE search. Scope lands in Phase 1,
+and is assessed as **tractable**: the spell engine already resolves AoE thoroughly, so most of the
+work is gathering and formatting information that exists and surfacing it to the agent, rather than
+new mechanics.
+
+**C2+M → in the study as a full condition (not pilot-only).** Definition: tool calls with raw params (C2's format)
+*plus* the legal menu in the observation (C3's affordance), pinning one dial at a time so C3's
+result can be attributed to format or to affordance rather than to both. It is **today's production
+path** (`observation.py` always includes `legal_actions`; `tools.py` takes raw params), so it costs
+no build time — C2 is the cell needing new work, by stripping the menu out. Rationale for including
+it: without it, a C2/C3 difference has two candidate causes and the headline claim cannot be
+attributed to either. Grid sizing therefore uses **4 conditions** (§3.5's 120-match figure, not 90).
+Related: the `move` tool currently accepts *either* a menu `option_id` or raw `x`/`z`, letting the
+model pick its own condition per decision; each interface must expose exactly one path. (Existing
+transcripts predate this split and are functionality tests only — no data is lost by changing it.)
+
+**Models → OpenRouter topped up ($15, 1,000 req/day).** Tentative slate: one cheap/free model
+(Nemotron 3.5, slow), one strong model (Claude Sonnet/Opus), possibly Gemini 3.8 as a fast, cheap
+middle point. Open: confirm **native tool-calling support for each** in preflight — C2, C2+M and C3
+all require it, and a model without it can only run C1. Pin Claude to one route (direct adapter or
+OpenRouter) and keep it fixed. **Throughput is not a constraint:** "free model" here means *a model
+available on a free tier*, not one run for free — a paid Nemotron host costs cents per million
+tokens and removes both the rate cap and the slow-host problem. So §3.5's "~4 days of background
+running" does not apply; size the grid on cost and calls, not on the 1,000/day cap.
 
 ### Phase 1 — Build the study harness (≈5–7 sessions, TDD throughout)
 Recording and instrumentation, first:
