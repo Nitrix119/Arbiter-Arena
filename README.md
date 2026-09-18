@@ -1,6 +1,8 @@
-# D&D Auto-Battler
+# Arbiter Arena
 
-A Python-based D&D 5e combat simulator with a browser-based UI, WebSocket-driven live combat, and a fully data-driven creature and spell system. Every creature, spell, and rule is defined in JSON — no code changes required to add new content.
+**A deterministic evaluation harness for tool-using LLM agents, built on an SRD 5.1-compatible tactical combat engine.**
+
+An agent proposes an action; the engine validates it against the rules, executes it, and records exactly what happened and why — so an agent's reliability can be measured rather than eyeballed. The underlying simulator is fully data-driven: every creature, spell, and rule is defined in JSON, with no code changes required to add content.
 
 ---
 
@@ -99,7 +101,7 @@ pip install -e .
 pip install -e ".[web,dev]"
 ```
 
-Requires Python 3.9+.
+Requires Python 3.11+.
 
 ---
 
@@ -153,3 +155,11 @@ pytest tests/ -v
 Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
 
 You may use, modify, and share this project for any **noncommercial** purpose — personal, hobby, research, and educational use are all welcome. **Commercial use (monetizing this work) is not permitted.** See the [LICENSE](LICENSE) file for the full terms.
+
+---
+
+## Attribution and non-affiliation
+
+This project is **not affiliated with, endorsed, sponsored, or approved by Wizards of the Coast LLC**. *Dungeons & Dragons* and *D&D* are trademarks of Wizards of the Coast LLC.
+
+Game rules content is derived from the **System Reference Document 5.1 ("SRD 5.1")** by Wizards of the Coast LLC, available under the [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/legalcode). References to 5e rules in this repository are descriptive, for interoperability.

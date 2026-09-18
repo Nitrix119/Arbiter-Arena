@@ -3,9 +3,9 @@ requires = ["setuptools>=65.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dnd-auto-battler"
+name = "arbiter-arena"
 version = "0.2.0"
-description = "D&D 5e combat simulator for automated battles"
+description = "A deterministic evaluation harness for tool-using LLM agents, on an SRD 5.1-compatible combat engine"
 readme = "README.md"
 # Matches what CI actually tests (3.11 and 3.13). Claiming an older floor would
 # be an unverified promise, and 3.9/3.10 buy nothing here — current cloud
@@ -45,7 +45,7 @@ agents = [
 ]
 
 [project.urls]
-homepage = "https://github.com/Nitrix119/DnD-Auto-Battler"
+homepage = "https://github.com/Nitrix119/arbiter-arena"
 
 # Formatter/linter settings live here so every environment and CI agree.
 # Black's default line length is 88; flake8 defaults to 79, and that mismatch

@@ -34,7 +34,7 @@ class _NoCacheStaticFiles(StaticFiles):
 
 
 def create_app() -> FastAPI:
-    application = FastAPI(title="D&D Auto Battler")
+    application = FastAPI(title="Arbiter Arena")
 
     # Global spell registry — scanned once at startup, shared across all sessions
     spell_registry = SpellRegistry()
