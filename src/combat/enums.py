@@ -5,6 +5,7 @@ from enum import Enum
 
 class CombatState(Enum):
     """State of a combat encounter."""
+
     SETUP = "setup"
     ACTIVE = "active"
     ENDED = "ended"
@@ -12,6 +13,7 @@ class CombatState(Enum):
 
 class ActionCategory(Enum):
     """Categories of actions in a turn."""
+
     ACTION = "action"
     BONUS_ACTION = "bonus_action"
     REACTION = "reaction"

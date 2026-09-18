@@ -27,9 +27,11 @@ from ..block import Block
 #: The one declaration of the selector, shared by every block that accepts it, so the
 #: schema, the validator, and the generated reference have a single source of truth.
 TARGET_FIELD = Field(
-    "target", "choice", choices=("self", "current"),
+    "target",
+    "choice",
+    choices=("self", "current"),
     description="'self' acts on the block's owner (caster/holder); "
-                "'current' acts on the current target slot (the default).",
+    "'current' acts on the current target slot (the default).",
 )
 
 

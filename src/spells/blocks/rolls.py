@@ -18,8 +18,12 @@ from ..block import Block
 from ..registry import REGISTRY
 
 _ABILITIES = (
-    "strength", "dexterity", "constitution",
-    "intelligence", "wisdom", "charisma",
+    "strength",
+    "dexterity",
+    "constitution",
+    "intelligence",
+    "wisdom",
+    "charisma",
 )
 
 
@@ -61,7 +65,11 @@ def attack_roll(block: Block, inv: Invocation) -> None:
     ctx["had_disadvantage"] = has_dis
 
     bonus_spec = block.get("attack_bonus", 0)
-    bonus = caster.spell_attack_bonus if bonus_spec == "use_caster_bonus" else int(bonus_spec)
+    bonus = (
+        caster.spell_attack_bonus
+        if bonus_spec == "use_caster_bonus"
+        else int(bonus_spec)
+    )
 
     roll = _roll_d20(has_adv, has_dis)
     total = roll + bonus
@@ -70,8 +78,9 @@ def attack_roll(block: Block, inv: Invocation) -> None:
 
     rolled = inv.event_bus.emit(
         EventType.ATTACK_ROLLED,
-        AttackRolledData(attacker=caster, defender=defender, action=action,
-                         roll=roll, total=total),
+        AttackRolledData(
+            attacker=caster, defender=defender, action=action, roll=roll, total=total
+        ),
     )
     crit_hit = rolled.data.get("critical_hit", False)
     crit_miss = rolled.data.get("critical_miss", False)
@@ -83,8 +92,13 @@ def attack_roll(block: Block, inv: Invocation) -> None:
     if hit:
         inv.event_bus.emit(
             EventType.ATTACK_HIT,
-            AttackHitData(attacker=caster, defender=defender, action=action,
-                          roll=total, critical_hit=crit_hit),
+            AttackHitData(
+                attacker=caster,
+                defender=defender,
+                action=action,
+                roll=total,
+                critical_hit=crit_hit,
+            ),
         )
 
 
@@ -93,9 +107,13 @@ REGISTRY.register(
     attack_roll,
     BlockContract(
         fields=(
-            Field("attack_bonus", "int", sentinels=("use_caster_bonus",),
-                  description="Flat bonus, or 'use_caster_bonus' for the caster's "
-                              "spell attack bonus."),
+            Field(
+                "attack_bonus",
+                "int",
+                sentinels=("use_caster_bonus",),
+                description="Flat bonus, or 'use_caster_bonus' for the caster's "
+                "spell attack bonus.",
+            ),
         ),
         writes=("hit", "attack_roll", "attack_total", "critical_hit", "critical_miss"),
         target_arity=TargetArity.SINGLE,
@@ -121,13 +139,18 @@ def saving_throw(block: Block, inv: Invocation) -> None:
     if effective_dc > 0 and attribute:
         declared = inv.event_bus.emit(
             EventType.SAVING_THROW_DECLARED,
-            SavingThrowDeclaredData(defender=defender, ability=attribute, dc=effective_dc),
+            SavingThrowDeclaredData(
+                defender=defender, ability=attribute, dc=effective_dc
+            ),
         )
         has_adv = declared.data.get("advantage", False)
         has_dis = declared.data.get("disadvantage", False)
         save_roll, save_success = roll_saving_throw(
-            defender, attribute, effective_dc,
-            advantage=has_adv, disadvantage=has_dis,
+            defender,
+            attribute,
+            effective_dc,
+            advantage=has_adv,
+            disadvantage=has_dis,
         )
     else:
         save_roll, save_success = None, True
@@ -142,12 +165,22 @@ REGISTRY.register(
     saving_throw,
     BlockContract(
         fields=(
-            Field("attribute", "choice", required=True, choices=_ABILITIES,
-                  description="Which ability the save is rolled against."),
+            Field(
+                "attribute",
+                "choice",
+                required=True,
+                choices=_ABILITIES,
+                description="Which ability the save is rolled against.",
+            ),
             # Note this `dc` is an int literal, *not* an expression — unlike
             # force_concentration_check's `dc`, which is resolved.
-            Field("dc", "int", required=True, sentinels=("use_caster_dc",),
-                  description="Flat DC, or 'use_caster_dc' for the caster's spell save DC."),
+            Field(
+                "dc",
+                "int",
+                required=True,
+                sentinels=("use_caster_dc",),
+                description="Flat DC, or 'use_caster_dc' for the caster's spell save DC.",
+            ),
         ),
         writes=("save_roll", "save_dc", "save_success"),
         target_arity=TargetArity.SINGLE,

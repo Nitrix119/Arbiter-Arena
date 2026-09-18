@@ -62,7 +62,7 @@ WEIGHT_BOUNDS: Dict[str, Tuple[float, float]] = {
 # Fitness composition. Win-rate dominates; the margin and speed terms only break ties
 # between equal win-rates (their magnitudes can never flip a win above a loss).
 DRAW_SCORE = 0.5
-MARGIN_WEIGHT = 0.3   # reward remaining-HP margin (in [-1, 1])
+MARGIN_WEIGHT = 0.3  # reward remaining-HP margin (in [-1, 1])
 SPEED_WEIGHT = 0.005  # mild preference for faster wins (rounds)
 
 
@@ -73,7 +73,9 @@ SPEED_WEIGHT = 0.005  # mild preference for faster wins (rounds)
 
 def random_weights(rng: random.Random) -> HeuristicWeights:
     """A weight vector with each gene drawn uniformly from its bound."""
-    return HeuristicWeights(**{k: rng.uniform(lo, hi) for k, (lo, hi) in WEIGHT_BOUNDS.items()})
+    return HeuristicWeights(
+        **{k: rng.uniform(lo, hi) for k, (lo, hi) in WEIGHT_BOUNDS.items()}
+    )
 
 
 def _clamp(name: str, value: float) -> float:
@@ -81,10 +83,15 @@ def _clamp(name: str, value: float) -> float:
     return min(hi, max(lo, value))
 
 
-def crossover(a: HeuristicWeights, b: HeuristicWeights, rng: random.Random) -> HeuristicWeights:
+def crossover(
+    a: HeuristicWeights, b: HeuristicWeights, rng: random.Random
+) -> HeuristicWeights:
     """Uniform crossover: each gene taken from one parent or the other at random."""
     return HeuristicWeights(
-        **{k: (getattr(a, k) if rng.random() < 0.5 else getattr(b, k)) for k in WEIGHT_BOUNDS}
+        **{
+            k: (getattr(a, k) if rng.random() < 0.5 else getattr(b, k))
+            for k in WEIGHT_BOUNDS
+        }
     )
 
 
@@ -120,7 +127,9 @@ def _play(
     with dice.using_rng(dice.new_rng(seed)):
         combat = scenario.build()
     agents: Dict[Optional[str], Agent] = {
-        scenario.llm_team: HeuristicAgent("candidate", scenario.llm_team, combat, weights=weights),
+        scenario.llm_team: HeuristicAgent(
+            "candidate", scenario.llm_team, combat, weights=weights
+        ),
         scenario.heuristic_team: ScriptedAgent("yardstick", scenario.heuristic_team),
     }
     return run_match(combat, agents, seed=seed, transcript=transcript)
@@ -168,7 +177,7 @@ def evaluate(
 
 
 def _evaluate_task(
-    args: Tuple[HeuristicWeights, List[str], List[int]]
+    args: Tuple[HeuristicWeights, List[str], List[int]],
 ) -> Tuple[float, List[Dict[str, object]]]:
     """Top-level worker (picklable) so a process Pool can map individuals across cores."""
     weights, scenario_names, seeds = args
@@ -210,7 +219,9 @@ class GAConfig:
     mutation_sigma: float = 0.15
     processes: int = 0  # <= 1 runs serially; > 1 uses a process Pool
     ga_seed: int = 0
-    seed_the_default: bool = True  # seed generation 0 with the hand-tuned DEFAULT_WEIGHTS
+    seed_the_default: bool = (
+        True  # seed generation 0 with the hand-tuned DEFAULT_WEIGHTS
+    )
     out_dir: str = "training"
 
 
@@ -277,7 +288,9 @@ def _evaluate_population(
             results = pool.map(_evaluate_task, tasks)
     else:
         results = [_evaluate_task(task) for task in tasks]
-    return [(population[i], results[i][0], results[i][1]) for i in range(len(population))]
+    return [
+        (population[i], results[i][0], results[i][1]) for i in range(len(population))
+    ]
 
 
 def _next_generation(
@@ -286,13 +299,17 @@ def _next_generation(
     rng: random.Random,
 ) -> List[HeuristicWeights]:
     """Elitism + tournament selection + crossover + mutation. ``evaluated`` is sorted desc."""
-    nxt: List[HeuristicWeights] = [weights for weights, _, _ in evaluated[: config.elitism]]
+    nxt: List[HeuristicWeights] = [
+        weights for weights, _, _ in evaluated[: config.elitism]
+    ]
     while len(nxt) < config.population_size:
         p1 = _tournament(evaluated, config.tournament_k, rng)
         p2 = _tournament(evaluated, config.tournament_k, rng)
         child = mutate(
-            crossover(p1, p2, rng), rng,
-            rate=config.mutation_rate, sigma=config.mutation_sigma,
+            crossover(p1, p2, rng),
+            rng,
+            rate=config.mutation_rate,
+            sigma=config.mutation_sigma,
         )
         nxt.append(child)
     return nxt
@@ -333,18 +350,33 @@ class _RunLogger:
         self._write({"kind": "generation", "gen": gen, "seeds": seeds})
 
     def individual(
-        self, gen: int, index: int, weights: HeuristicWeights, fitness: float,
+        self,
+        gen: int,
+        index: int,
+        weights: HeuristicWeights,
+        fitness: float,
         matches: List[Dict[str, object]],
     ) -> None:
-        self._write({
-            "kind": "individual", "gen": gen, "index": index,
-            "weights": asdict(weights), "fitness": fitness, "matches": matches,
-        })
+        self._write(
+            {
+                "kind": "individual",
+                "gen": gen,
+                "index": index,
+                "weights": asdict(weights),
+                "fitness": fitness,
+                "matches": matches,
+            }
+        )
 
     def champion(self, gen: int, weights: HeuristicWeights, fitness: float) -> None:
-        self._write({
-            "kind": "champion", "gen": gen, "weights": asdict(weights), "fitness": fitness,
-        })
+        self._write(
+            {
+                "kind": "champion",
+                "gen": gen,
+                "weights": asdict(weights),
+                "fitness": fitness,
+            }
+        )
 
     def run_end(self, weights: HeuristicWeights, fitness: float) -> None:
         self._write({"kind": "run_end", "weights": asdict(weights), "fitness": fitness})

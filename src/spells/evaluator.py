@@ -84,9 +84,13 @@ def resolve(
     if slot_level is None:
         slot_level = getattr(action, "spell_level", 0) or 0
     inv = _new_invocation(
-        caster, target, action,
-        event_bus=event_bus, damage_processor=damage_processor,
-        condition_rules=condition_rules, slot_level=slot_level,
+        caster,
+        target,
+        action,
+        event_bus=event_bus,
+        damage_processor=damage_processor,
+        condition_rules=condition_rules,
+        slot_level=slot_level,
     )
     return run_target(inv, program, registry)
 
@@ -123,9 +127,14 @@ def resolve_program(
     # `target` is a caster placeholder no block reads (the lint guarantees only a
     # set-consuming iterator can run at the root, and iterators read `targets`).
     root = _new_invocation(
-        caster, caster, action,
-        event_bus=event_bus, damage_processor=damage_processor,
-        condition_rules=condition_rules, slot_level=slot_level, targets=targets,
+        caster,
+        caster,
+        action,
+        event_bus=event_bus,
+        damage_processor=damage_processor,
+        condition_rules=condition_rules,
+        slot_level=slot_level,
+        targets=targets,
     )
     if not set_consumer:
         return [run_target(root.child(target=t), program, registry) for t in targets]

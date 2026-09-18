@@ -36,7 +36,13 @@ class TestBattleDeterminism:
     def test_a_seed_that_changes_the_battle_changes_the_result(self):
         # Not every seed pair must differ, but across a spread at least one outcome
         # (winner / rounds / hp fractions) must move — proving the seed governs the fight.
-        results = [
-            ga.regenerate_match(DEFAULT_WEIGHTS, SCEN, seed=s) for s in range(6)
-        ]
-        assert len({(r.winner, r.rounds, tuple(sorted(r.hp_fraction.items()))) for r in results}) > 1
+        results = [ga.regenerate_match(DEFAULT_WEIGHTS, SCEN, seed=s) for s in range(6)]
+        assert (
+            len(
+                {
+                    (r.winner, r.rounds, tuple(sorted(r.hp_fraction.items())))
+                    for r in results
+                }
+            )
+            > 1
+        )

@@ -83,14 +83,25 @@ REGISTRY.register(
     lifetime,
     BlockContract(
         fields=(
-            Field("kind", "choice", choices=("concentration", "rounds", "instant"),
-                  description="What ends this lifetime. Default 'rounds'."),
-            Field("concentration", "bool",
-                  description="Sugar for kind='concentration'."),
-            Field("duration_rounds", "int",
-                  description="Rounds until it expires; omitted = permanent."),
-            Field("source", "str",
-                  description="Label for the scope; defaults to the action's name."),
+            Field(
+                "kind",
+                "choice",
+                choices=("concentration", "rounds", "instant"),
+                description="What ends this lifetime. Default 'rounds'.",
+            ),
+            Field(
+                "concentration", "bool", description="Sugar for kind='concentration'."
+            ),
+            Field(
+                "duration_rounds",
+                "int",
+                description="Rounds until it expires; omitted = permanent.",
+            ),
+            Field(
+                "source",
+                "str",
+                description="Label for the scope; defaults to the action's name.",
+            ),
         ),
         target_arity=TargetArity.SINGLE,
         installs_reactions=True,

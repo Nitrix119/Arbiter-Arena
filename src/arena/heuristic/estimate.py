@@ -76,7 +76,7 @@ def crit_chance(*, advantage: bool = False, disadvantage: bool = False) -> float
     if advantage and not disadvantage:
         return 1.0 - (1.0 - _CRIT_FACE_CHANCE) ** 2
     if disadvantage and not advantage:
-        return _CRIT_FACE_CHANCE ** 2
+        return _CRIT_FACE_CHANCE**2
     return _CRIT_FACE_CHANCE
 
 
@@ -123,9 +123,7 @@ def damage_multiplier(defender: Entity, damage_type: DamageType) -> float:
     return 1.0
 
 
-def _damage_ev(
-    dice_mean: float, flat: float, p_normal: float, p_crit: float
-) -> float:
+def _damage_ev(dice_mean: float, flat: float, p_normal: float, p_crit: float) -> float:
     """Expected damage of one hit-gated component: crit doubles the dice, not the flat."""
     return p_normal * (dice_mean + flat) + p_crit * (2.0 * dice_mean + flat)
 
@@ -145,8 +143,10 @@ def expected_attack_damage(
     a hidden-information caller can decline to use resistances it shouldn't know.
     """
     p_hit = hit_chance(
-        attack.bonus_to_hit, defender.ac,
-        advantage=advantage, disadvantage=disadvantage,
+        attack.bonus_to_hit,
+        defender.ac,
+        advantage=advantage,
+        disadvantage=disadvantage,
     )
     p_crit = crit_chance(advantage=advantage, disadvantage=disadvantage)
     p_normal = max(0.0, p_hit - p_crit)  # hits that are not crits
@@ -173,8 +173,10 @@ def attack_ev_vs_ac(
     there is no concrete defender, only a stand-in :data:`TYPICAL_AC`.
     """
     p_hit = hit_chance(
-        attack.bonus_to_hit, target_ac,
-        advantage=advantage, disadvantage=disadvantage,
+        attack.bonus_to_hit,
+        target_ac,
+        advantage=advantage,
+        disadvantage=disadvantage,
     )
     p_crit = crit_chance(advantage=advantage, disadvantage=disadvantage)
     p_normal = max(0.0, p_hit - p_crit)
@@ -263,7 +265,9 @@ def spell_expected_damage(
         kind = block.get("block")
         if kind == "attack_roll":
             spec = block.get("attack_bonus", 0)
-            bonus = caster.spell_attack_bonus if spec == "use_caster_bonus" else int(spec)
+            bonus = (
+                caster.spell_attack_bonus if spec == "use_caster_bonus" else int(spec)
+            )
             p_hit = hit_chance(bonus, defender.ac)
             p_crit = crit_chance()
         elif kind == "saving_throw":

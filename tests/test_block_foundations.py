@@ -17,25 +17,29 @@ from src.spells import (
 )
 from src.spells.block import parse_program
 
-
 # ── Block parsing ───────────────────────────────────────────────────────────────
+
 
 class TestBlockParsing:
 
     def test_parses_type_and_args(self):
-        b = Block.from_dict({"block": "damage", "damage_type": "FIRE", "formula": "8d6"})
+        b = Block.from_dict(
+            {"block": "damage", "damage_type": "FIRE", "formula": "8d6"}
+        )
         assert b.type == "damage"
         assert b.args == {"damage_type": "FIRE", "formula": "8d6"}
         assert b.then == ()
 
     def test_parses_nested_then_recursively(self):
-        b = Block.from_dict({
-            "block": "for_each_target",
-            "then": [
-                {"block": "attack_roll", "attack_bonus": "use_caster_bonus"},
-                {"block": "damage", "formula": "2d6", "damage_type": "FIRE"},
-            ],
-        })
+        b = Block.from_dict(
+            {
+                "block": "for_each_target",
+                "then": [
+                    {"block": "attack_roll", "attack_bonus": "use_caster_bonus"},
+                    {"block": "damage", "formula": "2d6", "damage_type": "FIRE"},
+                ],
+            }
+        )
         assert b.type == "for_each_target"
         assert [c.type for c in b.then] == ["attack_roll", "damage"]
         assert b.then[1].get("formula") == "2d6"
@@ -65,10 +69,12 @@ class TestBlockParsing:
             b.type = "healing"  # frozen dataclass
 
     def test_parse_program(self):
-        prog = parse_program([
-            {"block": "attack_roll"},
-            {"block": "damage", "formula": "1d6", "damage_type": "FORCE"},
-        ])
+        prog = parse_program(
+            [
+                {"block": "attack_roll"},
+                {"block": "damage", "formula": "1d6", "damage_type": "FORCE"},
+            ]
+        )
         assert [b.type for b in prog] == ["attack_roll", "damage"]
 
     def test_parse_program_empty_and_none(self):
@@ -82,6 +88,7 @@ class TestBlockParsing:
 
 # ── Contract / arity ────────────────────────────────────────────────────────────
 
+
 class TestContract:
 
     def test_defaults_to_single_arity(self):
@@ -93,13 +100,15 @@ class TestContract:
         assert {a.value for a in TargetArity} == {"single", "caster", "set"}
 
     def test_contract_carries_reads_writes(self):
-        c = BlockContract(reads=("hit",), writes=("damage_dealt",),
-                          target_arity=TargetArity.SINGLE)
+        c = BlockContract(
+            reads=("hit",), writes=("damage_dealt",), target_arity=TargetArity.SINGLE
+        )
         assert c.reads == ("hit",)
         assert c.writes == ("damage_dealt",)
 
 
 # ── Registry ────────────────────────────────────────────────────────────────────
+
 
 def _noop(block, inv):
     return None

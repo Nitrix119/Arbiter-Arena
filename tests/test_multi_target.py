@@ -13,7 +13,11 @@ list directly.
 from unittest.mock import patch
 
 from src.models import (
-    AbilityScores, StatBlock, Entity, SpellAction, TargetingType,
+    AbilityScores,
+    StatBlock,
+    Entity,
+    SpellAction,
+    TargetingType,
 )
 from src.loaders import StatBlockLoader
 from src.combat.event_bus import EventBus
@@ -21,6 +25,7 @@ from src.combat.damage_processor import DamageProcessor
 from src.combat.spell_resolver import SpellResolver
 
 import os
+
 SPELLS_DIR = os.path.join(os.path.dirname(__file__), "..", "examples", "spells")
 
 
@@ -37,6 +42,7 @@ def _block_types(spell):
 
 def _damage_entries(spell):
     """damage blocks of a spell, including those nested under a ``then``."""
+
     def walk(blocks, key):
         out = []
         for b in blocks:
@@ -49,8 +55,12 @@ def _damage_entries(spell):
 
 
 def _entity(name="E", hp=100, ac=10):
-    sb = StatBlock(name=name, ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-                   hit_points_max=hp, armor_class=ac)
+    sb = StatBlock(
+        name=name,
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+        hit_points_max=hp,
+        armor_class=ac,
+    )
     e = Entity(sb)
     e.refill_resources()
     return e
@@ -63,30 +73,40 @@ def _resolver():
 
 # ── Content loads with the new targeting type ───────────────────────────────────
 
+
 class TestMultiTargetContent:
 
     def test_magic_missile_is_multi_target(self):
-        spell = StatBlockLoader.load_spell_from_json(os.path.join(SPELLS_DIR, "magic_missile.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            os.path.join(SPELLS_DIR, "magic_missile.json")
+        )
         assert spell.targeting_type == TargetingType.MULTI_TARGET
         dmg = _damage_entries(spell)[0]
         assert dmg["formula"] == "1d4+1"
 
     def test_scorching_ray_loads(self):
-        spell = StatBlockLoader.load_spell_from_json(os.path.join(SPELLS_DIR, "scorching_ray.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            os.path.join(SPELLS_DIR, "scorching_ray.json")
+        )
         assert spell.targeting_type == TargetingType.MULTI_TARGET
         types = _block_types(spell)
         assert types == ["attack_roll", "damage"]
 
     def test_eldritch_blast_is_multi_target(self):
-        spell = StatBlockLoader.load_spell_from_json(os.path.join(SPELLS_DIR, "eldritch_blast.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            os.path.join(SPELLS_DIR, "eldritch_blast.json")
+        )
         assert spell.targeting_type == TargetingType.MULTI_TARGET
 
 
 # ── Independent per-projectile resolution ───────────────────────────────────────
 
+
 def _magic_missile():
     return SpellAction(
-        name="Magic Missile", description="", spell_level=1,
+        name="Magic Missile",
+        description="",
+        spell_level=1,
         targeting_type=TargetingType.MULTI_TARGET,
         program=[{"block": "damage", "damage_type": "FORCE", "formula": "1d4+1"}],
     )
@@ -94,11 +114,18 @@ def _magic_missile():
 
 def _scorching_ray():
     return SpellAction(
-        name="Scorching Ray", description="", spell_level=2,
+        name="Scorching Ray",
+        description="",
+        spell_level=2,
         targeting_type=TargetingType.MULTI_TARGET,
         program=[
             {"block": "attack_roll", "attack_bonus": 10},
-            {"block": "damage", "damage_type": "FIRE", "formula": "2d6", "requires_hit": True},
+            {
+                "block": "damage",
+                "damage_type": "FIRE",
+                "formula": "2d6",
+                "requires_hit": True,
+            },
         ],
     )
 
@@ -112,9 +139,9 @@ class TestSplitResolution:
         with patch("src.utils.dice.roll_dice", lambda n, s: n * 3):  # 1d4 -> 3, +1 -> 4
             results = resolver.resolve(caster, [g1, g2, g1], _magic_missile())
         # 1d4+1 with each die = 3 -> 3 + 1 = 4 per dart.
-        assert g1.max_hp - g1.hp == 8   # two darts
-        assert g2.max_hp - g2.hp == 4   # one dart
-        assert len(results) == 3        # one result per projectile
+        assert g1.max_hp - g1.hp == 8  # two darts
+        assert g2.max_hp - g2.hp == 4  # one dart
+        assert len(results) == 3  # one result per projectile
 
     def test_each_dart_rolls_independently(self):
         caster, g1, g2 = _entity("C"), _entity("G1"), _entity("G2")
@@ -122,16 +149,18 @@ class TestSplitResolution:
         rolls = iter([1, 4])  # first dart's 1d4 -> 1, second dart's 1d4 -> 4
         with patch("src.utils.dice.roll_dice", lambda n, s: next(rolls)):
             resolver.resolve(caster, [g1, g2], _magic_missile())
-        assert g1.max_hp - g1.hp == 2   # 1 + 1
-        assert g2.max_hp - g2.hp == 5   # 4 + 1
+        assert g1.max_hp - g1.hp == 2  # 1 + 1
+        assert g2.max_hp - g2.hp == 5  # 4 + 1
 
     def test_scorching_ray_rolls_a_separate_attack_per_beam(self):
         caster = _entity("C")
-        hit_target = _entity("Hit", ac=5)     # easy to hit
+        hit_target = _entity("Hit", ac=5)  # easy to hit
         miss_target = _entity("Miss", ac=99)  # impossible to hit
         resolver = _resolver()
-        with patch("src.utils.dice.roll_d20", return_value=10), \
-             patch("src.utils.dice.roll_dice", lambda n, s: n * 6):  # 2d6 -> 12
+        with (
+            patch("src.utils.dice.roll_d20", return_value=10),
+            patch("src.utils.dice.roll_dice", lambda n, s: n * 6),
+        ):  # 2d6 -> 12
             resolver.resolve(caster, [hit_target, miss_target], _scorching_ray())
         assert hit_target.max_hp - hit_target.hp == 12  # beam hit
-        assert miss_target.hp == miss_target.max_hp     # beam missed, no damage
+        assert miss_target.hp == miss_target.max_hp  # beam missed, no damage

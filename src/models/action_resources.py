@@ -48,9 +48,7 @@ class ActionResources:
             ValueError: If any resource is insufficient.
         """
         if not self.can_afford(cost):
-            raise ValueError(
-                f"Insufficient resources: have {self}, need {cost}"
-            )
+            raise ValueError(f"Insufficient resources: have {self}, need {cost}")
         self.actions -= cost.actions
         self.bonus_actions -= cost.bonus_actions
         self.reactions -= cost.reactions

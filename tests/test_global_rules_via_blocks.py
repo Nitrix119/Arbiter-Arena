@@ -30,8 +30,9 @@ CONCENTRATION = os.path.join(_GLOBAL, "concentration.json")
 REFILL = os.path.join(_GLOBAL, "action_economy_refill.json")
 
 
-def _entity(hp=30, resistances=None, immunities=None, vulnerabilities=None,
-            con=10, ac=10):
+def _entity(
+    hp=30, resistances=None, immunities=None, vulnerabilities=None, con=10, ac=10
+):
     return Entity(
         StatBlock(
             name="Tester",
@@ -49,6 +50,7 @@ def _entity(hp=30, resistances=None, immunities=None, vulnerabilities=None,
 # Eligibility
 # ---------------------------------------------------------------------------
 
+
 class TestBlockEligible:
     def test_event_modifier_rules_are_eligible(self):
         for path in (RESISTANCE, IMMUNITY, VULN, CRIT_HIT, CRIT_MISS):
@@ -65,14 +67,13 @@ class TestBlockEligible:
 # End-to-end via the block engine (parity with the legacy numbers)
 # ---------------------------------------------------------------------------
 
+
 class TestGlobalRulesEndToEnd:
     def _install(self, *paths):
         bus = EventBus()
         processor = DamageProcessor(bus)
         rules = [RuleLoader.load(p) for p in paths]
-        handled = install_global_rules(
-            rules, event_bus=bus, damage_processor=processor
-        )
+        handled = install_global_rules(rules, event_bus=bus, damage_processor=processor)
         return bus, processor, handled
 
     def test_resistance_halves_via_block_engine(self):
@@ -107,8 +108,9 @@ class TestGlobalRulesEndToEnd:
         def roll(r):
             ev = bus.emit(
                 EventType.ATTACK_ROLLED,
-                AttackRolledData(attacker=_entity(), defender=_entity(),
-                                 action=None, roll=r, total=r),
+                AttackRolledData(
+                    attacker=_entity(), defender=_entity(), action=None, roll=r, total=r
+                ),
             )
             return ev.data["critical_hit"], ev.data["critical_miss"]
 
@@ -121,6 +123,7 @@ class TestGlobalRulesEndToEnd:
 # The production flow: load_rules_from_directory installs them on the block engine
 # ---------------------------------------------------------------------------
 
+
 class TestNativeGlobalInstall:
     """Loading a rule *is* installing it on the block engine — its single resolution
     path — so ``load_rules_from_directory`` wires every global rule for library and
@@ -130,7 +133,8 @@ class TestNativeGlobalInstall:
         bus = EventBus()
         processor = DamageProcessor(bus)
         rules = load_rules_from_directory(
-            _GLOBAL, event_bus=bus, damage_processor=processor)
+            _GLOBAL, event_bus=bus, damage_processor=processor
+        )
         assert len(rules) == 7  # every shipped global rule loaded
         # Resistance fires exactly once (halved, not doubled) — no explicit install call.
         entity = _entity(resistances=[DamageType.COLD])
@@ -142,14 +146,16 @@ class TestNativeGlobalInstall:
 # The two forward global rules (concentration break + resource refill)
 # ---------------------------------------------------------------------------
 
+
 class TestForwardGlobalRules:
     def test_refill_resets_resources_via_block_engine(self):
         bus = EventBus()
         install_global_rules([RuleLoader.load(REFILL)], event_bus=bus)
         entity = _entity()
         entity.resources.actions = 0  # spent
-        bus.emit(EventType.TURN_START,
-                 TurnEventData(entity=entity, round_num=2, turn_num=1))
+        bus.emit(
+            EventType.TURN_START, TurnEventData(entity=entity, round_num=2, turn_num=1)
+        )
         assert entity.resources.actions == 1  # refilled to the stat-block default
 
     def _concentrating_caster(self, bus, dp, con=10, hp=30):
@@ -158,14 +164,32 @@ class TestForwardGlobalRules:
         from src.spells.block import parse_program
 
         caster = _entity(hp=hp, con=con)
-        program = parse_program([{
-            "block": "lifetime", "kind": "concentration", "source": "Shield of Faith",
-            "then": [{"block": "add_modifier", "target": "self", "stat": "ac",
-                      "value": 2, "source": "Shield of Faith"}],
-        }])
-        resolve_blocks(caster, caster,
-                       SpellAction(name="Shield of Faith", description="", spell_level=1),
-                       program, event_bus=bus, damage_processor=dp)
+        program = parse_program(
+            [
+                {
+                    "block": "lifetime",
+                    "kind": "concentration",
+                    "source": "Shield of Faith",
+                    "then": [
+                        {
+                            "block": "add_modifier",
+                            "target": "self",
+                            "stat": "ac",
+                            "value": 2,
+                            "source": "Shield of Faith",
+                        }
+                    ],
+                }
+            ]
+        )
+        resolve_blocks(
+            caster,
+            caster,
+            SpellAction(name="Shield of Faith", description="", spell_level=1),
+            program,
+            event_bus=bus,
+            damage_processor=dp,
+        )
         return caster
 
     def test_failed_save_breaks_concentration_via_block_engine(self):
@@ -173,8 +197,9 @@ class TestForwardGlobalRules:
 
         bus = EventBus()
         dp = DamageProcessor(bus)
-        install_global_rules([RuleLoader.load(CONCENTRATION)],
-                             event_bus=bus, damage_processor=dp)
+        install_global_rules(
+            [RuleLoader.load(CONCENTRATION)], event_bus=bus, damage_processor=dp
+        )
         caster = self._concentrating_caster(bus, dp)
         base = _entity().ac
         assert caster.has_concentration and caster.ac == base + 2
@@ -182,15 +207,16 @@ class TestForwardGlobalRules:
         with patch("src.spells.blocks.global_effects.roll_d20", return_value=1):
             dp.apply_damage(caster, [Damage(DamageType.GENERIC, 20)])
         assert not caster.has_concentration  # failed CON save
-        assert caster.ac == base            # the buff was revoked with the scope
+        assert caster.ac == base  # the buff was revoked with the scope
 
     def test_passed_save_holds_concentration_via_block_engine(self):
         from unittest.mock import patch
 
         bus = EventBus()
         dp = DamageProcessor(bus)
-        install_global_rules([RuleLoader.load(CONCENTRATION)],
-                             event_bus=bus, damage_processor=dp)
+        install_global_rules(
+            [RuleLoader.load(CONCENTRATION)], event_bus=bus, damage_processor=dp
+        )
         caster = self._concentrating_caster(bus, dp)
         base = _entity().ac
 
@@ -208,8 +234,9 @@ class TestForwardGlobalRules:
 
         bus = EventBus()
         dp = DamageProcessor(bus)
-        install_global_rules([RuleLoader.load(CONCENTRATION)],
-                             event_bus=bus, damage_processor=dp)
+        install_global_rules(
+            [RuleLoader.load(CONCENTRATION)], event_bus=bus, damage_processor=dp
+        )
         caster = self._concentrating_caster(bus, dp, con=con, hp=100)
         with patch("src.spells.blocks.global_effects.roll_d20", return_value=roll):
             dp.apply_damage(caster, [Damage(DamageType.GENERIC, amount)])
@@ -226,12 +253,15 @@ class TestForwardGlobalRules:
         modifier, not the roll, is doing the work.
         """
         assert self._damage_a_concentrating_caster(roll=13).has_concentration
-        assert not self._damage_a_concentrating_caster(roll=13, con=10).has_concentration
+        assert not self._damage_a_concentrating_caster(
+            roll=13, con=10
+        ).has_concentration
 
 
 # ---------------------------------------------------------------------------
 # Cancelling an in-flight action from a global rule
 # ---------------------------------------------------------------------------
+
 
 class TestCancelViaGlobalRule:
     """A native global rule can cancel the action that raised the event.
@@ -268,7 +298,9 @@ class TestCancelViaGlobalRule:
         # bonus_to_hit 99 against AC 5: this attack cannot miss on its own merits,
         # so a (False, 0) result can only come from the cancellation.
         attack = AttackAction(
-            name="Sword", description="", bonus_to_hit=99,
+            name="Sword",
+            description="",
+            bonus_to_hit=99,
             damage=[Damage(DamageType.SLASHING, 1)],
         )
         return combat, attacker, defender, attack
@@ -282,8 +314,9 @@ class TestCancelViaGlobalRule:
 
     def test_cancel_on_attack_declared_stops_the_attack(self):
         combat, attacker, defender, attack = self._combat()
-        install_global_rules([RuleLoader.from_dict(dict(self._PACIFISM))],
-                             event_bus=combat.event_bus)
+        install_global_rules(
+            [RuleLoader.from_dict(dict(self._PACIFISM))], event_bus=combat.event_bus
+        )
 
         hit, damage, _ = combat.resolve_attack(attacker, defender, attack)
         assert hit is False

@@ -7,6 +7,7 @@ from typing import Optional
 
 class ProficiencyLevel(Enum):
     """Proficiency levels for skills and saving throws."""
+
     NONE = 0
     PROFICIENT = 1
     EXPERT = 2  # Expertise or Jack of All Trades doubling
@@ -15,24 +16,24 @@ class ProficiencyLevel(Enum):
 @dataclass
 class Skill:
     """A skill with proficiency and associated ability.
-    
+
     Attributes:
         name: The skill name
         ability: The ability score it's based on
         proficiency: The proficiency level
     """
-    
+
     name: str
     ability: str  # e.g., "strength", "dexterity"
     proficiency: ProficiencyLevel = ProficiencyLevel.NONE
-    
+
     def calculate_bonus(self, ability_modifier: int, proficiency_bonus: int) -> int:
         """Calculate total skill bonus.
-        
+
         Args:
             ability_modifier: The modifier from the related ability score
             proficiency_bonus: The character's proficiency bonus
-            
+
         Returns:
             Total skill bonus
         """

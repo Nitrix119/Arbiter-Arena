@@ -51,9 +51,7 @@ class Block:
                 f"block {btype!r}: {_THEN_KEY!r} must be a list, got {raw_then!r}"
             )
         then = tuple(cls.from_dict(child) for child in raw_then)
-        args = {
-            k: v for k, v in data.items() if k not in (_TYPE_KEY, _THEN_KEY)
-        }
+        args = {k: v for k, v in data.items() if k not in (_TYPE_KEY, _THEN_KEY)}
         return cls(type=btype, args=args, then=then)
 
     def get(self, key: str, default: Any = None) -> Any:

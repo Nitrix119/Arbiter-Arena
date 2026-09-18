@@ -118,9 +118,18 @@ TOOLS: List[Dict[str, Any]] = [
                     "description": "id of a move option from your legal options; resolves to "
                     "its destination. Omit if giving raw x/z.",
                 },
-                "x": {"type": "number", "description": "Destination x, in feet (east)."},
-                "y": {"type": "number", "description": "Destination y, in feet (up); usually 0."},
-                "z": {"type": "number", "description": "Destination z, in feet (south)."},
+                "x": {
+                    "type": "number",
+                    "description": "Destination x, in feet (east).",
+                },
+                "y": {
+                    "type": "number",
+                    "description": "Destination y, in feet (up); usually 0.",
+                },
+                "z": {
+                    "type": "number",
+                    "description": "Destination z, in feet (south).",
+                },
             },
         },
     },
@@ -168,7 +177,10 @@ def _gate_roll(
         return None
 
     if "ac" in roll_detail:  # attacker/spell-attack to-hit roll
-        out: Dict[str, Any] = {"attack_roll": roll_detail["d20"], "attack_total": roll_detail["total"]}
+        out: Dict[str, Any] = {
+            "attack_roll": roll_detail["d20"],
+            "attack_total": roll_detail["total"],
+        }
         if "bonus" in roll_detail:
             out["attack_bonus"] = roll_detail["bonus"]
         if policy.reveal_enemy_ac:
@@ -176,7 +188,10 @@ def _gate_roll(
         return out
 
     if "dc" in roll_detail:  # target's saving throw vs the actor's DC
-        out = {"save_dc": roll_detail["dc"], "target_saved": roll_detail["save_success"]}
+        out = {
+            "save_dc": roll_detail["dc"],
+            "target_saved": roll_detail["save_success"],
+        }
         if policy.reveal_enemy_ac:
             out["target_save_roll"] = roll_detail["total"]
         return out
@@ -265,7 +280,9 @@ class ToolExecutor:
         target_point: Optional[Point3D] = None
         tp = args.get("target_point")
         if tp is not None:
-            target_point = Point3D(float(tp["x"]), float(tp.get("y", 0.0)), float(tp["z"]))
+            target_point = Point3D(
+                float(tp["x"]), float(tp.get("y", 0.0)), float(tp["z"])
+            )
 
         results = self._combat.resolve_spell(
             actor,
@@ -295,7 +312,11 @@ class ToolExecutor:
         option_id = args.get("option_id")
         if option_id:
             option = next(
-                (o for o in move_candidates(self._combat, actor) if o.option_id == option_id),
+                (
+                    o
+                    for o in move_candidates(self._combat, actor)
+                    if o.option_id == option_id
+                ),
                 None,
             )
             if option is None:

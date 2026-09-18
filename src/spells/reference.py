@@ -167,7 +167,9 @@ def generate_block_reference(registry: BlockRegistry = REGISTRY) -> str:
         if c.installs_reactions:
             flags.append("installs reactions (subscribes handlers to future events)")
         if c.mutates_event:
-            flags.append("event modifier (mutates the in-flight event; only meaningful inside a `trigger`)")
+            flags.append(
+                "event modifier (mutates the in-flight event; only meaningful inside a `trigger`)"
+            )
         if flags:
             rows.append(("Category", "; ".join(flags)))
 

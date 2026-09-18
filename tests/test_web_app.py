@@ -22,6 +22,7 @@ def client():
 # App creation & SpellRegistry
 # ---------------------------------------------------------------------------
 
+
 class TestAppCreation:
     def test_app_creates_successfully(self):
         app = create_app()
@@ -43,6 +44,7 @@ class TestAppCreation:
 # ---------------------------------------------------------------------------
 # HTTP endpoints
 # ---------------------------------------------------------------------------
+
 
 class TestCreatureEndpoints:
     def test_list_creatures(self, client):
@@ -87,7 +89,8 @@ class TestSpellEndpoint:
 
     def test_spell_uses_registry_not_filesystem(self, client):
         """Verify the endpoint returns serialized SpellAction data (has 'cost' key
-        from _serialize_action), not raw JSON (which uses 'casting_time' but no 'cost')."""
+        from _serialize_action), not raw JSON (which uses 'casting_time' but no 'cost').
+        """
         r = client.get("/api/spells/by-name/Fireball")
         data = r.json()
         # _serialize_action always includes 'casting_time' and 'duration'
@@ -99,6 +102,7 @@ class TestSpellEndpoint:
 # ---------------------------------------------------------------------------
 # WebSocket
 # ---------------------------------------------------------------------------
+
 
 class TestWebSocketCombat:
     def test_connect_receives_connected_message(self, client):
@@ -119,24 +123,26 @@ class TestWebSocketCombat:
     def test_start_combat(self, client):
         with client.websocket_connect("/ws/combat") as ws:
             ws.receive_json()  # consume "connected"
-            ws.send_json({
-                "type": "start_combat",
-                "seq": 1,
-                "combatants": [
-                    {
-                        "creature_path": "goblin.json",
-                        "team": "enemy",
-                        "position": {"x": 3, "y": 0},
-                        "frontend_id": "fe-1",
-                    },
-                    {
-                        "creature_path": "characters/ranger.json",
-                        "team": "ally",
-                        "position": {"x": -3, "y": 0},
-                        "frontend_id": "fe-2",
-                    },
-                ],
-            })
+            ws.send_json(
+                {
+                    "type": "start_combat",
+                    "seq": 1,
+                    "combatants": [
+                        {
+                            "creature_path": "goblin.json",
+                            "team": "enemy",
+                            "position": {"x": 3, "y": 0},
+                            "frontend_id": "fe-1",
+                        },
+                        {
+                            "creature_path": "characters/ranger.json",
+                            "team": "ally",
+                            "position": {"x": -3, "y": 0},
+                            "frontend_id": "fe-2",
+                        },
+                    ],
+                }
+            )
             msg = ws.receive_json()
             assert msg["type"] == "combat_started"
             assert msg["seq"] == 1
@@ -158,24 +164,26 @@ class TestWebSocketCombat:
         """Verify frontend cell coords survive the round-trip through backend feet."""
         with client.websocket_connect("/ws/combat") as ws:
             ws.receive_json()
-            ws.send_json({
-                "type": "start_combat",
-                "seq": 1,
-                "combatants": [
-                    {
-                        "creature_path": "goblin.json",
-                        "team": "enemy",
-                        "position": {"x": 4.0, "y": 2.0},
-                        "frontend_id": "fe-1",
-                    },
-                    {
-                        "creature_path": "characters/ranger.json",
-                        "team": "ally",
-                        "position": {"x": -3.0, "y": 0.0},
-                        "frontend_id": "fe-2",
-                    },
-                ],
-            })
+            ws.send_json(
+                {
+                    "type": "start_combat",
+                    "seq": 1,
+                    "combatants": [
+                        {
+                            "creature_path": "goblin.json",
+                            "team": "enemy",
+                            "position": {"x": 4.0, "y": 2.0},
+                            "frontend_id": "fe-1",
+                        },
+                        {
+                            "creature_path": "characters/ranger.json",
+                            "team": "ally",
+                            "position": {"x": -3.0, "y": 0.0},
+                            "frontend_id": "fe-2",
+                        },
+                    ],
+                }
+            )
             msg = ws.receive_json()
             entities = {e["name"]: e for e in msg["combat_state"]["entities"]}
             goblin_pos = entities["Goblin"]["position"]
@@ -185,24 +193,26 @@ class TestWebSocketCombat:
     def test_end_turn(self, client):
         with client.websocket_connect("/ws/combat") as ws:
             ws.receive_json()
-            ws.send_json({
-                "type": "start_combat",
-                "seq": 1,
-                "combatants": [
-                    {
-                        "creature_path": "goblin.json",
-                        "team": "enemy",
-                        "position": {"x": 3, "y": 0},
-                        "frontend_id": "fe-1",
-                    },
-                    {
-                        "creature_path": "characters/ranger.json",
-                        "team": "ally",
-                        "position": {"x": -3, "y": 0},
-                        "frontend_id": "fe-2",
-                    },
-                ],
-            })
+            ws.send_json(
+                {
+                    "type": "start_combat",
+                    "seq": 1,
+                    "combatants": [
+                        {
+                            "creature_path": "goblin.json",
+                            "team": "enemy",
+                            "position": {"x": 3, "y": 0},
+                            "frontend_id": "fe-1",
+                        },
+                        {
+                            "creature_path": "characters/ranger.json",
+                            "team": "ally",
+                            "position": {"x": -3, "y": 0},
+                            "frontend_id": "fe-2",
+                        },
+                    ],
+                }
+            )
             started = ws.receive_json()
             first_entity = started["combat_state"]["current_entity_id"]
 

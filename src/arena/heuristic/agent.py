@@ -47,7 +47,9 @@ class HeuristicAgent(Agent):
         self._ledger: Dict[str, float] = {}
         self._ledger_round = -1
 
-    def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
+    def decide(
+        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
+    ) -> ToolCall:
         self._roll_ledger(observation)
         entity = self._active_entity(observation)
         if entity is None:
@@ -63,7 +65,10 @@ class HeuristicAgent(Agent):
         best = max(ordered, key=lambda p: scored[_plan_sort_key(p)])
         if best.is_end_turn:
             return ToolCall(TOOL_END_TURN, {})
-        if scored[_plan_sort_key(best)] - scored[_plan_sort_key(stay)] <= self._weights.end_turn_threshold:
+        if (
+            scored[_plan_sort_key(best)] - scored[_plan_sort_key(stay)]
+            <= self._weights.end_turn_threshold
+        ):
             return ToolCall(TOOL_END_TURN, {})
 
         self._record_commitment(entity, best)
@@ -71,8 +76,12 @@ class HeuristicAgent(Agent):
 
     def _score(self, entity: Entity, plan: TurnPlan) -> float:
         return score(
-            plan, self._combat, entity, policy=self._policy,
-            weights=self._weights, committed=self._ledger,
+            plan,
+            self._combat,
+            entity,
+            policy=self._policy,
+            weights=self._weights,
+            committed=self._ledger,
         )
 
     def _roll_ledger(self, observation: Dict[str, Any]) -> None:
@@ -95,8 +104,12 @@ class HeuristicAgent(Agent):
         target = self._lookup(plan.action.target_id)
         if target is None:
             return
-        dmg = plan.action.expected_damage(entity, target, self._combat, policy=self._policy)
-        self._ledger[plan.action.target_id] = self._ledger.get(plan.action.target_id, 0.0) + dmg
+        dmg = plan.action.expected_damage(
+            entity, target, self._combat, policy=self._policy
+        )
+        self._ledger[plan.action.target_id] = (
+            self._ledger.get(plan.action.target_id, 0.0) + dmg
+        )
 
     def _active_entity(self, observation: Dict[str, Any]) -> Optional[Entity]:
         return self._lookup(observation.get("self", {}).get("entity_id"))

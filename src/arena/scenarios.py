@@ -17,7 +17,14 @@ from typing import Callable, Dict, Tuple
 
 from src.arena.setup import build_combat
 from src.combat.combat_system import CombatSystem
-from src.models import AbilityScores, AttackAction, Damage, DamageType, Entity, StatBlock
+from src.models import (
+    AbilityScores,
+    AttackAction,
+    Damage,
+    DamageType,
+    Entity,
+    StatBlock,
+)
 
 _ABILITIES = (16, 14, 14, 10, 12, 10)  # str, dex, con, int, wis, cha
 
@@ -55,7 +62,12 @@ def _entity(
         hit_points_max=hp,
         armor_class=ac,
         proficiency_bonus=2,
-        resource_defaults={"actions": 1, "bonus_actions": 1, "reactions": 1, "speed": speed},
+        resource_defaults={
+            "actions": 1,
+            "bonus_actions": 1,
+            "reactions": 1,
+            "speed": speed,
+        },
     )
     for action in attacks:
         block.add_action(action)
@@ -86,8 +98,12 @@ class Scenario:
 
 # ── 1. Kiting duel — movement & range control ────────────────────────────────
 def _build_kiting() -> CombatSystem:
-    archer = _entity("Archer", "a", (0, 0, 0), hp=18, ac=14, speed=40, attacks=[_longbow()])
-    bruiser = _entity("Bruiser", "b", (40, 0, 0), hp=45, ac=15, speed=30, attacks=[_greatsword()])
+    archer = _entity(
+        "Archer", "a", (0, 0, 0), hp=18, ac=14, speed=40, attacks=[_longbow()]
+    )
+    bruiser = _entity(
+        "Bruiser", "b", (40, 0, 0), hp=45, ac=15, speed=30, attacks=[_greatsword()]
+    )
     return build_combat([archer, bruiser])
 
 

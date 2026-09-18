@@ -104,7 +104,9 @@ def _serialize_enemy(entity: Entity, policy: InformationPolicy) -> Dict[str, Any
     if policy.reveal_enemy_spell_slots:
         view["spell_slots"] = _spell_slots(entity)
     if policy.reveal_enemy_actions:
-        view["actions"] = [a.name for a in entity.stat_block.actions + entity.granted_actions]
+        view["actions"] = [
+            a.name for a in entity.stat_block.actions + entity.granted_actions
+        ]
         view["known_spells"] = list(entity.stat_block.known_spells)
 
     return view
@@ -135,9 +137,7 @@ def build_observation(
         "is_my_turn": current is not None and current.entity_id == entity.entity_id,
         "self": _serialize_ally(entity),
         "allies": [_serialize_ally(a) for a in combat.get_allies(entity)],
-        "enemies": [
-            _serialize_enemy(e, policy) for e in combat.get_enemies(entity)
-        ],
+        "enemies": [_serialize_enemy(e, policy) for e in combat.get_enemies(entity)],
         "legal_actions": legal_actions(combat, entity).to_dict(),
     }
 

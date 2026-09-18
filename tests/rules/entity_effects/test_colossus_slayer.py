@@ -16,7 +16,12 @@ import os
 from unittest.mock import patch
 
 from src.models import (
-    AbilityScores, StatBlock, Entity, AttackAction, Damage, DamageType,
+    AbilityScores,
+    StatBlock,
+    Entity,
+    AttackAction,
+    Damage,
+    DamageType,
 )
 from src.combat.event_bus import EventBus
 from src.combat.damage_processor import DamageProcessor
@@ -28,25 +33,34 @@ from src.rules.effect_registry import EffectRegistry
 
 EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "examples")
 COLOSSUS_JSON = os.path.join(
-    os.path.dirname(__file__), "..", "..", "..", "rules", "entity_effects",
+    os.path.dirname(__file__),
+    "..",
+    "..",
+    "..",
+    "rules",
+    "entity_effects",
     "colossus_slayer.json",
 )
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 def _entity(name="E", ac=10, hp=40):
     sb = StatBlock(
         name=name,
         ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-        hit_points_max=hp, armor_class=ac,
+        hit_points_max=hp,
+        armor_class=ac,
     )
     return Entity(sb)
 
 
 def _weapon(bonus=20, dtype=DamageType.SLASHING, formula="1d8"):
     return AttackAction(
-        name="Sword", description="", bonus_to_hit=bonus,
+        name="Sword",
+        description="",
+        bonus_to_hit=bonus,
         damage=[Damage(dtype, 0, formula=formula)],
     )
 
@@ -62,20 +76,27 @@ def _setup(*entities, colossus_on=None):
     reg = EffectRegistry()
     reg.scan_directory("rules/entity_effects")
     if colossus_on is not None:
-        apply_entity_rule(colossus_on, RuleLoader.load(COLOSSUS_JSON),
-                          event_bus=bus, damage_processor=dp)
+        apply_entity_rule(
+            colossus_on,
+            RuleLoader.load(COLOSSUS_JSON),
+            event_bus=bus,
+            damage_processor=dp,
+        )
     return bus, dp, reg, AttackResolver(bus, dp, condition_rules=reg)
 
 
 def _hit(ar, attacker, defender, weapon=None):
     """Resolve a guaranteed hit with fixed rolls; return (hit, reported_damage)."""
-    with patch("src.spells.blocks.rolls.roll_d20", return_value=15), \
-         patch("src.spells.blocks.damage.roll_formula", return_value=3):
+    with (
+        patch("src.spells.blocks.rolls.roll_d20", return_value=15),
+        patch("src.spells.blocks.damage.roll_formula", return_value=3),
+    ):
         hit, dmg, _log, _detail = ar.resolve(attacker, defender, weapon or _weapon())
     return hit, dmg
 
 
 # ── Fixture loading (unchanged general creature-loading coverage) ─────────────
+
 
 class TestFixtureLoading:
 
@@ -108,6 +129,7 @@ class TestFixtureLoading:
 
 
 # ── Colossus Slayer as a block trigger ────────────────────────────────────────
+
 
 class TestColossusSlayerBonusDie:
 

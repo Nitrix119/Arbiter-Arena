@@ -50,9 +50,7 @@ def modify_damage(block: Block, inv: Invocation) -> None:
         return
     multiplier = float(resolve(block.get("multiplier"), eval_context(inv)))
     filter_type = block.get("damage_type")
-    ftype = (
-        DamageType[str(filter_type).upper()] if filter_type is not None else None
-    )
+    ftype = DamageType[str(filter_type).upper()] if filter_type is not None else None
     for dmg in event.data.get("damage_list", []):
         if ftype is not None and dmg.damage_type != ftype:
             continue
@@ -118,17 +116,37 @@ def _event_modifier(*fields: Field) -> BlockContract:
     )
 
 
-REGISTRY.register("modify_damage", modify_damage, _event_modifier(
-    # Mandatory in practice: absent, `float(resolve(None, ...))` raises.
-    Field("multiplier", "expr", required=True,
-          description="Scale matching damage by this (0.5 resist, 0 immune, 2 vulnerable)."),
-    Field("damage_type", "enum", enum=DamageType,
-          description="Only scale this damage type; omitted scales every entry."),
-))
-REGISTRY.register("force_critical", force_critical, _event_modifier(
-    Field("outcome", "choice", choices=("hit", "miss"),
-          description="Force a critical hit or a critical miss. Default 'hit'."),
-))
+REGISTRY.register(
+    "modify_damage",
+    modify_damage,
+    _event_modifier(
+        # Mandatory in practice: absent, `float(resolve(None, ...))` raises.
+        Field(
+            "multiplier",
+            "expr",
+            required=True,
+            description="Scale matching damage by this (0.5 resist, 0 immune, 2 vulnerable).",
+        ),
+        Field(
+            "damage_type",
+            "enum",
+            enum=DamageType,
+            description="Only scale this damage type; omitted scales every entry.",
+        ),
+    ),
+)
+REGISTRY.register(
+    "force_critical",
+    force_critical,
+    _event_modifier(
+        Field(
+            "outcome",
+            "choice",
+            choices=("hit", "miss"),
+            description="Force a critical hit or a critical miss. Default 'hit'.",
+        ),
+    ),
+)
 REGISTRY.register("grant_advantage", grant_advantage, _event_modifier())
 REGISTRY.register("grant_disadvantage", grant_disadvantage, _event_modifier())
 REGISTRY.register("cancel", cancel, _event_modifier())

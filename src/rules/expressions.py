@@ -10,26 +10,52 @@ import types
 from types import SimpleNamespace
 from typing import Any, Dict, Set
 
-
 SAFE_BUILTINS: Dict[str, Any] = {
-    "max": max, "min": min, "abs": abs, "int": int,
-    "round": round, "bool": bool, "len": len, "hasattr": hasattr,
+    "max": max,
+    "min": min,
+    "abs": abs,
+    "int": int,
+    "round": round,
+    "bool": bool,
+    "len": len,
+    "hasattr": hasattr,
 }
 
 
-ALLOWED_NODES: frozenset = frozenset({
-    ast.Expression,
-    ast.Name, ast.Attribute, ast.Subscript,
-    ast.Index,    # Python 3.8 compat; never emitted by 3.9+ parser, but harmless
-    ast.Load,     # context node on every Name/Attribute/Subscript in read position
-    ast.Constant,
-    ast.Compare, ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.In, ast.NotIn,
-    ast.BoolOp, ast.And, ast.Or,
-    ast.UnaryOp, ast.Not,
-    ast.BinOp, ast.FloorDiv, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod,
-    ast.Call,
-    ast.Tuple,
-})
+ALLOWED_NODES: frozenset = frozenset(
+    {
+        ast.Expression,
+        ast.Name,
+        ast.Attribute,
+        ast.Subscript,
+        ast.Index,  # Python 3.8 compat; never emitted by 3.9+ parser, but harmless
+        ast.Load,  # context node on every Name/Attribute/Subscript in read position
+        ast.Constant,
+        ast.Compare,
+        ast.Eq,
+        ast.NotEq,
+        ast.Lt,
+        ast.LtE,
+        ast.Gt,
+        ast.GtE,
+        ast.In,
+        ast.NotIn,
+        ast.BoolOp,
+        ast.And,
+        ast.Or,
+        ast.UnaryOp,
+        ast.Not,
+        ast.BinOp,
+        ast.FloorDiv,
+        ast.Add,
+        ast.Sub,
+        ast.Mult,
+        ast.Div,
+        ast.Mod,
+        ast.Call,
+        ast.Tuple,
+    }
+)
 
 _validated_cache: Set[str] = set()
 _compiled_cache: Dict[str, types.CodeType] = {}

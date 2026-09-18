@@ -11,13 +11,15 @@ from .initiative import InitiativeTracker
 
 # Conditions that prevent an entity from taking any meaningful action.
 # Entities with any of these conditions have their turn skipped automatically.
-_SKIP_CONDITIONS: frozenset[ConditionType] = frozenset({
-    ConditionType.UNCONSCIOUS,
-    ConditionType.INCAPACITATED,
-    ConditionType.PARALYZED,
-    ConditionType.STUNNED,
-    ConditionType.PETRIFIED,
-})
+_SKIP_CONDITIONS: frozenset[ConditionType] = frozenset(
+    {
+        ConditionType.UNCONSCIOUS,
+        ConditionType.INCAPACITATED,
+        ConditionType.PARALYZED,
+        ConditionType.STUNNED,
+        ConditionType.PETRIFIED,
+    }
+)
 
 
 def _should_skip(entity: Entity) -> bool:
@@ -44,7 +46,9 @@ class TurnManager:
         """Begin the first round."""
         self.round = 1
         self.turn = 1
-        self._event_bus.emit(EventType.ROUND_START, RoundEventData(round_num=self.round))
+        self._event_bus.emit(
+            EventType.ROUND_START, RoundEventData(round_num=self.round)
+        )
         self._event_bus.emit(
             EventType.TURN_START,
             TurnEventData(
@@ -70,10 +74,14 @@ class TurnManager:
         self.turn += 1
 
         if self._initiative_tracker.current_turn_index == 0:
-            self._event_bus.emit(EventType.ROUND_END, RoundEventData(round_num=self.round))
+            self._event_bus.emit(
+                EventType.ROUND_END, RoundEventData(round_num=self.round)
+            )
             self.round += 1
             self.turn = 1
-            self._event_bus.emit(EventType.ROUND_START, RoundEventData(round_num=self.round))
+            self._event_bus.emit(
+                EventType.ROUND_START, RoundEventData(round_num=self.round)
+            )
 
         alive = [c for c in self._combatants if c.is_alive()]
         if len(alive) <= 1:
@@ -90,10 +98,14 @@ class TurnManager:
             self.turn += 1
             skips += 1
             if self._initiative_tracker.current_turn_index == 0:
-                self._event_bus.emit(EventType.ROUND_END, RoundEventData(round_num=self.round))
+                self._event_bus.emit(
+                    EventType.ROUND_END, RoundEventData(round_num=self.round)
+                )
                 self.round += 1
                 self.turn = 1
-                self._event_bus.emit(EventType.ROUND_START, RoundEventData(round_num=self.round))
+                self._event_bus.emit(
+                    EventType.ROUND_START, RoundEventData(round_num=self.round)
+                )
 
         self._event_bus.emit(
             EventType.TURN_START,

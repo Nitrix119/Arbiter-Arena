@@ -19,23 +19,24 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Tuple, Type
 
-
 #: The closed set of field kinds. Keep it closed: a kind per block would be a second
 #: vocabulary, which is the thing this engine exists to avoid.
-KINDS = frozenset({
-    "expr",      # an expression string, evaluated against the block's context
-    "formula",   # a dice formula literal ("2d6+1", "20")
-    "int",       # an integer literal
-    "number",    # an int or float literal
-    "str",       # a plain string literal
-    "bool",      # a JSON boolean
-    "enum",      # a member *name* of ``Field.enum``
-    "choice",    # one of ``Field.choices``
-    "object",    # a nested object shaped by ``Field.subfields``
-    "list",      # a list of objects, each shaped by ``Field.subfields``
-    "map_expr",  # an object whose values are expressions (``bindings``)
-    "any",       # deliberately unconstrained
-})
+KINDS = frozenset(
+    {
+        "expr",  # an expression string, evaluated against the block's context
+        "formula",  # a dice formula literal ("2d6+1", "20")
+        "int",  # an integer literal
+        "number",  # an int or float literal
+        "str",  # a plain string literal
+        "bool",  # a JSON boolean
+        "enum",  # a member *name* of ``Field.enum``
+        "choice",  # one of ``Field.choices``
+        "object",  # a nested object shaped by ``Field.subfields``
+        "list",  # a list of objects, each shaped by ``Field.subfields``
+        "map_expr",  # an object whose values are expressions (``bindings``)
+        "any",  # deliberately unconstrained
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -104,8 +105,11 @@ class TargetArity(Enum):
 #: ``runner._condition_passes`` before dispatch, not by any handler — so it belongs
 #: here rather than being repeated in all twenty contracts.
 UNIVERSAL_FIELDS: Tuple[Field, ...] = (
-    Field("condition", "expr",
-          description="Expression; the block is skipped when it evaluates falsy."),
+    Field(
+        "condition",
+        "expr",
+        description="Expression; the block is skipped when it evaluates falsy.",
+    ),
 )
 
 

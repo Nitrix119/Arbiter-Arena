@@ -72,9 +72,7 @@ class SpellResolver:
         # with no program has nothing to resolve — an authoring error we raise on
         # rather than silently doing nothing.
         if not action.program:
-            raise ValueError(
-                f"Spell {action.name!r} has no block program to resolve."
-            )
+            raise ValueError(f"Spell {action.name!r} has no block program to resolve.")
         return self._resolve_via_blocks(caster, defenders, action, slot_level)
 
     def _resolve_via_blocks(

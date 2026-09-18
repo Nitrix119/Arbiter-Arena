@@ -192,7 +192,10 @@ def _may_disengage(combat: "CombatSystem", entity: Entity) -> bool:
         return False
     my_speed = entity.stat_block.resource_defaults.get("speed", 30)
     fastest_threat = max(
-        (e.stat_block.resource_defaults.get("speed", 30) for e in combat.get_enemies(entity)),
+        (
+            e.stat_block.resource_defaults.get("speed", 30)
+            for e in combat.get_enemies(entity)
+        ),
         default=0,
     )
     return my_speed > fastest_threat
@@ -243,14 +246,18 @@ def _aoe_plans(
             if not foes:
                 continue
             allies = [e for e in hit if e.team == entity.team]
-            net = len(foes) - len(allies)  # a proxy to pick the point; features scores value
+            net = len(foes) - len(
+                allies
+            )  # a proxy to pick the point; features scores value
             if best_point is None or net > best_net:
                 best_point = aim
                 best_ids = tuple(e.entity_id for e in hit)
                 best_net = net
         if best_point is not None:
             out.append(
-                PlannedAction("aoe", spell_opt.name, target_point=best_point, aoe_targets=best_ids)
+                PlannedAction(
+                    "aoe", spell_opt.name, target_point=best_point, aoe_targets=best_ids
+                )
             )
     return out
 
@@ -292,15 +299,17 @@ def _attack_after_move(
     return PlannedAction("attack", best.name, enemy_id)
 
 
-def _gap_at(
-    pos: Tuple[float, float, float], entity: Entity, other: Entity
-) -> float:
+def _gap_at(pos: Tuple[float, float, float], entity: Entity, other: Entity) -> float:
     """Edge-to-edge gap between *entity* standing at *pos* and *other* (floored at 0)."""
     dx = pos[0] - other.x
     dy = pos[1] - other.y
     dz = pos[2] - other.z
     dist = math.sqrt(dx * dx + dy * dy + dz * dz)
-    gap = dist - entity.stat_block.size.size_ft / 2.0 - other.stat_block.size.size_ft / 2.0
+    gap = (
+        dist
+        - entity.stat_block.size.size_ft / 2.0
+        - other.stat_block.size.size_ft / 2.0
+    )
     return max(0.0, gap)
 
 

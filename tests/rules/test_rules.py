@@ -14,17 +14,25 @@ import pytest
 from unittest.mock import patch
 
 from src.models import (
-    AbilityScores, StatBlock, Entity, Damage, DamageType, AttackAction,
+    AbilityScores,
+    StatBlock,
+    Entity,
+    Damage,
+    DamageType,
+    AttackAction,
 )
 from src.combat import CombatSystem, EventBus, EventType
 from src.rules import RuleLoader
 from src.spells.rules import apply_entity_rule, load_rule_file
 
-GLOBAL_RULES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "rules", "global")
+GLOBAL_RULES_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "..", "rules", "global"
+)
 CONCENTRATION_JSON = os.path.join(GLOBAL_RULES_DIR, "concentration.json")
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
+
 
 def make_entity(name="Tester", hp=30, ac=10, con=10):
     """Build a minimal Entity. CON score controls saving throw modifier."""
@@ -38,6 +46,7 @@ def make_entity(name="Tester", hp=30, ac=10, con=10):
 
 
 # ── RuleLoader ───────────────────────────────────────────────────────────────
+
 
 class TestRuleLoader:
 
@@ -55,6 +64,7 @@ class TestRuleLoader:
 
 # ── The install seam ──────────────────────────────────────────────────────────
 
+
 class TestRuleInstall:
 
     def test_load_from_file_installs_and_subscribes(self):
@@ -62,7 +72,9 @@ class TestRuleInstall:
         rule = load_rule_file(CONCENTRATION_JSON, event_bus=bus)
         assert rule.name == "concentration_damage_check"
         # Subscribed: a non-concentrating entity causes no crash.
-        bus.emit(EventType.DAMAGE_DEALT, defender=make_entity(), damage_list=[], total=10)
+        bus.emit(
+            EventType.DAMAGE_DEALT, defender=make_entity(), damage_list=[], total=10
+        )
 
     def test_apply_effect_rejects_a_rule_with_nothing_to_install(self):
         """An empty program has no triggers to install — say so rather than no-op."""
@@ -72,6 +84,7 @@ class TestRuleInstall:
 
 
 # ── Concentration rule integration ───────────────────────────────────────────
+
 
 class TestConcentrationRule:
     """Integration tests using the real concentration.json rule."""
@@ -99,41 +112,65 @@ class TestConcentrationRule:
             bus.emit(EventType.DAMAGE_DEALT, defender=entity, damage_list=[], total=20)
         assert entity.concentrating_on is None  # was None to start, still None
 
-    def test_rule_fires_for_concentrating_entity(self, bus, engine, concentrating_entity):
+    def test_rule_fires_for_concentrating_entity(
+        self, bus, engine, concentrating_entity
+    ):
         """When entity IS concentrating, the concentration check runs."""
-        with patch("src.spells.blocks.global_effects.roll_d20", return_value=20):  # pass
-            bus.emit(EventType.DAMAGE_DEALT,
-                     defender=concentrating_entity, damage_list=[], total=10)
+        with patch(
+            "src.spells.blocks.global_effects.roll_d20", return_value=20
+        ):  # pass
+            bus.emit(
+                EventType.DAMAGE_DEALT,
+                defender=concentrating_entity,
+                damage_list=[],
+                total=10,
+            )
         # High roll → passed save → still concentrating
         assert concentrating_entity.concentrating_on == "Bless"
 
     def test_failed_save_ends_concentration(self, bus, engine, concentrating_entity):
         # Damage = 20 → DC = max(10, 10) = 10; CON +0; roll 1 → total 1 < 10
         with patch("src.spells.blocks.global_effects.roll_d20", return_value=1):
-            bus.emit(EventType.DAMAGE_DEALT,
-                     defender=concentrating_entity, damage_list=[], total=20)
+            bus.emit(
+                EventType.DAMAGE_DEALT,
+                defender=concentrating_entity,
+                damage_list=[],
+                total=20,
+            )
         assert concentrating_entity.concentrating_on is None
 
     def test_passed_save_keeps_concentration(self, bus, engine, concentrating_entity):
         # Damage = 20 → DC = 10; CON +0; roll 10 → total 10 >= 10
         with patch("src.spells.blocks.global_effects.roll_d20", return_value=10):
-            bus.emit(EventType.DAMAGE_DEALT,
-                     defender=concentrating_entity, damage_list=[], total=20)
+            bus.emit(
+                EventType.DAMAGE_DEALT,
+                defender=concentrating_entity,
+                damage_list=[],
+                total=20,
+            )
         assert concentrating_entity.concentrating_on == "Bless"
 
     def test_dc_scales_with_damage_low(self, bus, engine, concentrating_entity):
         """Low damage → DC 10 (minimum). Roll 10 should pass."""
         with patch("src.spells.blocks.global_effects.roll_d20", return_value=10):
-            bus.emit(EventType.DAMAGE_DEALT,
-                     defender=concentrating_entity, damage_list=[], total=8)
+            bus.emit(
+                EventType.DAMAGE_DEALT,
+                defender=concentrating_entity,
+                damage_list=[],
+                total=8,
+            )
         # DC = max(10, 8//2=4) = 10; 10 + 0 = 10 → pass
         assert concentrating_entity.concentrating_on == "Bless"
 
     def test_dc_scales_with_damage_high(self, bus, engine, concentrating_entity):
         """High damage → DC rises above minimum. Same roll that passed above now fails."""
         with patch("src.spells.blocks.global_effects.roll_d20", return_value=10):
-            bus.emit(EventType.DAMAGE_DEALT,
-                     defender=concentrating_entity, damage_list=[], total=30)
+            bus.emit(
+                EventType.DAMAGE_DEALT,
+                defender=concentrating_entity,
+                damage_list=[],
+                total=30,
+            )
         # DC = max(10, 30//2=15) = 15; 10 + 0 = 10 < 15 → fail
         assert concentrating_entity.concentrating_on is None
 
@@ -155,14 +192,17 @@ class TestConcentrationRule:
         load_rule_file(CONCENTRATION_JSON, event_bus=combat.event_bus)
 
         attack = AttackAction(
-            name="Sword", description="",
+            name="Sword",
+            description="",
             bonus_to_hit=99,  # guaranteed hit
             damage=[Damage(DamageType.SLASHING, 20, "1d1+19")],
         )
 
         # Attack roll → 20 (hit); concentration save → 1 (fail)
-        with patch("src.spells.blocks.rolls.roll_d20", return_value=20), \
-             patch("src.spells.blocks.global_effects.roll_d20", return_value=1):
+        with (
+            patch("src.spells.blocks.rolls.roll_d20", return_value=20),
+            patch("src.spells.blocks.global_effects.roll_d20", return_value=1),
+        ):
             combat.resolve_attack(attacker, defender, attack)
 
         assert defender.concentrating_on is None

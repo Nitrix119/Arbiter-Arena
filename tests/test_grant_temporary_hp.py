@@ -14,21 +14,27 @@ from src.models import Entity
 from src.models.ability import AbilityScores
 from src.models.action import SpellAction
 from src.models.spell_properties import (
-    CastingTime, CastingTimeType,
-    Duration, DurationUnit,
-    RangeType, SpellComponents, SpellRange,
+    CastingTime,
+    CastingTimeType,
+    Duration,
+    DurationUnit,
+    RangeType,
+    SpellComponents,
+    SpellRange,
     TargetingType,
 )
 from src.models.stat_block import StatBlock
 
 
 def _entity(name: str) -> Entity:
-    return Entity(StatBlock(
-        name=name,
-        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-        hit_points_max=30,
-        armor_class=10,
-    ))
+    return Entity(
+        StatBlock(
+            name=name,
+            ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+            hit_points_max=30,
+            armor_class=10,
+        )
+    )
 
 
 def _temp_hp_spell(amount, target="self") -> SpellAction:
@@ -53,8 +59,12 @@ def _run(action, caster, defender):
     bus = EventBus()
     program = parse_program(action.program)
     return resolve_blocks(
-        caster, defender, action, program,
-        event_bus=bus, damage_processor=DamageProcessor(bus),
+        caster,
+        defender,
+        action,
+        program,
+        event_bus=bus,
+        damage_processor=DamageProcessor(bus),
     )
 
 

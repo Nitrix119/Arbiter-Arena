@@ -20,8 +20,10 @@ IMMUNITY_JSON = os.path.join(GLOBAL_RULES_DIR, "damage_immunity_rule.json")
 # Helpers
 # ---------------------------------------------------------------------------
 
-def make_stat_block(name="Tester", hp=30, ac=10,
-                    vulnerabilities=None, resistances=None, immunities=None):
+
+def make_stat_block(
+    name="Tester", hp=30, ac=10, vulnerabilities=None, resistances=None, immunities=None
+):
     return StatBlock(
         name=name,
         ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
@@ -53,6 +55,7 @@ def make_dummy_effect_ctx_event(damage_list):
 # StatBlock: field defaults
 # ---------------------------------------------------------------------------
 
+
 class TestStatBlockDefaults:
     def test_vulnerability_defaults_empty(self):
         sb = make_stat_block()
@@ -77,6 +80,7 @@ class TestStatBlockDefaults:
 # ---------------------------------------------------------------------------
 # StatBlock: construction with values
 # ---------------------------------------------------------------------------
+
 
 class TestStatBlockConstruction:
     def test_single_vulnerability(self):
@@ -107,6 +111,7 @@ class TestStatBlockConstruction:
 # ---------------------------------------------------------------------------
 # Stat block damage modifier membership
 # ---------------------------------------------------------------------------
+
 
 class TestStatBlockDamageModifierMembership:
     @pytest.fixture
@@ -155,6 +160,7 @@ class TestStatBlockDamageModifierMembership:
 # Rule loading
 # ---------------------------------------------------------------------------
 
+
 class TestDamageModifierRuleLoading:
     """The damage-modifier globals are native block rules now (§5d): a single
     DAMAGE_INCOMING ``trigger`` running a ``modify_damage`` block. Their structural
@@ -188,6 +194,7 @@ class TestDamageModifierRuleLoading:
 # ---------------------------------------------------------------------------
 # End-to-end via DamageProcessor + the installed global rules
 # ---------------------------------------------------------------------------
+
 
 class TestDamageModifierEndToEnd:
     """

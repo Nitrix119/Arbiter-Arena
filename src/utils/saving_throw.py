@@ -39,7 +39,8 @@ def roll_saving_throw(
         roll = roll_d20()
     base_bonus = defender.stat_block.get_saving_throw_bonus(ability)
     extra = sum(
-        m.value for m in defender.stat_modifiers
+        m.value
+        for m in defender.stat_modifiers
         if m.stat in (f"saving_throw.{ability.lower()}", "saving_throw.all")
     )
     total = roll + base_bonus + extra

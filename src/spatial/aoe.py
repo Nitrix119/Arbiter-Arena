@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 # Abstract base
 # ---------------------------------------------------------------------------
 
+
 class AOEVolume(ABC):
     """Abstract base class for area-of-effect volumes."""
 
@@ -39,6 +40,7 @@ class AOEVolume(ABC):
 # ---------------------------------------------------------------------------
 # SAT helper for OBB vs AABB
 # ---------------------------------------------------------------------------
+
 
 def _sat_obb_aabb(
     obb_center: Point3D,
@@ -79,10 +81,7 @@ def _sat_obb_aabb(
         (obb_axes[1].x, obb_axes[1].y, obb_axes[1].z),
         (obb_axes[2].x, obb_axes[2].y, obb_axes[2].z),
     )
-    absR = tuple(
-        tuple(abs(R[i][j]) + EPSILON for j in range(3))
-        for i in range(3)
-    )
+    absR = tuple(tuple(abs(R[i][j]) + EPSILON for j in range(3)) for i in range(3))
 
     # --- Test 3 AABB face normals (world X, Y, Z) ---
     for i in range(3):
@@ -96,10 +95,7 @@ def _sat_obb_aabb(
             return False
 
     # Project translation onto OBB local axes
-    T_local = tuple(
-        tx * R[i][0] + ty * R[i][1] + tz * R[i][2]
-        for i in range(3)
-    )
+    T_local = tuple(tx * R[i][0] + ty * R[i][1] + tz * R[i][2] for i in range(3))
 
     # --- Test 3 OBB face normals (local u, v, w) ---
     for i in range(3):
@@ -135,6 +131,7 @@ def _sat_obb_aabb(
 # OBB builder helper (shared by Cube and Line)
 # ---------------------------------------------------------------------------
 
+
 def _build_obb_frame(
     direction: Vector3D,
 ) -> Tuple[Vector3D, Vector3D, Vector3D]:
@@ -157,6 +154,7 @@ def _build_obb_frame(
 # Concrete volumes
 # ---------------------------------------------------------------------------
 
+
 class SphereVolume(AOEVolume):
     """A sphere centred on *center* with the given *radius*.
 
@@ -175,7 +173,7 @@ class SphereVolume(AOEVolume):
             + (nearest.y - self.center.y) ** 2
             + (nearest.z - self.center.z) ** 2
         )
-        return dist_sq <= self.radius ** 2
+        return dist_sq <= self.radius**2
 
 
 class CylinderVolume(AOEVolume):
@@ -217,7 +215,7 @@ class CylinderVolume(AOEVolume):
         nearest_z = max(bbox.min_corner.z, min(self.center_z, bbox.max_corner.z))
         dx = nearest_x - self.center_x
         dz = nearest_z - self.center_z
-        return dx * dx + dz * dz <= self.radius ** 2
+        return dx * dx + dz * dz <= self.radius**2
 
 
 class ConeVolume(AOEVolume):

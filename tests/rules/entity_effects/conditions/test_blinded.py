@@ -14,19 +14,35 @@ from src.loaders import StatBlockLoader
 from src.rules import RuleLoader
 from src.spells.rules import apply_entity_rule
 
-EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "examples")
-CONDITIONS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "rules", "entity_effects", "conditions")
+EXAMPLES_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "..", "examples"
+)
+CONDITIONS_DIR = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "..",
+    "..",
+    "..",
+    "rules",
+    "entity_effects",
+    "conditions",
+)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 def load_fighter() -> Entity:
-    sb = StatBlockLoader.load_from_json(os.path.join(EXAMPLES_DIR, "creatures/characters/fighter.json"))
+    sb = StatBlockLoader.load_from_json(
+        os.path.join(EXAMPLES_DIR, "creatures/characters/fighter.json")
+    )
     return Entity(sb)
 
 
 def load_goblin() -> Entity:
-    sb = StatBlockLoader.load_from_json(os.path.join(EXAMPLES_DIR, "creatures/goblin.json"))
+    sb = StatBlockLoader.load_from_json(
+        os.path.join(EXAMPLES_DIR, "creatures/goblin.json")
+    )
     return Entity(sb)
 
 
@@ -49,6 +65,7 @@ def get_action(entity: Entity, name: str):
 
 # ── Blinded attacker gets disadvantage ────────────────────────────────────────
 
+
 class TestBlindedAttackerDisadvantage:
 
     def test_blinded_attacker_gets_disadvantage(self):
@@ -59,8 +76,9 @@ class TestBlindedAttackerDisadvantage:
         apply_blinded(bus, dp, fighter)
 
         action = get_action(fighter, "Longsword")
-        event = bus.emit(EventType.ATTACK_DECLARED,
-                         attacker=fighter, defender=goblin, action=action)
+        event = bus.emit(
+            EventType.ATTACK_DECLARED, attacker=fighter, defender=goblin, action=action
+        )
 
         assert event.data.get("disadvantage") is True
         assert event.data.get("advantage", False) is False
@@ -73,20 +91,26 @@ class TestBlindedAttackerDisadvantage:
         apply_blinded(bus, dp, fighter)
 
         from src.combat.combat_system import CombatSystem
+
         combat = CombatSystem()
         combat.event_bus = bus
         combat.add_combatant(fighter, initiative_modifier=100)
         combat.add_combatant(goblin, initiative_modifier=0)
 
         action = get_action(fighter, "Longsword")
-        with patch("src.spells.blocks.rolls.roll_with_disadvantage", return_value=10) as mock_dis, \
-             patch("src.spells.blocks.rolls.roll_d20") as mock_d20:
+        with (
+            patch(
+                "src.spells.blocks.rolls.roll_with_disadvantage", return_value=10
+            ) as mock_dis,
+            patch("src.spells.blocks.rolls.roll_d20") as mock_d20,
+        ):
             combat.resolve_attack(fighter, goblin, action)
             mock_dis.assert_called_once()
             mock_d20.assert_not_called()
 
 
 # ── Blinded defender gives advantage to attacker ──────────────────────────────
+
 
 class TestBlindedDefenderAdvantage:
 
@@ -98,8 +122,9 @@ class TestBlindedDefenderAdvantage:
         apply_blinded(bus, dp, goblin)
 
         action = get_action(fighter, "Longsword")
-        event = bus.emit(EventType.ATTACK_DECLARED,
-                         attacker=fighter, defender=goblin, action=action)
+        event = bus.emit(
+            EventType.ATTACK_DECLARED, attacker=fighter, defender=goblin, action=action
+        )
 
         assert event.data.get("advantage") is True
         assert event.data.get("disadvantage", False) is False
@@ -112,20 +137,26 @@ class TestBlindedDefenderAdvantage:
         apply_blinded(bus, dp, goblin)
 
         from src.combat.combat_system import CombatSystem
+
         combat = CombatSystem()
         combat.event_bus = bus
         combat.add_combatant(fighter, initiative_modifier=100)
         combat.add_combatant(goblin, initiative_modifier=0)
 
         action = get_action(fighter, "Longsword")
-        with patch("src.spells.blocks.rolls.roll_with_advantage", return_value=15) as mock_adv, \
-             patch("src.spells.blocks.rolls.roll_d20") as mock_d20:
+        with (
+            patch(
+                "src.spells.blocks.rolls.roll_with_advantage", return_value=15
+            ) as mock_adv,
+            patch("src.spells.blocks.rolls.roll_d20") as mock_d20,
+        ):
             combat.resolve_attack(fighter, goblin, action)
             mock_adv.assert_called_once()
             mock_d20.assert_not_called()
 
 
 # ── Both combatants blinded — cancels out ─────────────────────────────────────
+
 
 class TestBlindedBothCancelOut:
 
@@ -139,8 +170,9 @@ class TestBlindedBothCancelOut:
         apply_blinded(bus, dp, goblin)
 
         action = get_action(fighter, "Longsword")
-        event = bus.emit(EventType.ATTACK_DECLARED,
-                         attacker=fighter, defender=goblin, action=action)
+        event = bus.emit(
+            EventType.ATTACK_DECLARED, attacker=fighter, defender=goblin, action=action
+        )
 
         assert event.data.get("advantage") is True
         assert event.data.get("disadvantage") is True
@@ -154,15 +186,18 @@ class TestBlindedBothCancelOut:
         apply_blinded(bus, dp, goblin)
 
         from src.combat.combat_system import CombatSystem
+
         combat = CombatSystem()
         combat.event_bus = bus
         combat.add_combatant(fighter, initiative_modifier=100)
         combat.add_combatant(goblin, initiative_modifier=0)
 
         action = get_action(fighter, "Longsword")
-        with patch("src.spells.blocks.rolls.roll_d20", return_value=12) as mock_d20, \
-             patch("src.spells.blocks.rolls.roll_with_advantage") as mock_adv, \
-             patch("src.spells.blocks.rolls.roll_with_disadvantage") as mock_dis:
+        with (
+            patch("src.spells.blocks.rolls.roll_d20", return_value=12) as mock_d20,
+            patch("src.spells.blocks.rolls.roll_with_advantage") as mock_adv,
+            patch("src.spells.blocks.rolls.roll_with_disadvantage") as mock_dis,
+        ):
             combat.resolve_attack(fighter, goblin, action)
             mock_d20.assert_called_once()
             mock_adv.assert_not_called()
@@ -170,6 +205,7 @@ class TestBlindedBothCancelOut:
 
 
 # ── Uninvolved entity ────────────────────────────────────────────────────────
+
 
 class TestBlindedDoesNotAffectOthers:
 
@@ -183,8 +219,9 @@ class TestBlindedDoesNotAffectOthers:
         apply_blinded(bus, dp, bystander)
 
         action = get_action(fighter, "Longsword")
-        event = bus.emit(EventType.ATTACK_DECLARED,
-                         attacker=fighter, defender=goblin, action=action)
+        event = bus.emit(
+            EventType.ATTACK_DECLARED, attacker=fighter, defender=goblin, action=action
+        )
 
         assert event.data.get("advantage", False) is False
         assert event.data.get("disadvantage", False) is False

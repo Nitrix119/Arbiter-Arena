@@ -13,7 +13,14 @@ from src.arena.setup import build_combat
 from src.combat import CombatSystem
 from src.combat.spell_registry import SpellRegistry
 from src.loaders import StatBlockLoader
-from src.models import AbilityScores, AttackAction, Damage, DamageType, Entity, StatBlock
+from src.models import (
+    AbilityScores,
+    AttackAction,
+    Damage,
+    DamageType,
+    Entity,
+    StatBlock,
+)
 from src.models.action import SpellAction
 from src.models.spell_properties import RangeType, SpellRange, TargetingType
 from src.utils import dice

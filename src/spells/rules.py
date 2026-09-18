@@ -30,18 +30,12 @@ from .entity_effects import install_entity_effect
 from .global_rules import install_global_rules
 
 
-def install_rule(
-    rule: Rule, *, event_bus: Any, damage_processor: Any = None
-) -> None:
+def install_rule(rule: Rule, *, event_bus: Any, damage_processor: Any = None) -> None:
     """Install *rule* as permanent global triggers on the shared event bus."""
-    install_global_rules(
-        [rule], event_bus=event_bus, damage_processor=damage_processor
-    )
+    install_global_rules([rule], event_bus=event_bus, damage_processor=damage_processor)
 
 
-def load_rule_file(
-    path: str, *, event_bus: Any, damage_processor: Any = None
-) -> Rule:
+def load_rule_file(path: str, *, event_bus: Any, damage_processor: Any = None) -> Rule:
     """Load one JSON rule file and install it. Returns the loaded Rule."""
     rule = RuleLoader.load(path)
     install_rule(rule, event_bus=event_bus, damage_processor=damage_processor)
@@ -56,10 +50,13 @@ def load_rules_from_directory(
     for dirpath, _dirs, filenames in os.walk(path):
         for filename in sorted(filenames):
             if filename.endswith(".json"):
-                rules.append(load_rule_file(
-                    os.path.join(dirpath, filename),
-                    event_bus=event_bus, damage_processor=damage_processor,
-                ))
+                rules.append(
+                    load_rule_file(
+                        os.path.join(dirpath, filename),
+                        event_bus=event_bus,
+                        damage_processor=damage_processor,
+                    )
+                )
     return rules
 
 

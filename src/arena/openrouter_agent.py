@@ -25,7 +25,9 @@ try:  # optional dependency — only this module needs it (pip install -e ".[age
 except ImportError:  # pragma: no cover - exercised via the missing-dep message
     openai = None
 
-DEFAULT_MODEL = "nvidia/nemotron-nano-9b-v2:free"  # free + tool-capable; override with --model
+DEFAULT_MODEL = (
+    "nvidia/nemotron-nano-9b-v2:free"  # free + tool-capable; override with --model
+)
 DEFAULT_MAX_TOKENS = 4096
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # Optional OpenRouter attribution headers (harmless; used only for their leaderboards).
@@ -67,7 +69,7 @@ class OpenRouterAgent(Agent):
             if openai is None:
                 raise ImportError(
                     "OpenRouterAgent needs the 'openai' package. Install it with "
-                    "`pip install -e \".[agents]\"` (see docs/current/AGENT_ARENA_LLM_SETUP.md)."
+                    '`pip install -e ".[agents]"` (see docs/current/AGENT_ARENA_LLM_SETUP.md).'
                 )
             api_key = resolve_credential("OPENROUTER_API_KEY", "openrouter.key")
             client = openai.OpenAI(base_url=OPENROUTER_BASE_URL, api_key=api_key)
@@ -75,7 +77,9 @@ class OpenRouterAgent(Agent):
         self.model = model
         self.max_tokens = max_tokens
 
-    def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
+    def decide(
+        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
+    ) -> ToolCall:
         return decide_one_action(self._request_action, self, observation, tools)
 
     def _request_action(
@@ -95,6 +99,10 @@ class OpenRouterAgent(Agent):
         for tc in getattr(message, "tool_calls", None) or []:
             fn = tc.function
             arguments = fn.arguments
-            args = json.loads(arguments) if isinstance(arguments, str) else dict(arguments or {})
+            args = (
+                json.loads(arguments)
+                if isinstance(arguments, str)
+                else dict(arguments or {})
+            )
             return ToolCall(fn.name, args, call_id=getattr(tc, "id", None))
         return None

@@ -222,7 +222,9 @@ def control(
     value = 0.0
     for block in program:
         if block.get("block") == "apply_condition":
-            severity = CONTROL_SEVERITY.get(block.get("condition_type", ""), _DEFAULT_SEVERITY)
+            severity = CONTROL_SEVERITY.get(
+                block.get("condition_type", ""), _DEFAULT_SEVERITY
+            )
             value += severity * ratio * p_fail
     return value
 
@@ -263,7 +265,11 @@ def exposure_fraction(
         if not enemy.is_alive():
             continue
         reach = _speed_ft(enemy) + _max_reach_ft(enemy)
-        gap = _center_distance(pos, enemy) - self_half - enemy.stat_block.size.size_ft / 2.0
+        gap = (
+            _center_distance(pos, enemy)
+            - self_half
+            - enemy.stat_block.size.size_ft / 2.0
+        )
         if max(0.0, gap) > reach:
             continue
         attack = best_attack(enemy) if known else None
@@ -300,7 +306,9 @@ def engagement(
             continue
         gap = max(
             0.0,
-            _center_distance(pos, enemy) - self_half - enemy.stat_block.size.size_ft / 2.0,
+            _center_distance(pos, enemy)
+            - self_half
+            - enemy.stat_block.size.size_ft / 2.0,
         )
         over = max(0.0, gap - reach)
         approach = 1.0 / (1.0 + over / max(1.0, speed))

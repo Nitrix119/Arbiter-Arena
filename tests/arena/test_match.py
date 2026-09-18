@@ -14,7 +14,9 @@ from .conftest import melee_attack
 class PacifistAgent(Agent):
     """Always ends its turn — used to force a round-cap outcome."""
 
-    def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
+    def decide(
+        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
+    ) -> ToolCall:
         return ToolCall("end_turn", {})
 
 
@@ -56,7 +58,8 @@ def test_scripted_2v2_makes_no_illegal_moves(make_entity, make_combat):
     run_match(combat, agents, seed=1, transcript=transcript)
 
     failed = [
-        r for r in transcript.records_of("action")
+        r
+        for r in transcript.records_of("action")
         if r["call"]["name"] == "move" and not r["result"].get("ok")
     ]
     assert failed == []  # every move the heuristic chose was legal by construction
@@ -84,8 +87,12 @@ def test_round_cap_ends_a_stalemate_as_a_draw(make_entity, make_combat):
 
 
 def test_stronger_side_wins(make_entity, make_combat):
-    strong = make_entity("Champion", team="a", pos=(0, 0, 0), hp=40, attacks=[melee_attack()])
-    weakling = make_entity("Kobold", team="b", pos=(5, 0, 0), hp=3, attacks=[melee_attack()])
+    strong = make_entity(
+        "Champion", team="a", pos=(0, 0, 0), hp=40, attacks=[melee_attack()]
+    )
+    weakling = make_entity(
+        "Kobold", team="b", pos=(5, 0, 0), hp=3, attacks=[melee_attack()]
+    )
     combat = make_combat([strong, weakling])
     agents = {"a": ScriptedAgent("A", "a"), "b": ScriptedAgent("B", "b")}
 

@@ -11,11 +11,21 @@ from src.models.entity import Entity
 from src.models.action import Action, AttackAction, SpellAction
 from .spell_registry import SpellRegistry
 from src.models.action_resources import ActionCost
-from src.models.spell_properties import AOEProperties, AOEShape, RangeType, TargetingType
+from src.models.spell_properties import (
+    AOEProperties,
+    AOEShape,
+    RangeType,
+    TargetingType,
+)
 from src.utils.saving_throw import roll_saving_throw
 from src.spatial.geometry import BoundingBox, Point3D, Vector3D
 from src.spatial.aoe import (
-    AOEVolume, SphereVolume, CylinderVolume, ConeVolume, CubeVolume, LineVolume,
+    AOEVolume,
+    SphereVolume,
+    CylinderVolume,
+    ConeVolume,
+    CubeVolume,
+    LineVolume,
 )
 from src.spatial.range_check import (
     check_attack_range,
@@ -30,8 +40,6 @@ from .damage_processor import DamageProcessor
 from .attack_resolver import AttackResolver
 from .spell_resolver import SpellResolver
 from .turn_manager import TurnManager
-
-
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
@@ -70,6 +78,7 @@ class SpellTargetResult(NamedTuple):
         healing: HP restored during this target's resolution.
         healed: The entity that was healed (may differ from *entity*), or None.
     """
+
     entity: Entity
     hit: bool
     damage: int
@@ -88,6 +97,7 @@ class CombatLog:
         actor: The entity performing the action
         action: Description of what happened
     """
+
     round_num: int
     turn_num: int
     actor: Entity
@@ -166,9 +176,7 @@ class CombatSystem:
                 "set combat.spell_registry before looking up spells"
             )
         if spell_name not in entity.stat_block.known_spells:
-            raise ValueError(
-                f"{entity.name} does not know the spell {spell_name!r}"
-            )
+            raise ValueError(f"{entity.name} does not know the spell {spell_name!r}")
         return self._spell_registry.get(spell_name)
 
     @property
@@ -216,28 +224,39 @@ class CombatSystem:
 
         self.state = CombatState.ACTIVE
         self._turn_manager = TurnManager(
-            self.event_bus, self.initiative_tracker, self.combatants,
+            self.event_bus,
+            self.initiative_tracker,
+            self.combatants,
         )
         # Refill legendary actions for a creature at the start of its own turn.
         from .events import EventType as _ET
         from .event_data import TurnEventData as _TED
+
         def _on_turn_start(event) -> None:
-            entity = event.data.entity if hasattr(event.data, "entity") else event.data.get("entity")
+            entity = (
+                event.data.entity
+                if hasattr(event.data, "entity")
+                else event.data.get("entity")
+            )
             if entity is not None and entity.legendary_actions is not None:
                 entity.legendary_actions.refill()
+
         self.event_bus.subscribe(_ET.TURN_START, _on_turn_start)
         # Drive the block-engine lifetime clock (durations / concentration) on TURN_END,
         # independent of the legacy rule engine (§4).
         from .lifetime_clock import install_lifetime_clock
+
         install_lifetime_clock(self.event_bus)
 
-        self._log_action(self.initiative_tracker.get_current_entity(),
-                        "Combat started!")
+        self._log_action(
+            self.initiative_tracker.get_current_entity(), "Combat started!"
+        )
         self._turn_manager.start()
 
     @_with_rng
-    def resolve_attack(self, attacker: Entity, defender: Entity,
-                       action: AttackAction) -> Tuple[bool, int]:
+    def resolve_attack(
+        self, attacker: Entity, defender: Entity, action: AttackAction
+    ) -> Tuple[bool, int]:
         """Resolve an attack roll and damage.
 
         Args:
@@ -265,7 +284,9 @@ class CombatSystem:
         attacker.spend_resources(action.cost)
 
         hit, total_damage, log_msg, roll_detail = self._attack_resolver.resolve(
-            attacker, defender, action,
+            attacker,
+            defender,
+            action,
         )
         if log_msg:
             self._log_action(attacker, log_msg)
@@ -422,7 +443,9 @@ class CombatSystem:
             if defender is None:
                 raise ValueError("Legendary attack action requires a defender")
             hit, total_damage, log_msg, roll_detail = self._attack_resolver.resolve(
-                entity, defender, action,
+                entity,
+                defender,
+                action,
             )
             if log_msg:
                 self._log_action(entity, log_msg)
@@ -445,20 +468,30 @@ class CombatSystem:
                 for def_ in defenders:
                     check_single_target_range(entity, def_, action)
 
-            if action.spell_level and action.spell_level > 0 and entity.spell_slots is not None:
+            if (
+                action.spell_level
+                and action.spell_level > 0
+                and entity.spell_slots is not None
+            ):
                 if not entity.spell_slots.can_afford(action.spell_level):
                     raise ValueError(
                         f"{entity.name} has no level-{action.spell_level} spell slots remaining"
                     )
                 entity.spell_slots.spend(action.spell_level)
 
-            results = self._spell_resolver.resolve(entity, defenders, action, origin=origin)
+            results = self._spell_resolver.resolve(
+                entity, defenders, action, origin=origin
+            )
             for _, _, log_msg, _, _, _ in results:
                 if log_msg:
                     self._log_action(entity, log_msg)
             return [
-                SpellTargetResult(defenders[i], hit, damage, roll_detail, healing, healed)
-                for i, (hit, damage, _, roll_detail, healing, healed) in enumerate(results)
+                SpellTargetResult(
+                    defenders[i], hit, damage, roll_detail, healing, healed
+                )
+                for i, (hit, damage, _, roll_detail, healing, healed) in enumerate(
+                    results
+                )
             ]
 
         # Generic ability action
@@ -537,9 +570,7 @@ class CombatSystem:
         if entity.entity_id not in self.active_entity_ids:
             current = self.initiative_tracker.get_current_entity()
             whose = current.name if current else "nobody"
-            raise ValueError(
-                f"It is not {entity.name}'s turn (active: {whose})"
-            )
+            raise ValueError(f"It is not {entity.name}'s turn (active: {whose})")
 
     def get_alive_entities(self) -> List[Entity]:
         """Get all entities still in the fight."""
@@ -558,8 +589,11 @@ class CombatSystem:
         """
         if entity.team is None:
             return [e for e in self.get_alive_entities() if e != entity]
-        return [e for e in self.get_alive_entities()
-                if e != entity and e.team != entity.team]
+        return [
+            e
+            for e in self.get_alive_entities()
+            if e != entity and e.team != entity.team
+        ]
 
     def get_allies(self, entity: Entity) -> List[Entity]:
         """Get all alive allies of a given entity (same team, excluding self).
@@ -568,8 +602,11 @@ class CombatSystem:
         """
         if entity.team is None:
             return []
-        return [e for e in self.get_alive_entities()
-                if e != entity and e.team == entity.team]
+        return [
+            e
+            for e in self.get_alive_entities()
+            if e != entity and e.team == entity.team
+        ]
 
     # ------------------------------------------------------------------
     # Spatial movement
@@ -600,9 +637,7 @@ class CombatSystem:
         """
         self._assert_active(entity)
         distance = math.sqrt(
-            (new_x - entity.x) ** 2
-            + (new_y - entity.y) ** 2
-            + (new_z - entity.z) ** 2
+            (new_x - entity.x) ** 2 + (new_y - entity.y) ** 2 + (new_z - entity.z) ** 2
         )
         cost_ft = round(distance, 1)
         movement_cost = ActionCost(movement=cost_ft)
@@ -758,15 +793,17 @@ class CombatSystem:
             raise ValueError(f"AoE shape {shape.value!r} is not spatially modelled")
 
         if direction is None:
-            raise ValueError(
-                f"AoE shape {shape.value!r} requires a direction vector"
-            )
+            raise ValueError(f"AoE shape {shape.value!r} requires a direction vector")
 
         if shape == AOEShape.CONE:
-            return ConeVolume(apex=origin, direction=direction, length=float(aoe.size_ft))
+            return ConeVolume(
+                apex=origin, direction=direction, length=float(aoe.size_ft)
+            )
 
         if shape == AOEShape.CUBE:
-            return CubeVolume(origin=origin, direction=direction, size_ft=float(aoe.size_ft))
+            return CubeVolume(
+                origin=origin, direction=direction, size_ft=float(aoe.size_ft)
+            )
 
         if shape == AOEShape.LINE:
             width = float(aoe.width_ft if aoe.width_ft is not None else 5)
@@ -798,5 +835,7 @@ class CombatSystem:
         formatted = []
         for entry in self.log:
             actor_name = entry.actor.name if entry.actor else "System"
-            formatted.append(f"R{entry.round_num}T{entry.turn_num} [{actor_name}] {entry.action}")
+            formatted.append(
+                f"R{entry.round_num}T{entry.turn_num} [{actor_name}] {entry.action}"
+            )
         return formatted

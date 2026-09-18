@@ -123,7 +123,10 @@ def _end_cause(actions: List[dict]) -> str:
         if not ok:
             consecutive += 1
             failures += 1
-            if consecutive >= _MAX_CONSECUTIVE_FAILURES or failures >= _MAX_TOTAL_FAILURES:
+            if (
+                consecutive >= _MAX_CONSECUTIVE_FAILURES
+                or failures >= _MAX_TOTAL_FAILURES
+            ):
                 return "budget"
         else:
             consecutive = 0
@@ -163,7 +166,9 @@ def group_turns(records: List[dict]) -> List[Turn]:
 # ---------------------------------------------------------------------------
 
 
-def hp_timeline(records: List[dict], roster: Dict[str, Combatant]) -> Dict[str, List[int]]:
+def hp_timeline(
+    records: List[dict], roster: Dict[str, Combatant]
+) -> Dict[str, List[int]]:
     """Per-entity HP over the match: max HP, then its HP at each ``turn_end`` snapshot.
 
     Ground truth straight from the ungated snapshots, so it captures every source of HP loss (not
@@ -271,7 +276,9 @@ _SCENARIO_SCOPES: Dict[str, List[Tuple[str, str]]] = {
 }
 
 
-def _resolve_subject(role: str, roster: Dict[str, Combatant]) -> Tuple[Optional[Combatant], str]:
+def _resolve_subject(
+    role: str, roster: Dict[str, Combatant]
+) -> Tuple[Optional[Combatant], str]:
     """Resolve a scoped metric's subject by role, requiring uniqueness.
 
     Returns ``(combatant, "")`` on a unique match, or ``(None, reason)`` when the role matches
@@ -288,7 +295,10 @@ def _resolve_subject(role: str, roster: Dict[str, Combatant]) -> Tuple[Optional[
         return None, f"unknown role rule {role!r}"
     if len(cands) == 1:
         return cands[0], ""
-    return None, f"{label} is not unique ({len(cands)} candidates); not tracking to avoid a false signal"
+    return (
+        None,
+        f"{label} is not unique ({len(cands)} candidates); not tracking to avoid a false signal",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -344,7 +354,9 @@ def _kiting_adherence(
                 continue
             dist = math.dist((me["x"], me["z"]), (ef["x"], ef["z"]))
             reachable.append(dist <= _melee_reach_between(subject, enemy))
-        if not reachable:  # no live melee enemy this frame — not a kiting decision point
+        if (
+            not reachable
+        ):  # no live melee enemy this frame — not a kiting decision point
             continue
         considered += 1
         if not any(reachable):
@@ -400,7 +412,9 @@ def compute_report(records: List[dict], scenario: Optional[str] = None) -> Match
     end = _first(records, "match_end")
     turns = group_turns(records)
 
-    teams: Dict[str, TeamMetrics] = {t: TeamMetrics(team=t) for t in {c.team for c in roster.values()}}
+    teams: Dict[str, TeamMetrics] = {
+        t: TeamMetrics(team=t) for t in {c.team for c in roster.values()}
+    }
 
     # Per-turn: conformance counts + damage dealt/overkill from the action stream.
     running_hp = {eid: c.max_hp for eid, c in roster.items()}
@@ -478,7 +492,13 @@ def _compute_scoped(
         return []
     declarations = _SCENARIO_SCOPES.get(scenario)
     if declarations is None:
-        return [ScopedMetric(f"<{scenario}>", applicable=False, reason="unknown scenario; no scope declared")]
+        return [
+            ScopedMetric(
+                f"<{scenario}>",
+                applicable=False,
+                reason="unknown scenario; no scope declared",
+            )
+        ]
     out: List[ScopedMetric] = []
     for metric_name, role in declarations:
         subject, reason = _resolve_subject(role, roster)

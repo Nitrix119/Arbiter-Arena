@@ -23,7 +23,9 @@ SPELLS_DIR = os.path.join(os.path.dirname(__file__), "..", "examples", "spells")
 
 
 def _spell(name):
-    return StatBlockLoader.load_spell_from_json(os.path.join(SPELLS_DIR, f"{name}.json"))
+    return StatBlockLoader.load_spell_from_json(
+        os.path.join(SPELLS_DIR, f"{name}.json")
+    )
 
 
 # NOTE: this file once also asserted the *shape* a translator produced from these
@@ -44,13 +46,20 @@ class TestLongstriderEndToEnd:
         from src.combat.event_data import TurnEventData
 
         wizard = StatBlockLoader.load_from_json(
-            os.path.join(os.path.dirname(__file__), "..", "examples",
-                         "creatures", "characters", "wizard.json")
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "examples",
+                "creatures",
+                "characters",
+                "wizard.json",
+            )
         )
         wizard = Entity(wizard)
         goblin = StatBlockLoader.load_from_json(
-            os.path.join(os.path.dirname(__file__), "..", "examples",
-                         "creatures", "goblin.json")
+            os.path.join(
+                os.path.dirname(__file__), "..", "examples", "creatures", "goblin.json"
+            )
         )
         goblin = Entity(goblin)
         base_move = goblin.resources.movement
@@ -59,26 +68,33 @@ class TestLongstriderEndToEnd:
         dp = DamageProcessor(bus)
         reg = EffectRegistry()
         reg.scan_directory("rules/entity_effects")
-        load_rule_file("rules/global/action_economy_refill.json",
-                       event_bus=bus, damage_processor=dp)
+        load_rule_file(
+            "rules/global/action_economy_refill.json",
+            event_bus=bus,
+            damage_processor=dp,
+        )
         resolver = SpellResolver(bus, dp, condition_rules=reg)
 
         resolver.resolve(wizard, [goblin], _spell("longstrider"))
         assert len(goblin.lifetimes) == 1  # the spell's lifetime scope is open
 
-        bus.emit(EventType.TURN_START,
-                 TurnEventData(entity=goblin, round_num=2, turn_num=1))
+        bus.emit(
+            EventType.TURN_START, TurnEventData(entity=goblin, round_num=2, turn_num=1)
+        )
         assert goblin.resources.movement == base_move + 10
 
 
 # ── End-to-end on the new engine, via the real router ───────────────────────────
 
+
 def _cleric():
     sb = StatBlock(
         name="Cleric",
         ability_scores=AbilityScores(10, 10, 12, 10, 16, 10),
-        hit_points_max=30, armor_class=14,
-        proficiency_bonus=2, spellcasting_ability="wisdom",
+        hit_points_max=30,
+        armor_class=14,
+        proficiency_bonus=2,
+        spellcasting_ability="wisdom",
     )
     return Entity(sb)
 
@@ -90,8 +106,9 @@ def _resolver(*entities):
     dp = DamageProcessor(bus)
     reg = EffectRegistry()
     reg.scan_directory("rules/entity_effects")
-    load_rule_file("rules/global/concentration.json",
-                   event_bus=bus, damage_processor=dp)
+    load_rule_file(
+        "rules/global/concentration.json", event_bus=bus, damage_processor=dp
+    )
     return bus, reg, SpellResolver(bus, dp, condition_rules=reg)
 
 
@@ -182,22 +199,28 @@ class TestHaste:
         dp = DamageProcessor(bus)
         reg = EffectRegistry()
         reg.scan_directory("rules/entity_effects")
-        for rule_path in ("rules/global/action_economy_refill.json",
-                          "rules/global/concentration.json"):
+        for rule_path in (
+            "rules/global/action_economy_refill.json",
+            "rules/global/concentration.json",
+        ):
             load_rule_file(rule_path, event_bus=bus, damage_processor=dp)
         return bus, reg, SpellResolver(bus, dp, condition_rules=reg)
 
     def _turn_start(self, bus, entity, round_num=2):
         from src.combat.event_data import TurnEventData
 
-        bus.emit(EventType.TURN_START,
-                 TurnEventData(entity=entity, round_num=round_num, turn_num=1))
+        bus.emit(
+            EventType.TURN_START,
+            TurnEventData(entity=entity, round_num=round_num, turn_num=1),
+        )
 
     def _turn_end(self, bus, entity, round_num=1):
         from src.combat.event_data import TurnEventData
 
-        bus.emit(EventType.TURN_END,
-                 TurnEventData(entity=entity, round_num=round_num, turn_num=1))
+        bus.emit(
+            EventType.TURN_END,
+            TurnEventData(entity=entity, round_num=round_num, turn_num=1),
+        )
 
     def test_grants_extra_action_on_the_ally_after_refill(self):
         caster, ally = _cleric(), _cleric()

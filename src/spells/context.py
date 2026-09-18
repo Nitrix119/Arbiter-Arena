@@ -278,10 +278,10 @@ def eval_context(inv: "Invocation") -> Dict[str, Any]:
 # ``tests/test_expression_roots.py::test_declared_roots_match_eval_context``, which
 # checks this against a real invocation rather than trusting the list.
 EXPRESSION_ROOTS = frozenset(SAFE_BUILTINS) | {
-    "event",             # the triggering event's fields (or caster/defender on a cast)
-    "context",           # the per-invocation context (see CONTEXT_KEYS)
-    "entity",            # the invocation's caster — the rider's holder
-    "instance_fields",   # values captured by a trigger's `bindings`
+    "event",  # the triggering event's fields (or caster/defender on a cast)
+    "context",  # the per-invocation context (see CONTEXT_KEYS)
+    "entity",  # the invocation's caster — the rider's holder
+    "instance_fields",  # values captured by a trigger's `bindings`
     "save_success",
     "save_roll",
 }

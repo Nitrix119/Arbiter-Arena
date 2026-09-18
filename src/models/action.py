@@ -8,17 +8,21 @@ from .action_resources import ActionCost, ACTION_COST, BONUS_ACTION_COST, REACTI
 from .damage import DamageType, Damage
 from src.utils.dice import roll_formula
 from .spell_properties import (
-    SpellRange, RangeType,
+    SpellRange,
+    RangeType,
     TargetingType,
     AOEProperties,
-    CastingTime, CastingTimeType,
-    Duration, DurationUnit,
+    CastingTime,
+    CastingTimeType,
+    Duration,
+    DurationUnit,
     SpellComponents,
 )
 
 
 class ActionType(Enum):
     """Types of actions in combat."""
+
     ATTACK = "attack"
     SPELL = "spell"
     ABILITY = "ability"
@@ -28,14 +32,14 @@ class ActionType(Enum):
 @dataclass
 class Action:
     """Base class for combat actions.
-    
+
     Attributes:
         name: Name of the action
         description: What the action does
         action_type: The type of action
         recharge: Recharge condition (e.g., "Recharge 5-6")
     """
-    
+
     name: str
     description: str
     action_type: ActionType
@@ -99,7 +103,7 @@ class Action:
 @dataclass
 class AttackAction(Action):
     """A melee or ranged attack action.
-    
+
     Attributes:
         bonus_to_hit: Bonus applied to attack rolls
         damage: List of damage instances for a hit
@@ -137,9 +141,15 @@ class SpellAction(Action):
     spell_range: SpellRange = field(default_factory=lambda: SpellRange(RangeType.TOUCH))
     targeting_type: TargetingType = TargetingType.SINGLE_TARGET
     aoe: Optional[AOEProperties] = None
-    casting_time: CastingTime = field(default_factory=lambda: CastingTime(CastingTimeType.ACTION))
-    duration: Duration = field(default_factory=lambda: Duration(DurationUnit.INSTANTANEOUS))
-    components: SpellComponents = field(default_factory=lambda: SpellComponents(verbal=True, somatic=True))
+    casting_time: CastingTime = field(
+        default_factory=lambda: CastingTime(CastingTimeType.ACTION)
+    )
+    duration: Duration = field(
+        default_factory=lambda: Duration(DurationUnit.INSTANTANEOUS)
+    )
+    components: SpellComponents = field(
+        default_factory=lambda: SpellComponents(verbal=True, somatic=True)
+    )
     higher_level_scaling: Optional[str] = None  # TODO: structured scaling rules
     can_target_self: bool = False
     cannot_cause_self_damage: bool = False

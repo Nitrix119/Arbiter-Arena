@@ -27,9 +27,7 @@ class SpellRegistry:
         for path in sorted(Path(directory).rglob("*.json")):
             spell = StatBlockLoader.load_spell_from_json(str(path))
             if spell.name in self._spells:
-                raise ValueError(
-                    f"Duplicate spell name '{spell.name}' found in {path}"
-                )
+                raise ValueError(f"Duplicate spell name '{spell.name}' found in {path}")
             self._spells[spell.name] = spell
 
     def register(self, spell: SpellAction) -> None:

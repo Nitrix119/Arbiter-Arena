@@ -30,8 +30,12 @@ _SRC = pathlib.Path(__file__).parent.parent / "src" / "spells"
 # Modules that read block args: the handlers, plus the two places that read args off a
 # block they do not own.
 _MODULES = sorted((_SRC / "blocks").glob("*.py")) + [
-    _SRC / "runner.py",     # reads `condition` on every block before dispatch
-    _SRC / "iterators.py" if (_SRC / "iterators.py").exists() else _SRC / "blocks" / "iterators.py",
+    _SRC / "runner.py",  # reads `condition` on every block before dispatch
+    (
+        _SRC / "iterators.py"
+        if (_SRC / "iterators.py").exists()
+        else _SRC / "blocks" / "iterators.py"
+    ),
 ]
 
 # Receiver names that denote a block whose args are being read.
@@ -48,7 +52,9 @@ _CROSS_READS = {
     "target",
     # `roll_once` / `formula` / `scaling` — re-read off child `damage` blocks by
     # for_each_target, to share one roll across the target set. Declared on `damage`.
-    "roll_once", "formula", "scaling",
+    "roll_once",
+    "formula",
+    "scaling",
 }
 
 

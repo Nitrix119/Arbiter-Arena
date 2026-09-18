@@ -8,12 +8,19 @@ from src.combat import CombatSystem, SpellRegistry
 from src.loaders.stat_block_loader import StatBlockLoader
 
 SPELLS_DIR = str(Path(__file__).parent.parent / "examples" / "spells")
-WIZARD_JSON = str(Path(__file__).parent.parent / "examples" / "creatures" / "characters" / "wizard.json")
+WIZARD_JSON = str(
+    Path(__file__).parent.parent
+    / "examples"
+    / "creatures"
+    / "characters"
+    / "wizard.json"
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_entity(name="Mage", known_spells=None):
     abilities = AbilityScores(8, 14, 14, 18, 12, 10)
@@ -37,6 +44,7 @@ def _make_registry() -> SpellRegistry:
 # ---------------------------------------------------------------------------
 # SpellRegistry unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestSpellRegistry:
     def test_scan_directory_loads_spells(self):
@@ -101,6 +109,7 @@ class TestSpellRegistry:
     def test_scan_duplicate_raises_value_error(self, tmp_path):
         """Two JSON files defining the same spell name should raise ValueError."""
         import shutil
+
         src = Path(SPELLS_DIR) / "firebolt.json"
         (tmp_path / "a.json").write_text(src.read_text())
         (tmp_path / "b.json").write_text(src.read_text())
@@ -112,6 +121,7 @@ class TestSpellRegistry:
 # ---------------------------------------------------------------------------
 # CombatSystem.get_spell_for_entity tests
 # ---------------------------------------------------------------------------
+
 
 class TestGetSpellForEntity:
     def test_returns_spell_when_entity_knows_it(self):
@@ -173,6 +183,7 @@ class TestGetSpellForEntity:
 # Wizard JSON integration tests
 # ---------------------------------------------------------------------------
 
+
 class TestWizardJsonIntegration:
     def test_wizard_loads_known_spells(self):
         sb = StatBlockLoader.load_from_json(WIZARD_JSON)
@@ -218,12 +229,19 @@ class TestWizardJsonIntegration:
 # StatBlockLoader known_spells parsing tests
 # ---------------------------------------------------------------------------
 
+
 class TestStatBlockLoaderKnownSpells:
     def test_from_dict_parses_known_spells(self):
         data = {
             "name": "Test Mage",
-            "abilities": {"strength": 10, "dexterity": 10, "constitution": 10,
-                          "intelligence": 16, "wisdom": 10, "charisma": 10},
+            "abilities": {
+                "strength": 10,
+                "dexterity": 10,
+                "constitution": 10,
+                "intelligence": 16,
+                "wisdom": 10,
+                "charisma": 10,
+            },
             "hit_points": 20,
             "armor_class": 12,
             "known_spells": ["Fireball", "Fire Bolt"],
@@ -234,8 +252,14 @@ class TestStatBlockLoaderKnownSpells:
     def test_from_dict_defaults_to_empty_list(self):
         data = {
             "name": "Fighter",
-            "abilities": {"strength": 16, "dexterity": 10, "constitution": 14,
-                          "intelligence": 10, "wisdom": 10, "charisma": 10},
+            "abilities": {
+                "strength": 16,
+                "dexterity": 10,
+                "constitution": 14,
+                "intelligence": 10,
+                "wisdom": 10,
+                "charisma": 10,
+            },
             "hit_points": 40,
             "armor_class": 16,
         }

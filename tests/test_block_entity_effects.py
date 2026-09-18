@@ -27,8 +27,11 @@ _NATIVE_POISON = {
         {
             # `damage` has no target selector — the enclosing trigger decides who is
             # targeted (here the holder, via `rebind_target: "event.entity"`).
-            "block": "trigger", "event": "TURN_START", "holder": "caster",
-            "when": "event.entity == entity", "rebind_target": "event.entity",
+            "block": "trigger",
+            "event": "TURN_START",
+            "holder": "caster",
+            "when": "event.entity == entity",
+            "rebind_target": "event.entity",
             "then": [
                 {"block": "damage", "formula": "1d6", "damage_type": "POISON"},
             ],
@@ -39,8 +42,10 @@ _NATIVE_POISON = {
 
 def _ent(name="E", hp=40):
     sb = StatBlock(
-        name=name, ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-        hit_points_max=hp, armor_class=10,
+        name=name,
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+        hit_points_max=hp,
+        armor_class=10,
     )
     return Entity(sb)
 
@@ -55,8 +60,12 @@ def _wire(*entities):
 
 
 def _poison(bus, dp, entity):
-    apply_entity_rule(entity, RuleLoader.from_dict(dict(_NATIVE_POISON)),
-                      event_bus=bus, damage_processor=dp)
+    apply_entity_rule(
+        entity,
+        RuleLoader.from_dict(dict(_NATIVE_POISON)),
+        event_bus=bus,
+        damage_processor=dp,
+    )
 
 
 class TestBlockInstall:
@@ -64,17 +73,17 @@ class TestBlockInstall:
     def test_installed_as_a_scope_owned_rider(self):
         victim = _ent("Victim")
         _bus, dp = _wire(victim)
-        _poison(_bus if 'bus' not in dir() else bus, dp, victim)
+        _poison(_bus if "bus" not in dir() else bus, dp, victim)
         assert [s.source for s in victim.lifetimes] == ["poison_dot"]
 
     def test_fires_on_turn_start(self):
         victim, other = _ent("Victim"), _ent("Other")
         bus, dp = _wire(victim, other)
-        _poison(_bus if 'bus' not in dir() else bus, dp, victim)
+        _poison(_bus if "bus" not in dir() else bus, dp, victim)
         hp0 = victim.hp
         with patch("src.spells.blocks.damage.roll_formula", return_value=4):
             bus.emit(EventType.TURN_START, entity=victim, round_num=1)
-            assert hp0 - victim.hp == 4               # 1d6 poison to the holder
+            assert hp0 - victim.hp == 4  # 1d6 poison to the holder
             # Not on anyone else's turn.
             hp1 = victim.hp
             bus.emit(EventType.TURN_START, entity=other, round_num=1)
@@ -83,24 +92,24 @@ class TestBlockInstall:
     def test_expires_after_duration(self):
         victim = _ent("Victim", hp=100)
         bus, dp = _wire(victim)
-        _poison(_bus if 'bus' not in dir() else bus, dp, victim)
+        _poison(_bus if "bus" not in dir() else bus, dp, victim)
         hp0 = victim.hp
         with patch("src.spells.blocks.damage.roll_formula", return_value=4):
-            for rnd in range(1, 4):                   # rounds 1-3: fires, then ticks down
+            for rnd in range(1, 4):  # rounds 1-3: fires, then ticks down
                 bus.emit(EventType.TURN_START, entity=victim, round_num=rnd)
                 bus.emit(EventType.TURN_END, entity=victim, round_num=rnd)
-            assert hp0 - victim.hp == 12              # 3 × 4
+            assert hp0 - victim.hp == 12  # 3 × 4
             bus.emit(EventType.TURN_START, entity=victim, round_num=4)
-            assert hp0 - victim.hp == 12              # expired: no further damage
+            assert hp0 - victim.hp == 12  # expired: no further damage
         assert victim.lifetimes == []
 
     def test_remove_effect_disposes_the_rider(self):
         victim = _ent("Victim")
         bus, dp = _wire(victim)
-        _poison(_bus if 'bus' not in dir() else bus, dp, victim)
+        _poison(_bus if "bus" not in dir() else bus, dp, victim)
         victim.remove_effect("poison_dot")
         assert victim.lifetimes == []
         with patch("src.spells.blocks.damage.roll_formula", return_value=4):
             hp0 = victim.hp
             bus.emit(EventType.TURN_START, entity=victim, round_num=1)
-            assert victim.hp == hp0                   # rider gone → no damage
+            assert victim.hp == hp0  # rider gone → no damage

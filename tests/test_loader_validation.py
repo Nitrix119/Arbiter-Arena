@@ -18,37 +18,59 @@ def _creature(**overrides):
 
 class TestFriendlyEnumErrors:
     def test_bad_attack_damage_type(self):
-        data = _creature(actions=[{
-            "name": "Bite", "type": "attack",
-            "damage": [{"type": "SLASH", "amount": 3}],  # not a DamageType
-        }])
+        data = _creature(
+            actions=[
+                {
+                    "name": "Bite",
+                    "type": "attack",
+                    "damage": [{"type": "SLASH", "amount": 3}],  # not a DamageType
+                }
+            ]
+        )
         with pytest.raises(ValueError) as exc:
             StatBlockLoader.from_dict(data)
         assert "SLASH" in str(exc.value)
         assert "valid values" in str(exc.value).lower()
 
     def test_bad_targeting_type(self):
-        data = _creature(actions=[{
-            "name": "Zap", "type": "spell", "targeting_type": "everywhere",
-        }])
+        data = _creature(
+            actions=[
+                {
+                    "name": "Zap",
+                    "type": "spell",
+                    "targeting_type": "everywhere",
+                }
+            ]
+        )
         with pytest.raises(ValueError) as exc:
             StatBlockLoader.from_dict(data)
         assert "everywhere" in str(exc.value)
 
     def test_bad_spell_range_type(self):
-        data = _creature(actions=[{
-            "name": "Zap", "type": "spell",
-            "spell_range": {"type": "lightyears"},
-        }])
+        data = _creature(
+            actions=[
+                {
+                    "name": "Zap",
+                    "type": "spell",
+                    "spell_range": {"type": "lightyears"},
+                }
+            ]
+        )
         with pytest.raises(ValueError) as exc:
             StatBlockLoader.from_dict(data)
         assert "lightyears" in str(exc.value)
 
     def test_bad_aoe_shape(self):
-        data = _creature(actions=[{
-            "name": "Zap", "type": "spell", "targeting_type": "aoe",
-            "aoe": {"shape": "blob", "size_ft": 10},
-        }])
+        data = _creature(
+            actions=[
+                {
+                    "name": "Zap",
+                    "type": "spell",
+                    "targeting_type": "aoe",
+                    "aoe": {"shape": "blob", "size_ft": 10},
+                }
+            ]
+        )
         with pytest.raises(ValueError) as exc:
             StatBlockLoader.from_dict(data)
         assert "blob" in str(exc.value)
@@ -56,10 +78,15 @@ class TestFriendlyEnumErrors:
 
 class TestDamageFormulaValidation:
     def _attack_with_formula(self, formula):
-        return _creature(actions=[{
-            "name": "Hit", "type": "attack",
-            "damage": [{"type": "SLASHING", "formula": formula}],
-        }])
+        return _creature(
+            actions=[
+                {
+                    "name": "Hit",
+                    "type": "attack",
+                    "damage": [{"type": "SLASHING", "formula": formula}],
+                }
+            ]
+        )
 
     def test_multi_term_formula_accepted(self):
         # E5: previously rejected by the single-term regex.

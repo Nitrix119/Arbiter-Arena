@@ -17,8 +17,12 @@ def test_env_var_wins(monkeypatch, tmp_path):
 def test_falls_back_to_keyfile(monkeypatch, tmp_path):
     monkeypatch.setattr(credentials, "_SECRETS_DIR", tmp_path)
     monkeypatch.delenv(ENV, raising=False)
-    (tmp_path / "openrouter.key").write_text("# my key\n\nsk-from-file\n", encoding="utf-8")
-    assert resolve_credential(ENV, "openrouter.key") == "sk-from-file"  # skips comment/blank
+    (tmp_path / "openrouter.key").write_text(
+        "# my key\n\nsk-from-file\n", encoding="utf-8"
+    )
+    assert (
+        resolve_credential(ENV, "openrouter.key") == "sk-from-file"
+    )  # skips comment/blank
 
 
 def test_env_takes_precedence_over_keyfile(monkeypatch, tmp_path):

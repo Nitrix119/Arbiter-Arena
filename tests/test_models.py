@@ -2,8 +2,16 @@
 
 import pytest
 from src.models import (
-    AbilityScores, StatBlock, AttackAction, Damage, DamageType,
-    Entity, Skill, ProficiencyLevel, Condition, ConditionType
+    AbilityScores,
+    StatBlock,
+    AttackAction,
+    Damage,
+    DamageType,
+    Entity,
+    Skill,
+    ProficiencyLevel,
+    Condition,
+    ConditionType,
 )
 
 
@@ -60,7 +68,9 @@ class TestStatBlock:
             ability_scores=abilities,
             hit_points_max=50,
             armor_class=16,
-            skills={"athletics": Skill("Athletics", "strength", ProficiencyLevel.PROFICIENT)},
+            skills={
+                "athletics": Skill("Athletics", "strength", ProficiencyLevel.PROFICIENT)
+            },
         )
         bonus = stat_block.get_skill_bonus("athletics")
         assert bonus == 4
@@ -73,7 +83,9 @@ class TestStatBlock:
             ability_scores=abilities,
             hit_points_max=50,
             armor_class=16,
-            skills={"athletics": Skill("Athletics", "strength", ProficiencyLevel.EXPERT)},
+            skills={
+                "athletics": Skill("Athletics", "strength", ProficiencyLevel.EXPERT)
+            },
         )
         bonus = stat_block.get_skill_bonus("athletics")
         assert bonus == 6
@@ -226,7 +238,7 @@ class TestAttackAction:
             name="Longsword",
             description="A melee attack",
             bonus_to_hit=5,
-            damage=[Damage(DamageType.SLASHING, 8)]
+            damage=[Damage(DamageType.SLASHING, 8)],
         )
         assert attack.name == "Longsword"
         assert attack.bonus_to_hit == 5

@@ -16,7 +16,13 @@ import random
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
-from src.arena.tools import TOOL_ATTACK, TOOL_CAST_SPELL, TOOL_END_TURN, TOOL_MOVE, ToolCall
+from src.arena.tools import (
+    TOOL_ATTACK,
+    TOOL_CAST_SPELL,
+    TOOL_END_TURN,
+    TOOL_MOVE,
+    ToolCall,
+)
 
 
 class NoToolCallError(RuntimeError):
@@ -54,7 +60,9 @@ class Agent(ABC):
         """
 
     @abstractmethod
-    def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
+    def decide(
+        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
+    ) -> ToolCall:
         """Return one action to attempt, given the current observation."""
 
 
@@ -69,7 +77,9 @@ def _dist(a: Dict[str, float], b: Dict[str, float]) -> float:
     )
 
 
-def _pick_target(self_view: Dict[str, Any], candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _pick_target(
+    self_view: Dict[str, Any], candidates: List[Dict[str, Any]]
+) -> Dict[str, Any]:
     """Choose the enemy to hit: lowest HP if HP is visible for all, else the nearest."""
     if candidates and all("hp" in c for c in candidates):
         return min(candidates, key=lambda c: c["hp"])
@@ -77,7 +87,9 @@ def _pick_target(self_view: Dict[str, Any], candidates: List[Dict[str, Any]]) ->
     return min(candidates, key=lambda c: _dist(sp, c["position"]))
 
 
-def _move_option_toward(observation: Dict[str, Any], enemy_id: str) -> Optional[ToolCall]:
+def _move_option_toward(
+    observation: Dict[str, Any], enemy_id: str
+) -> Optional[ToolCall]:
     """A ``move`` ToolCall taking the legal ``toward_melee`` option for *enemy_id*, if any.
 
     The option comes from :func:`~src.arena.action_space.move_candidates`, so it is already
@@ -92,9 +104,7 @@ def _move_option_toward(observation: Dict[str, Any], enemy_id: str) -> Optional[
     return None
 
 
-def _attacks_on_enemies(
-    observation: Dict[str, Any], enemy_ids: set
-) -> List[tuple]:
+def _attacks_on_enemies(observation: Dict[str, Any], enemy_ids: set) -> List[tuple]:
     """All ``(attack, enemy_target_view)`` pairs the actor could make this call."""
     enemy_by_id = {e["entity_id"]: e for e in observation["enemies"]}
     pairs = []
@@ -105,9 +115,7 @@ def _attacks_on_enemies(
     return pairs
 
 
-def _spells_on_enemies(
-    observation: Dict[str, Any], enemy_ids: set
-) -> List[tuple]:
+def _spells_on_enemies(observation: Dict[str, Any], enemy_ids: set) -> List[tuple]:
     """All ``(spell, enemy_target_view)`` pairs for single-target spells with a reachable enemy."""
     enemy_by_id = {e["entity_id"]: e for e in observation["enemies"]}
     pairs = []
@@ -131,7 +139,9 @@ class RandomAgent(Agent):
     when given a seeded ``rng``.
     """
 
-    def __init__(self, name: str, team: Optional[str] = None, rng: Optional[random.Random] = None):
+    def __init__(
+        self, name: str, team: Optional[str] = None, rng: Optional[random.Random] = None
+    ):
         super().__init__(name, team)
         self._rng = rng or random.Random()
 
@@ -139,18 +149,26 @@ class RandomAgent(Agent):
         """Reseed this agent's private choice RNG for a reproducible match."""
         self._rng.seed(seed)
 
-    def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
+    def decide(
+        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
+    ) -> ToolCall:
         la = observation["legal_actions"]
         enemy_ids = {e["entity_id"] for e in observation["enemies"]}
         candidates: List[ToolCall] = [ToolCall(TOOL_END_TURN, {})]
 
         for atk, target in _attacks_on_enemies(observation, enemy_ids):
             candidates.append(
-                ToolCall(TOOL_ATTACK, {"action_name": atk["name"], "defender_id": target["entity_id"]})
+                ToolCall(
+                    TOOL_ATTACK,
+                    {"action_name": atk["name"], "defender_id": target["entity_id"]},
+                )
             )
         for sp, target in _spells_on_enemies(observation, enemy_ids):
             candidates.append(
-                ToolCall(TOOL_CAST_SPELL, {"spell_name": sp["name"], "target_ids": [target["entity_id"]]})
+                ToolCall(
+                    TOOL_CAST_SPELL,
+                    {"spell_name": sp["name"], "target_ids": [target["entity_id"]]},
+                )
             )
         for move in la.get("moves", []):
             candidates.append(ToolCall(TOOL_MOVE, {"option_id": move["option_id"]}))
@@ -166,7 +184,9 @@ class ScriptedAgent(Agent):
     turn. A fixed skill benchmark for LLM agents to be measured against.
     """
 
-    def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
+    def decide(
+        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
+    ) -> ToolCall:
         self_view = observation["self"]
         enemies = observation["enemies"]
         enemy_ids = {e["entity_id"] for e in enemies}
@@ -174,18 +194,30 @@ class ScriptedAgent(Agent):
         attack_pairs = _attacks_on_enemies(observation, enemy_ids)
         if attack_pairs:
             target = _pick_target(self_view, [t for _, t in attack_pairs])
-            atk = next(a for a, t in attack_pairs if t["entity_id"] == target["entity_id"])
-            return ToolCall(TOOL_ATTACK, {"action_name": atk["name"], "defender_id": target["entity_id"]})
+            atk = next(
+                a for a, t in attack_pairs if t["entity_id"] == target["entity_id"]
+            )
+            return ToolCall(
+                TOOL_ATTACK,
+                {"action_name": atk["name"], "defender_id": target["entity_id"]},
+            )
 
         spell_pairs = _spells_on_enemies(observation, enemy_ids)
         if spell_pairs:
             target = _pick_target(self_view, [t for _, t in spell_pairs])
-            sp = next(s for s, t in spell_pairs if t["entity_id"] == target["entity_id"])
-            return ToolCall(TOOL_CAST_SPELL, {"spell_name": sp["name"], "target_ids": [target["entity_id"]]})
+            sp = next(
+                s for s, t in spell_pairs if t["entity_id"] == target["entity_id"]
+            )
+            return ToolCall(
+                TOOL_CAST_SPELL,
+                {"spell_name": sp["name"], "target_ids": [target["entity_id"]]},
+            )
 
         budget = observation["legal_actions"]["movement_remaining_ft"]
         if budget >= 1 and enemies:
-            nearest = min(enemies, key=lambda e: _dist(self_view["position"], e["position"]))
+            nearest = min(
+                enemies, key=lambda e: _dist(self_view["position"], e["position"])
+            )
             move = _move_option_toward(observation, nearest["entity_id"])
             if move is not None:
                 return move

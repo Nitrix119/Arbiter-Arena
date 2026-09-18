@@ -46,8 +46,11 @@ def _strong_melee():
 
 def _weak_melee():
     return AttackAction(
-        name="Club", description="", bonus_to_hit=2,
-        damage=[Damage(DamageType.BLUDGEONING, formula="1d4")], range_ft=5.0,
+        name="Club",
+        description="",
+        bonus_to_hit=2,
+        damage=[Damage(DamageType.BLUDGEONING, formula="1d4")],
+        range_ft=5.0,
     )
 
 
@@ -67,7 +70,9 @@ def test_attacks_a_reachable_enemy_and_it_resolves(make_entity, make_combat):
 
 def test_targets_the_higher_threat_not_the_nearest(make_entity, make_combat):
     a = make_entity("A", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
-    cannon = make_entity("Cannon", team="b", pos=(5, 0, 0), hp=20, attacks=[_strong_melee()])
+    cannon = make_entity(
+        "Cannon", team="b", pos=(5, 0, 0), hp=20, attacks=[_strong_melee()]
+    )
     tank = make_entity("Tank", team="b", pos=(0, 5, 0), hp=20, attacks=[_weak_melee()])
     combat = _started(make_combat, [a, cannon, tank], a)
 
@@ -79,7 +84,9 @@ def test_secures_the_kill(make_entity, make_combat):
     # Equal-threat enemies so the choice is purely about finishing one now.
     a = make_entity("A", team="a", pos=(0, 0, 0), attacks=[_strong_melee()])
     low = make_entity("Low", team="b", pos=(5, 0, 0), hp=3, attacks=[_strong_melee()])
-    high = make_entity("High", team="b", pos=(0, 5, 0), hp=30, attacks=[_strong_melee()])
+    high = make_entity(
+        "High", team="b", pos=(0, 5, 0), hp=30, attacks=[_strong_melee()]
+    )
     combat = _started(make_combat, [a, low, high], a)
 
     call = _decide(combat, a)
@@ -92,9 +99,13 @@ def test_closes_on_a_distant_enemy_with_a_legal_move(make_entity, make_combat):
     combat = _started(make_combat, [a, b], a)
 
     call = _decide(combat, a)
-    assert call.name == "move" and call.arguments["option_id"].startswith("toward_melee:")
+    assert call.name == "move" and call.arguments["option_id"].startswith(
+        "toward_melee:"
+    )
     result = ToolExecutor(combat).apply(a, call, FULL_INFORMATION)
-    assert result["ok"] is True  # legal by construction — never lands on an occupied cell
+    assert (
+        result["ok"] is True
+    )  # legal by construction — never lands on an occupied cell
 
 
 # --- out-plays the weak baseline --------------------------------------------
@@ -114,8 +125,12 @@ def test_heuristic_kiter_beats_scripted_melee(make_entity, make_combat):
     """
 
     def build():
-        archer = make_entity("Archer", team="a", pos=(0, 0, 0), hp=25, attacks=[_strong_ranged()])
-        brute = make_entity("Brute", team="b", pos=(60, 0, 0), hp=25, attacks=[_strong_melee()])
+        archer = make_entity(
+            "Archer", team="a", pos=(0, 0, 0), hp=25, attacks=[_strong_ranged()]
+        )
+        brute = make_entity(
+            "Brute", team="b", pos=(60, 0, 0), hp=25, attacks=[_strong_melee()]
+        )
         _set_speed(archer, 40)
         _set_speed(brute, 25)
         combat = make_combat([archer, brute])

@@ -14,7 +14,6 @@ larger, separate design (see ``docs/current/AGENT_ARENA_PLAN.md`` §10).
 
 from dataclasses import dataclass
 
-
 # HP display modes for enemies.
 HP_EXACT = "exact"  # numeric current/max/temp HP
 HP_BUCKETED = "bucketed"  # a coarse label: "healthy" / "bloodied" / "critical"

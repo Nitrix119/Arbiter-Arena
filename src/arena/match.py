@@ -90,9 +90,7 @@ def _decide_result(combat: "CombatSystem", round_cap: int) -> MatchResult:
         reason = "round_cap"
         ranked = sorted(hp_fraction.items(), key=lambda kv: kv[1], reverse=True)
         winner = (
-            ranked[0][0]
-            if len(ranked) >= 2 and ranked[0][1] > ranked[1][1]
-            else None
+            ranked[0][0] if len(ranked) >= 2 and ranked[0][1] > ranked[1][1] else None
         )
 
     return MatchResult(
@@ -137,7 +135,9 @@ def run_match(
 
     with dice.using_rng(combat.rng):
         if seed is not None:
-            _reroll_initiative(combat)  # so the seed governs turn order, not just resolution
+            _reroll_initiative(
+                combat
+            )  # so the seed governs turn order, not just resolution
         return _run_seeded(combat, agents, policies, round_cap, transcript)
 
 

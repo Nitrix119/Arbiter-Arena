@@ -55,7 +55,8 @@ class RuleLoader:
             hint = (
                 f" It uses the retired {'/'.join(legacy)} form; rewrite it as a "
                 f"program of trigger blocks."
-                if legacy else ""
+                if legacy
+                else ""
             )
             raise ValueError(
                 f"Rule {name!r} has no 'program'. A rule must be authored as a "

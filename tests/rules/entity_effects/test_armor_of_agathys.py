@@ -25,11 +25,14 @@ SPELLS_DIR = Path(__file__).parent.parent.parent.parent / "examples" / "spells"
 
 # -- Helpers ------------------------------------------------------------------
 
+
 def _make_entity(name="Fighter", hp=30, ac=15, speed=30, actions=None):
     abilities = AbilityScores(14, 14, 14, 10, 10, 10)
     sb = StatBlock(
-        name=name, ability_scores=abilities,
-        hit_points_max=hp, armor_class=ac,
+        name=name,
+        ability_scores=abilities,
+        hit_points_max=hp,
+        armor_class=ac,
     )
     if actions:
         sb.actions = actions
@@ -42,15 +45,19 @@ def _make_entity(name="Fighter", hp=30, ac=15, speed=30, actions=None):
 def _make_attacker(name="Goblin"):
     """Create an entity with a melee attack action."""
     from src.models.action import AttackAction, ActionType
+
     scimitar = AttackAction(
-        name="Scimitar", description="Melee weapon attack",
+        name="Scimitar",
+        description="Melee weapon attack",
         bonus_to_hit=4,
         damage=[Damage(DamageType.SLASHING, formula="1d6+2")],
     )
     abilities = AbilityScores(10, 14, 10, 10, 10, 10)
     sb = StatBlock(
-        name=name, ability_scores=abilities,
-        hit_points_max=20, armor_class=13,
+        name=name,
+        ability_scores=abilities,
+        hit_points_max=20,
+        armor_class=13,
         actions=[scimitar],
     )
     return Entity(sb)
@@ -68,16 +75,20 @@ def _setup(*entities):
 
 
 def _load_spell():
-    return StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "armor_of_agathys.json"))
+    return StatBlockLoader.load_spell_from_json(
+        str(SPELLS_DIR / "armor_of_agathys.json")
+    )
 
 
 # -- Loading tests ------------------------------------------------------------
+
 
 class TestArmorOfAgathysLoading:
 
     def test_loads_native_program(self):
         """Armor of Agathys is a native program: a lifetime granting temp HP with a
-        retaliation trigger (its effect is inline, not a separate entity-effect file)."""
+        retaliation trigger (its effect is inline, not a separate entity-effect file).
+        """
         spell = _load_spell()
         assert spell.program
         life = spell.program[0]
@@ -105,6 +116,7 @@ class TestArmorOfAgathysLoading:
 
 
 # -- Temp HP grant tests ------------------------------------------------------
+
 
 class TestArmorOfAgathysTempHP:
 
@@ -139,6 +151,7 @@ class TestArmorOfAgathysTempHP:
 
 
 # -- Retaliation tests --------------------------------------------------------
+
 
 class TestArmorOfAgathysRetaliation:
 
@@ -218,6 +231,7 @@ class TestArmorOfAgathysRetaliation:
 
 # -- Self-termination tests ---------------------------------------------------
 
+
 class TestArmorOfAgathysSelfTermination:
 
     def test_effect_removed_when_temp_hp_depleted_by_attack(self):
@@ -236,8 +250,10 @@ class TestArmorOfAgathysSelfTermination:
         # effects.deal_damage() use their own imported copies.
         action = attacker.stat_block.actions[0]
         mock_roll = lambda f: 5 if f == "5" else 10
-        with patch("src.spells.blocks.rolls.roll_d20", return_value=20), \
-             patch("src.spells.blocks.damage.roll_formula", side_effect=mock_roll):
+        with (
+            patch("src.spells.blocks.rolls.roll_d20", return_value=20),
+            patch("src.spells.blocks.damage.roll_formula", side_effect=mock_roll),
+        ):
             ar.resolve(attacker, caster, action)
 
         assert caster.temporary_hp == 0
@@ -283,8 +299,10 @@ class TestArmorOfAgathysSelfTermination:
 
         # Force hit, scimitar deals 8 damage (> 5 temp HP)
         mock_roll = lambda f: 5 if f == "5" else 8
-        with patch("src.spells.blocks.rolls.roll_d20", return_value=20), \
-             patch("src.spells.blocks.damage.roll_formula", side_effect=mock_roll):
+        with (
+            patch("src.spells.blocks.rolls.roll_d20", return_value=20),
+            patch("src.spells.blocks.damage.roll_formula", side_effect=mock_roll),
+        ):
             ar.resolve(attacker, caster, action)
 
         # Attacker took 5 cold retaliation

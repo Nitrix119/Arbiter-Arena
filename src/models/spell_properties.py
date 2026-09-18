@@ -4,13 +4,14 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, List
 
-
 # ---------------------------------------------------------------------------
 # Range
 # ---------------------------------------------------------------------------
 
+
 class RangeType(Enum):
     """How a spell's range is measured."""
+
     SELF = "self"
     TOUCH = "touch"
     FEET = "feet"
@@ -27,13 +28,16 @@ class SpellRange:
         range_type: Category of range
         distance_ft: Distance in feet; required when range_type is FEET
     """
+
     range_type: RangeType
     distance_ft: Optional[int] = None
 
     def __post_init__(self) -> None:
         if self.range_type == RangeType.FEET:
             if self.distance_ft is None or self.distance_ft < 0:
-                raise ValueError("distance_ft must be a non-negative int when range_type is FEET")
+                raise ValueError(
+                    "distance_ft must be a non-negative int when range_type is FEET"
+                )
 
     def __str__(self) -> str:
         if self.range_type == RangeType.FEET:
@@ -45,8 +49,10 @@ class SpellRange:
 # Targeting
 # ---------------------------------------------------------------------------
 
+
 class TargetingType(Enum):
     """How a spell selects its targets."""
+
     SINGLE_TARGET = "single_target"
     MULTI_TARGET = "multi_target"  # split projectiles: caller assigns each to a target
     AOE = "aoe"
@@ -55,6 +61,7 @@ class TargetingType(Enum):
 
 class AOEShape(Enum):
     """Geometric shapes for area-of-effect spells."""
+
     SPHERE = "sphere"
     CONE = "cone"
     CYLINDER = "cylinder"
@@ -76,6 +83,7 @@ class AOEProperties:
         width_ft: Width of the line cross-section in feet.  Used by LINE;
                   when ``None`` the D&D default of 5 ft is used at runtime.
     """
+
     shape: AOEShape
     size_ft: int
     height_ft: Optional[int] = None
@@ -90,7 +98,9 @@ class AOEProperties:
             raise ValueError("AOE width_ft must be positive when specified")
 
     def __str__(self) -> str:
-        label = "radius" if self.shape in (AOEShape.SPHERE, AOEShape.CYLINDER) else "length"
+        label = (
+            "radius" if self.shape in (AOEShape.SPHERE, AOEShape.CYLINDER) else "length"
+        )
         if self.shape == AOEShape.CUBE:
             label = "side"
         return f"{self.shape.value.capitalize()} ({self.size_ft} ft. {label})"
@@ -100,8 +110,10 @@ class AOEProperties:
 # Casting time
 # ---------------------------------------------------------------------------
 
+
 class CastingTimeType(Enum):
     """Categories of spell casting time."""
+
     ACTION = "action"
     BONUS_ACTION = "bonus_action"
     REACTION = "reaction"
@@ -122,6 +134,7 @@ class CastingTime:
         reaction_trigger: Description of what triggers this reaction cast
         special_description: Free-text description when time_type is SPECIAL
     """
+
     time_type: CastingTimeType
     count: int = 1
     reaction_trigger: Optional[str] = None
@@ -154,8 +167,10 @@ class CastingTime:
 # Duration
 # ---------------------------------------------------------------------------
 
+
 class DurationUnit(Enum):
     """Units of time for spell duration."""
+
     INSTANTANEOUS = "instantaneous"
     ROUND = "round"
     MINUTE = "minute"
@@ -165,7 +180,12 @@ class DurationUnit(Enum):
     SPECIAL = "special"
 
 
-_TIMED_UNITS = {DurationUnit.ROUND, DurationUnit.MINUTE, DurationUnit.HOUR, DurationUnit.DAY}
+_TIMED_UNITS = {
+    DurationUnit.ROUND,
+    DurationUnit.MINUTE,
+    DurationUnit.HOUR,
+    DurationUnit.DAY,
+}
 
 
 @dataclass
@@ -178,6 +198,7 @@ class Duration:
         concentration: Whether the spell requires concentration to maintain
         special_description: Free-text description when unit is SPECIAL
     """
+
     unit: DurationUnit
     count: int = 1
     concentration: bool = False
@@ -212,6 +233,7 @@ class Duration:
 # Components
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SpellComponents:
     """Components required to cast a spell.
@@ -221,6 +243,7 @@ class SpellComponents:
         somatic: Whether the spell requires a somatic (S) component
         material: List of material component descriptions (empty if none)
     """
+
     verbal: bool
     somatic: bool
     material: List[str] = field(default_factory=list)

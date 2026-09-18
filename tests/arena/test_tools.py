@@ -41,7 +41,10 @@ def test_attack_applies_and_shows_own_roll(make_entity, make_combat):
     combat = _started(make_combat, [fighter, goblin], fighter)
 
     result = ToolExecutor(combat).apply(
-        fighter, ToolCall("attack", {"action_name": "Longsword", "defender_id": goblin.entity_id})
+        fighter,
+        ToolCall(
+            "attack", {"action_name": "Longsword", "defender_id": goblin.entity_id}
+        ),
     )
 
     assert result["ok"] is True
@@ -63,7 +66,9 @@ def test_attack_hides_target_ac_under_policy(make_entity, make_combat):
 
     result = ToolExecutor(combat).apply(
         fighter,
-        ToolCall("attack", {"action_name": "Longsword", "defender_id": goblin.entity_id}),
+        ToolCall(
+            "attack", {"action_name": "Longsword", "defender_id": goblin.entity_id}
+        ),
         NO_AC,
     )
 
@@ -90,7 +95,10 @@ def test_attack_unknown_action_is_structured_error(make_entity, make_combat):
     combat = _started(make_combat, [fighter, goblin], fighter)
 
     result = ToolExecutor(combat).apply(
-        fighter, ToolCall("attack", {"action_name": "Fireball", "defender_id": goblin.entity_id})
+        fighter,
+        ToolCall(
+            "attack", {"action_name": "Fireball", "defender_id": goblin.entity_id}
+        ),
     )
     assert result["ok"] is False
     assert "no attack called" in result["error"]
@@ -99,10 +107,15 @@ def test_attack_unknown_action_is_structured_error(make_entity, make_combat):
 def test_attack_out_of_turn_is_structured_error(make_entity, make_combat):
     fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
     goblin = make_entity("Goblin", team="b", pos=(5, 0, 0))
-    combat = _started(make_combat, [fighter, goblin], goblin)  # goblin's turn, not fighter's
+    combat = _started(
+        make_combat, [fighter, goblin], goblin
+    )  # goblin's turn, not fighter's
 
     result = ToolExecutor(combat).apply(
-        fighter, ToolCall("attack", {"action_name": "Longsword", "defender_id": goblin.entity_id})
+        fighter,
+        ToolCall(
+            "attack", {"action_name": "Longsword", "defender_id": goblin.entity_id}
+        ),
     )
     assert result["ok"] is False
     assert "not" in result["error"].lower() and "turn" in result["error"].lower()
@@ -116,7 +129,9 @@ def test_move_applies_and_spends_movement(make_entity, make_combat):
     goblin = make_entity("Goblin", team="b", pos=(50, 0, 50))
     combat = _started(make_combat, [fighter, goblin], fighter)
 
-    result = ToolExecutor(combat).apply(fighter, ToolCall("move", {"x": 15, "y": 0, "z": 0}))
+    result = ToolExecutor(combat).apply(
+        fighter, ToolCall("move", {"x": 15, "y": 0, "z": 0})
+    )
 
     assert result["ok"] is True
     assert result["position"] == {"x": 15, "y": 0, "z": 0}
@@ -143,7 +158,9 @@ def test_move_by_option_id_resolves_to_candidate_destination(make_entity, make_c
     combat = _started(make_combat, [fighter, goblin], fighter)
 
     option = next(
-        o for o in move_candidates(combat, fighter) if o.option_id == f"toward_melee:{goblin.entity_id}"
+        o
+        for o in move_candidates(combat, fighter)
+        if o.option_id == f"toward_melee:{goblin.entity_id}"
     )
     result = ToolExecutor(combat).apply(
         fighter, ToolCall("move", {"option_id": option.option_id})
@@ -159,7 +176,9 @@ def test_move_unknown_option_id_is_structured_error(make_entity, make_combat):
     goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
     combat = _started(make_combat, [fighter, goblin], fighter)
 
-    result = ToolExecutor(combat).apply(fighter, ToolCall("move", {"option_id": "toward_melee:nope"}))
+    result = ToolExecutor(combat).apply(
+        fighter, ToolCall("move", {"option_id": "toward_melee:nope"})
+    )
     assert result["ok"] is False
     assert "nope" in result["error"]
     assert (fighter.x, fighter.z) == (0, 0)
@@ -194,18 +213,29 @@ def test_end_turn_advances_the_turn(make_entity, make_combat):
 # -- cast_spell --------------------------------------------------------------
 
 
-def test_cast_attack_spell_shows_own_roll_gates_ac(make_entity, make_combat, registry_with):
+def test_cast_attack_spell_shows_own_roll_gates_ac(
+    make_entity, make_combat, registry_with
+):
     firebolt = load_spell("firebolt.json")
     wizard = make_entity(
-        "Wizard", team="a", pos=(0, 0, 0),
-        known_spells=[firebolt.name], spellcasting_ability="intelligence",
+        "Wizard",
+        team="a",
+        pos=(0, 0, 0),
+        known_spells=[firebolt.name],
+        spellcasting_ability="intelligence",
     )
     goblin = make_entity("Goblin", team="b", pos=(10, 0, 0), hp=20)
-    combat = _started(make_combat, [wizard, goblin], wizard, registry=registry_with(firebolt))
+    combat = _started(
+        make_combat, [wizard, goblin], wizard, registry=registry_with(firebolt)
+    )
 
     executor = ToolExecutor(combat)
     full = executor.apply(
-        wizard, ToolCall("cast_spell", {"spell_name": firebolt.name, "target_ids": [goblin.entity_id]})
+        wizard,
+        ToolCall(
+            "cast_spell",
+            {"spell_name": firebolt.name, "target_ids": [goblin.entity_id]},
+        ),
     )
     assert full["ok"] is True
     roll = full["results"][0]["roll"]
@@ -217,24 +247,37 @@ def test_cast_attack_spell_shows_own_roll_gates_ac(make_entity, make_combat, reg
     force_turn(combat, wizard)
     hidden = executor.apply(
         wizard,
-        ToolCall("cast_spell", {"spell_name": firebolt.name, "target_ids": [goblin.entity_id]}),
+        ToolCall(
+            "cast_spell",
+            {"spell_name": firebolt.name, "target_ids": [goblin.entity_id]},
+        ),
         NO_AC,
     )
     assert "target_ac" not in hidden["results"][0]["roll"]
 
 
-def test_cast_save_spell_shows_own_dc_gates_target_roll(make_entity, make_combat, registry_with):
+def test_cast_save_spell_shows_own_dc_gates_target_roll(
+    make_entity, make_combat, registry_with
+):
     sacred_flame = load_spell("sacred_flame.json")
     cleric = make_entity(
-        "Cleric", team="a", pos=(0, 0, 0),
-        known_spells=[sacred_flame.name], spellcasting_ability="wisdom",
+        "Cleric",
+        team="a",
+        pos=(0, 0, 0),
+        known_spells=[sacred_flame.name],
+        spellcasting_ability="wisdom",
     )
     goblin = make_entity("Goblin", team="b", pos=(10, 0, 0), hp=20)
-    combat = _started(make_combat, [cleric, goblin], cleric, registry=registry_with(sacred_flame))
+    combat = _started(
+        make_combat, [cleric, goblin], cleric, registry=registry_with(sacred_flame)
+    )
 
     result = ToolExecutor(combat).apply(
         cleric,
-        ToolCall("cast_spell", {"spell_name": sacred_flame.name, "target_ids": [goblin.entity_id]}),
+        ToolCall(
+            "cast_spell",
+            {"spell_name": sacred_flame.name, "target_ids": [goblin.entity_id]},
+        ),
         NO_AC,
     )
 
@@ -242,18 +285,32 @@ def test_cast_save_spell_shows_own_dc_gates_target_roll(make_entity, make_combat
     roll = result["results"][0]["roll"]
     assert "save_dc" in roll  # the actor's own DC is shown...
     assert "target_saved" in roll  # ...and the outcome...
-    assert "target_save_roll" not in roll  # ...but not the target's roll value under NO_AC
+    assert (
+        "target_save_roll" not in roll
+    )  # ...but not the target's roll value under NO_AC
 
 
-def test_cast_unknown_spell_is_structured_error(make_entity, make_combat, registry_with):
+def test_cast_unknown_spell_is_structured_error(
+    make_entity, make_combat, registry_with
+):
     firebolt = load_spell("firebolt.json")
-    wizard = make_entity("Wizard", team="a", known_spells=[firebolt.name],
-                         spellcasting_ability="intelligence")
+    wizard = make_entity(
+        "Wizard",
+        team="a",
+        known_spells=[firebolt.name],
+        spellcasting_ability="intelligence",
+    )
     goblin = make_entity("Goblin", team="b", pos=(10, 0, 0))
-    combat = _started(make_combat, [wizard, goblin], wizard, registry=registry_with(firebolt))
+    combat = _started(
+        make_combat, [wizard, goblin], wizard, registry=registry_with(firebolt)
+    )
 
     result = ToolExecutor(combat).apply(
-        wizard, ToolCall("cast_spell", {"spell_name": "Meteor Swarm", "target_ids": [goblin.entity_id]})
+        wizard,
+        ToolCall(
+            "cast_spell",
+            {"spell_name": "Meteor Swarm", "target_ids": [goblin.entity_id]},
+        ),
     )
     assert result["ok"] is False
     assert "does not know" in result["error"]

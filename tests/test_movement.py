@@ -11,10 +11,10 @@ from src.models.stat_block import StatBlock
 from src.models.spell_properties import AOEProperties, AOEShape
 from src.spatial.geometry import Point3D, Vector3D
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_entity(
     name: str = "Fighter",
@@ -32,7 +32,12 @@ def _make_entity(
         hit_points_max=hp,
         armor_class=10,
         size=size,
-        resource_defaults={"actions": 1, "bonus_actions": 1, "reactions": 1, "speed": speed},
+        resource_defaults={
+            "actions": 1,
+            "bonus_actions": 1,
+            "reactions": 1,
+            "speed": speed,
+        },
     )
     e = Entity(sb, x=x, y=y, z=z, team=team)
     return e
@@ -54,6 +59,7 @@ def _make_combat(*entities) -> CombatSystem:
 # ---------------------------------------------------------------------------
 # move_entity (willing movement)
 # ---------------------------------------------------------------------------
+
 
 class TestMoveEntity:
     def test_successful_move_deducts_movement(self):
@@ -130,6 +136,7 @@ class TestMoveEntity:
 # push_entity (forced movement)
 # ---------------------------------------------------------------------------
 
+
 class TestPushEntity:
     def test_push_does_not_consume_movement(self):
         mover = _make_entity(speed=30)
@@ -173,6 +180,7 @@ class TestPushEntity:
 # ---------------------------------------------------------------------------
 # get_targets_in_aoe
 # ---------------------------------------------------------------------------
+
 
 class TestGetTargetsInAoe:
     def test_fireball_hits_entities_in_radius(self):

@@ -38,7 +38,10 @@ def test_scenario_plays_to_completion_offline(name):
     }
     result = run_match(combat, agents, seed=1, round_cap=30)
 
-    assert combat.state in (CombatState.ENDED, CombatState.ACTIVE)  # ran without raising
+    assert combat.state in (
+        CombatState.ENDED,
+        CombatState.ACTIVE,
+    )  # ran without raising
     assert result.reason in ("last_standing", "round_cap")
     # Every action a scripted agent took was legal (no schema/geometry surprises in setup).
     assert result.rounds >= 1

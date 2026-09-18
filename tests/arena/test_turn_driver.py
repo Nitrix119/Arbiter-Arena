@@ -20,7 +20,9 @@ class _SequenceAgent(Agent):
         self._calls = calls
         self._i = 0
 
-    def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
+    def decide(
+        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
+    ) -> ToolCall:
         call = self._calls[min(self._i, len(self._calls) - 1)]
         self._i += 1
         return call
@@ -35,7 +37,9 @@ class _RecordingAgent(Agent):
         self._i = 0
         self.seen: List[Dict[str, Any]] = []
 
-    def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
+    def decide(
+        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
+    ) -> ToolCall:
         self.seen.append(observation)
         call = self._calls[min(self._i, len(self._calls) - 1)]
         self._i += 1
@@ -66,7 +70,9 @@ def test_consecutive_failures_force_end(make_entity, make_combat):
     goblin = make_entity("Goblin", team="b", pos=(5, 0, 0))
     combat = _started(make_combat, [fighter, goblin], fighter)
 
-    always_bad = _SequenceAgent([ToolCall("attack", {"action_name": "Nope", "defender_id": "bad"})])
+    always_bad = _SequenceAgent(
+        [ToolCall("attack", {"action_name": "Nope", "defender_id": "bad"})]
+    )
     outcome = run_turn(combat, fighter, always_bad)
 
     assert outcome.failures == 3  # 3 consecutive failures trips the budget
@@ -77,7 +83,9 @@ def test_consecutive_failures_force_end(make_entity, make_combat):
 
 def test_total_failure_budget_forces_end(make_entity, make_combat):
     fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
-    goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))  # far, so the moves are unobstructed
+    goblin = make_entity(
+        "Goblin", team="b", pos=(60, 0, 0)
+    )  # far, so the moves are unobstructed
     combat = _started(make_combat, [fighter, goblin], fighter)
 
     bad = ToolCall("attack", {"action_name": "Nope", "defender_id": "bad"})
@@ -135,8 +143,12 @@ def test_rejected_action_is_fed_back_next_observation(make_entity, make_combat):
     agent = _RecordingAgent([illegal, ToolCall("end_turn", {})])
     run_turn(combat, fighter, agent)
 
-    assert "rejected_actions" not in agent.seen[0]  # nothing rejected yet on the first call
-    fed = agent.seen[1]["rejected_actions"]  # the second call carries the rejection + reason
+    assert (
+        "rejected_actions" not in agent.seen[0]
+    )  # nothing rejected yet on the first call
+    fed = agent.seen[1][
+        "rejected_actions"
+    ]  # the second call carries the rejection + reason
     assert fed[0]["action"]["name"] == "attack"
     assert "Unknown entity_id" in fed[0]["error"]
 
@@ -147,12 +159,16 @@ def test_success_clears_rejection_feedback(make_entity, make_combat):
     combat = _started(make_combat, [fighter, goblin], fighter)
 
     illegal = ToolCall("attack", {"action_name": "Longsword", "defender_id": "bad"})
-    good = ToolCall("attack", {"action_name": "Longsword", "defender_id": goblin.entity_id})
+    good = ToolCall(
+        "attack", {"action_name": "Longsword", "defender_id": goblin.entity_id}
+    )
     agent = _RecordingAgent([illegal, good, ToolCall("end_turn", {})])
     run_turn(combat, fighter, agent)
 
     assert "rejected_actions" in agent.seen[1]  # after the illegal attempt
-    assert "rejected_actions" not in agent.seen[2]  # cleared after the successful attack
+    assert (
+        "rejected_actions" not in agent.seen[2]
+    )  # cleared after the successful attack
 
 
 def test_kite_option_ends_turn_out_of_reach(make_entity, make_combat):
@@ -162,14 +178,19 @@ def test_kite_option_ends_turn_out_of_reach(make_entity, make_combat):
     combat = _started(make_combat, [archer, bruiser], archer)
 
     agent = _SequenceAgent(
-        [ToolCall("move", {"option_id": f"kite_range:{bruiser.entity_id}"}), ToolCall("end_turn", {})]
+        [
+            ToolCall("move", {"option_id": f"kite_range:{bruiser.entity_id}"}),
+            ToolCall("end_turn", {}),
+        ]
     )
     outcome = run_turn(combat, archer, agent)
 
     assert outcome.failures == 0  # the kite move was legal by construction
     dist = math.dist((archer.x, archer.z), (bruiser.x, bruiser.z))
     assert dist > 40  # opened the gap rather than standing and trading
-    melee_reach = archer.stat_block.size.size_ft / 2 + bruiser.stat_block.size.size_ft / 2 + 5
+    melee_reach = (
+        archer.stat_block.size.size_ft / 2 + bruiser.stat_block.size.size_ft / 2 + 5
+    )
     assert dist > melee_reach  # ends the turn beyond the bruiser's reach
 
 

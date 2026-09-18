@@ -50,7 +50,11 @@ class TargetOption:
     relation: str
 
     def to_dict(self) -> dict:
-        return {"entity_id": self.entity_id, "name": self.name, "relation": self.relation}
+        return {
+            "entity_id": self.entity_id,
+            "name": self.name,
+            "relation": self.relation,
+        }
 
 
 @dataclass(frozen=True)
@@ -220,7 +224,9 @@ def _spell_targets(
             check_single_target_range(caster, other, action)
         except ValueError:
             continue
-        reachable.append(TargetOption(other.entity_id, other.name, _relation(caster, other)))
+        reachable.append(
+            TargetOption(other.entity_id, other.name, _relation(caster, other))
+        )
     return reachable
 
 
@@ -282,7 +288,9 @@ def _clear_option_along(
         ny = entity.y + uy * travel
         nz = entity.z + uz * travel
         if combat.is_destination_clear(entity, nx, ny, nz):
-            return MoveOption(option_id, label, description, nx, ny, nz, round(travel, 1))
+            return MoveOption(
+                option_id, label, description, nx, ny, nz, round(travel, 1)
+            )
         travel -= 1.0
     return None
 
@@ -315,7 +323,11 @@ def move_candidates(combat: "CombatSystem", entity: Entity) -> List[MoveOption]:
         standoff = self_half + enemy.stat_block.size.size_ft / 2.0 + 0.5
 
         melee = _clear_option_along(
-            combat, entity, toward, dist - standoff, budget,
+            combat,
+            entity,
+            toward,
+            dist - standoff,
+            budget,
             f"toward_melee:{enemy.entity_id}",
             f"Close to melee reach of {enemy.name}",
             f"Move toward {enemy.name}, stopping just within melee reach.",
@@ -324,7 +336,11 @@ def move_candidates(combat: "CombatSystem", entity: Entity) -> List[MoveOption]:
             options.append(melee)
 
         retreat = _clear_option_along(
-            combat, entity, away, budget, budget,
+            combat,
+            entity,
+            away,
+            budget,
+            budget,
             f"retreat:{enemy.entity_id}",
             f"Retreat from {enemy.name}",
             f"Move directly away from {enemy.name} at full speed.",
@@ -336,7 +352,11 @@ def move_candidates(combat: "CombatSystem", entity: Entity) -> List[MoveOption]:
             travel = min(max_range, dist + budget) - dist  # extra distance to open up
             if travel >= 1:
                 kite = _clear_option_along(
-                    combat, entity, away, travel, budget,
+                    combat,
+                    entity,
+                    away,
+                    travel,
+                    budget,
                     f"kite_range:{enemy.entity_id}",
                     f"Kite {enemy.name} to weapon range",
                     f"Fall back from {enemy.name} as far as possible while staying "

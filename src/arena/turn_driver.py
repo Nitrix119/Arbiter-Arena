@@ -38,7 +38,9 @@ class TurnOutcome:
     entity_id: str
     actions_taken: int
     failures: int
-    forced_end: bool  # True when the driver ended the turn (budget/cap/skip), not the agent
+    forced_end: (
+        bool  # True when the driver ended the turn (budget/cap/skip), not the agent
+    )
 
 
 def run_turn(
@@ -85,15 +87,22 @@ def run_turn(
             transcript.action(actor.entity_id, call, result)
 
         if not result["ok"]:
-            rejections.append({
-                "action": {"name": call.name, "arguments": dict(call.arguments)},
-                "error": result.get("error", ""),
-            })
+            rejections.append(
+                {
+                    "action": {"name": call.name, "arguments": dict(call.arguments)},
+                    "error": result.get("error", ""),
+                }
+            )
             consecutive += 1
             failures += 1
-            if consecutive >= MAX_CONSECUTIVE_FAILURES or failures >= MAX_TOTAL_FAILURES:
+            if (
+                consecutive >= MAX_CONSECUTIVE_FAILURES
+                or failures >= MAX_TOTAL_FAILURES
+            ):
                 combat.end_turn(actor.entity_id)
-                return _finish(transcript, combat, actor, actions, failures, forced=True)
+                return _finish(
+                    transcript, combat, actor, actions, failures, forced=True
+                )
             continue
 
         rejections.clear()

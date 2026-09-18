@@ -85,7 +85,9 @@ def score(
             total += weights.control * features.control(
                 entity, plan.action, combat, policy=policy
             )
-            total -= weights.resource * features.resource_cost(entity, plan.action, combat)
+            total -= weights.resource * features.resource_cost(
+                entity, plan.action, combat
+            )
 
     end_pos = plan.end_position(entity)
     exposure = features.exposure_fraction(entity, end_pos, combat, policy=policy)

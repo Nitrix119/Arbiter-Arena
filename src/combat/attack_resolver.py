@@ -29,19 +29,26 @@ def _default_program(action: AttackAction) -> List[Dict[str, Any]]:
         {"block": "attack_roll", "attack_bonus": action.bonus_to_hit}
     ]
     for d in action.damage:
-        blocks.append({
-            "block": "damage",
-            "formula": d.formula or str(d.amount),
-            "damage_type": d.damage_type.name,
-            "requires_hit": True,
-        })
+        blocks.append(
+            {
+                "block": "damage",
+                "formula": d.formula or str(d.amount),
+                "damage_type": d.damage_type.name,
+                "requires_hit": True,
+            }
+        )
     return blocks
 
 
 class AttackResolver:
     """Resolves melee/ranged attack actions on the block engine."""
 
-    def __init__(self, event_bus: EventBus, damage_processor: DamageProcessor, condition_rules=None) -> None:
+    def __init__(
+        self,
+        event_bus: EventBus,
+        damage_processor: DamageProcessor,
+        condition_rules=None,
+    ) -> None:
         self._event_bus = event_bus
         self._damage_processor = damage_processor
         self.condition_rules = condition_rules
@@ -76,7 +83,10 @@ class AttackResolver:
 
         program = parse_program(action.program or _default_program(action))
         return resolve_blocks(
-            attacker, defender, action, program,
+            attacker,
+            defender,
+            action,
+            program,
             event_bus=self._event_bus,
             damage_processor=self._damage_processor,
             condition_rules=self.condition_rules,

@@ -145,9 +145,7 @@ def trigger(block: Block, inv: Invocation) -> None:
     bus.subscribe(event_type, handler, priority=priority)
     if inv.active_scope is not None:
         inv.active_scope.add(
-            RevokeHandle(
-                lambda: bus.unsubscribe(event_type, handler), label="trigger"
-            )
+            RevokeHandle(lambda: bus.unsubscribe(event_type, handler), label="trigger")
         )
 
 
@@ -156,24 +154,45 @@ REGISTRY.register(
     trigger,
     BlockContract(
         fields=(
-            Field("event", "enum", required=True, enum=EventType,
-                  description="The combat event this rider fires on."),
-            Field("when", "expr",
-                  description="Guard evaluated at fire time against the event; "
-                              "the rider is skipped when falsy."),
+            Field(
+                "event",
+                "enum",
+                required=True,
+                enum=EventType,
+                description="The combat event this rider fires on.",
+            ),
+            Field(
+                "when",
+                "expr",
+                description="Guard evaluated at fire time against the event; "
+                "the rider is skipped when falsy.",
+            ),
             # Unlike the two-value `target` selector on state blocks, this is an
             # expression naming the entity to rebind the current-target slot to when
             # the rider fires — hence the distinct name (SPELL_SYSTEM_REMAINING §4).
-            Field("rebind_target", "expr",
-                  description="Expression naming the entity the `then` body acts on "
-                              "when the rider fires (e.g. 'event.defender')."),
-            Field("holder", "choice", choices=("caster", "defender"),
-                  description="Whose rider this is — which entity 'entity' resolves to."),
-            Field("priority", "int",
-                  description="Bus subscription priority; lower runs later."),
-            Field("bindings", "map_expr",
-                  description="Values captured once at install, read later as "
-                              "instance_fields.<name>."),
+            Field(
+                "rebind_target",
+                "expr",
+                description="Expression naming the entity the `then` body acts on "
+                "when the rider fires (e.g. 'event.defender').",
+            ),
+            Field(
+                "holder",
+                "choice",
+                choices=("caster", "defender"),
+                description="Whose rider this is — which entity 'entity' resolves to.",
+            ),
+            Field(
+                "priority",
+                "int",
+                description="Bus subscription priority; lower runs later.",
+            ),
+            Field(
+                "bindings",
+                "map_expr",
+                description="Values captured once at install, read later as "
+                "instance_fields.<name>.",
+            ),
         ),
         target_arity=TargetArity.SINGLE,
         installs_reactions=True,

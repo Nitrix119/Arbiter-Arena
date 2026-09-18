@@ -57,7 +57,14 @@ def _obs():
 
 
 def test_decide_returns_the_models_tool_call():
-    client = FakeClient([response(thinking(), tool_use("attack", {"action_name": "Bite", "defender_id": "g1"}))])
+    client = FakeClient(
+        [
+            response(
+                thinking(),
+                tool_use("attack", {"action_name": "Bite", "defender_id": "g1"}),
+            )
+        ]
+    )
     agent = LLMAgent("A", "a", client=client)
 
     call = agent.decide(_obs(), TOOLS)
@@ -85,7 +92,9 @@ def test_request_shape_is_well_formed():
 
 
 def test_note_is_captured_and_stripped():
-    client = FakeClient([response(tool_use("end_turn", {"note": "kite the archer next turn"}))])
+    client = FakeClient(
+        [response(tool_use("end_turn", {"note": "kite the archer next turn"}))]
+    )
     agent = LLMAgent("A", "a", client=client)
 
     call = agent.decide(_obs(), TOOLS)
@@ -96,7 +105,9 @@ def test_note_is_captured_and_stripped():
 
 
 def test_retries_once_when_no_tool_call_then_succeeds():
-    client = FakeClient([response(text("I'll attack.")), response(tool_use("end_turn", {}))])
+    client = FakeClient(
+        [response(text("I'll attack.")), response(tool_use("end_turn", {}))]
+    )
     agent = LLMAgent("A", "a", client=client)
 
     call = agent.decide(_obs(), TOOLS)
@@ -106,7 +117,9 @@ def test_retries_once_when_no_tool_call_then_succeeds():
 
 
 def test_raises_if_no_tool_call_after_retry():
-    client = FakeClient([response(text("thinking...")), response(text("still thinking..."))])
+    client = FakeClient(
+        [response(text("thinking...")), response(text("still thinking..."))]
+    )
     agent = LLMAgent("A", "a", client=client)
 
     with pytest.raises(RuntimeError, match="no tool call"):
@@ -126,10 +139,17 @@ def test_llm_agent_drives_a_real_turn(make_entity, make_combat):
     combat.start_combat()
     force_turn(combat, fighter)
 
-    client = FakeClient([
-        response(tool_use("attack", {"action_name": "Longsword", "defender_id": goblin.entity_id})),
-        response(tool_use("end_turn", {})),
-    ])
+    client = FakeClient(
+        [
+            response(
+                tool_use(
+                    "attack",
+                    {"action_name": "Longsword", "defender_id": goblin.entity_id},
+                )
+            ),
+            response(tool_use("end_turn", {})),
+        ]
+    )
     agent = LLMAgent("A", "a", client=client)
 
     outcome = run_turn(combat, fighter, agent)

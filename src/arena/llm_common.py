@@ -93,8 +93,7 @@ def render_observation(notes: str, observation: Dict[str, Any]) -> str:
         parts.append("\n".join(lines))
     parts.append(
         "It is your turn. Study the battlefield and your legal options, then take "
-        "exactly one action.\n\n"
-        + json.dumps(obs, indent=2, default=str)
+        "exactly one action.\n\n" + json.dumps(obs, indent=2, default=str)
     )
     return "\n\n".join(parts)
 
@@ -126,7 +125,9 @@ def decide_one_action(
 
     call = request_fn(messages, api_tools)
     if call is None:  # model replied without a tool call — correct it once
-        messages.append({"role": "user", "content": "Respond with exactly one tool call."})
+        messages.append(
+            {"role": "user", "content": "Respond with exactly one tool call."}
+        )
         call = request_fn(messages, api_tools)
     if call is None:
         raise NoToolCallError(

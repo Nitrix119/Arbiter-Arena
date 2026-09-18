@@ -21,9 +21,7 @@ class EffectRegistry:
                 data = json.load(f)
             rule = RuleLoader.from_dict(data)
             if rule.name in self._effects:
-                raise ValueError(
-                    f"Duplicate effect name '{rule.name}' found in {path}"
-                )
+                raise ValueError(f"Duplicate effect name '{rule.name}' found in {path}")
             self._effects[rule.name] = rule
 
     def get(self, name: str) -> Rule:

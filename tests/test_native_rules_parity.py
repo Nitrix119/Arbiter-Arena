@@ -23,7 +23,9 @@ def _rule_files():
     files = []
     for root, _dirs, names in os.walk(_ENTITY):
         files += [os.path.join(root, n) for n in names if n.endswith(".json")]
-    files += [os.path.join(_GLOBAL, n) for n in os.listdir(_GLOBAL) if n.endswith(".json")]
+    files += [
+        os.path.join(_GLOBAL, n) for n in os.listdir(_GLOBAL) if n.endswith(".json")
+    ]
     return sorted(files)
 
 

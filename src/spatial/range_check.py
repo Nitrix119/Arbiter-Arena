@@ -73,7 +73,7 @@ def check_attack_range(
     gap_x = max(0.0, a.min_corner.x - d.max_corner.x, d.min_corner.x - a.max_corner.x)
     gap_y = max(0.0, a.min_corner.y - d.max_corner.y, d.min_corner.y - a.max_corner.y)
     gap_z = max(0.0, a.min_corner.z - d.max_corner.z, d.min_corner.z - a.max_corner.z)
-    dist = math.sqrt(gap_x ** 2 + gap_y ** 2 + gap_z ** 2)
+    dist = math.sqrt(gap_x**2 + gap_y**2 + gap_z**2)
     if dist > action.range_ft:
         raise ValueError(
             f"{attacker.name} cannot use {action.name}: "

@@ -164,21 +164,38 @@ def test_duration_lifetime_expires_via_the_real_turn_end_clock():
     bus = EventBus()
     install_lifetime_clock(bus)
 
-    program = [{
-        "block": "lifetime", "kind": "rounds", "duration_rounds": 2,
-        "source": "Barkskin",
-        "then": [{"block": "add_modifier", "target": "current",
-                  "stat": "ac", "value": 2, "source": "Barkskin"}],
-    }]
+    program = [
+        {
+            "block": "lifetime",
+            "kind": "rounds",
+            "duration_rounds": 2,
+            "source": "Barkskin",
+            "then": [
+                {
+                    "block": "add_modifier",
+                    "target": "current",
+                    "stat": "ac",
+                    "value": 2,
+                    "source": "Barkskin",
+                }
+            ],
+        }
+    ]
     action = SpellAction(name="Barkskin", description="", spell_level=2)
-    resolve_blocks(caster, target, action, parse_program(program),
-                   event_bus=bus, damage_processor=DamageProcessor(bus))
+    resolve_blocks(
+        caster,
+        target,
+        action,
+        parse_program(program),
+        event_bus=bus,
+        damage_processor=DamageProcessor(bus),
+    )
     assert target.ac == 14 and len(target.lifetimes) == 1
 
     bus.emit(EventType.TURN_END, TurnEventData(entity=target, round_num=1, turn_num=1))
     assert target.ac == 14  # one round left
     bus.emit(EventType.TURN_END, TurnEventData(entity=target, round_num=2, turn_num=1))
-    assert target.ac == 12          # expired: buff revoked
+    assert target.ac == 12  # expired: buff revoked
     assert target.lifetimes == []
 
 

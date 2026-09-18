@@ -22,10 +22,13 @@ EXAMPLES_DIR = Path(__file__).parent.parent / "examples"
 SPELLS_DIR = EXAMPLES_DIR / "spells"
 CHARACTERS_DIR = EXAMPLES_DIR / "creatures/characters"
 CREATURES_DIR = EXAMPLES_DIR / "creatures"
-CONDITIONS_DIR = Path(__file__).parent.parent / "rules" / "entity_effects" / "conditions"
+CONDITIONS_DIR = (
+    Path(__file__).parent.parent / "rules" / "entity_effects" / "conditions"
+)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def load_wizard() -> Entity:
     sb = StatBlockLoader.load_from_json(str(CHARACTERS_DIR / "wizard.json"))
@@ -62,12 +65,15 @@ def charm_person_spell(save_dc: int = 13) -> SpellAction:
 
 # ── Loading ───────────────────────────────────────────────────────────────────
 
+
 class TestSpellEffectLoading:
 
     def test_charm_person_loads_program(self):
         """charm_person.json parses into a native program: a save then an
         apply_condition for ``charmed``, gated on a failed save, binding the charmer."""
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "charm_person.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "charm_person.json")
+        )
         assert spell.program
         cond = [b for b in spell.program if b.get("block") == "apply_condition"]
         assert len(cond) == 1
@@ -77,7 +83,9 @@ class TestSpellEffectLoading:
         assert block.get("bindings", {}).get("charmer") == "event.caster"
 
     def test_charm_person_save_ability(self):
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "charm_person.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "charm_person.json")
+        )
         save_steps = [b for b in spell.program if b.get("block") == "saving_throw"]
         assert save_steps[0]["attribute"] == "wisdom"
         assert save_steps[0]["dc"] == "use_caster_dc"
@@ -85,7 +93,9 @@ class TestSpellEffectLoading:
     def test_spell_without_effects_has_no_entity_effect_steps(self):
         """Firebolt has no add_entity_effect steps in the pipeline."""
         spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "firebolt.json"))
-        effect_steps = [b for b in spell.program if b.get("block") == "add_entity_effect"]
+        effect_steps = [
+            b for b in spell.program if b.get("block") == "add_entity_effect"
+        ]
         assert effect_steps == []
 
     def test_spell_without_save_has_no_saving_throw_step(self):
@@ -96,6 +106,7 @@ class TestSpellEffectLoading:
 
 
 # ── Saving throws ─────────────────────────────────────────────────────────────
+
 
 class TestSavingThrows:
 
@@ -146,7 +157,9 @@ class TestSavingThrows:
         spell_hit_events = []
         bus.subscribe(EventType.SPELL_HIT, lambda e: spell_hit_events.append(e))
 
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "magic_missile.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "magic_missile.json")
+        )
         resolver.resolve(wizard, [goblin], spell)
 
         assert spell_hit_events[0].data.get("save_roll") is None
@@ -154,6 +167,7 @@ class TestSavingThrows:
 
 
 # ── Effect application on failed save ─────────────────────────────────────────
+
 
 class TestSpellEffectApplicationOnFailedSave:
 
@@ -173,8 +187,9 @@ class TestSpellEffectApplicationOnFailedSave:
         # on the wizard (the instance_fields closure took effect).
         assert len(goblin.lifetimes) == 1
         action = next(a for a in goblin.stat_block.actions if a.name == "Scimitar")
-        event = bus.emit(EventType.ATTACK_DECLARED,
-                         attacker=goblin, defender=wizard, action=action)
+        event = bus.emit(
+            EventType.ATTACK_DECLARED, attacker=goblin, defender=wizard, action=action
+        )
         assert event.cancelled is True
 
     def test_charmed_not_applied_when_save_succeeds(self):
@@ -203,8 +218,9 @@ class TestSpellEffectApplicationOnFailedSave:
 
         # Now try the goblin attacking the wizard — should be cancelled
         action = next(a for a in goblin.stat_block.actions if a.name == "Scimitar")
-        event = bus.emit(EventType.ATTACK_DECLARED,
-                         attacker=goblin, defender=wizard, action=action)
+        event = bus.emit(
+            EventType.ATTACK_DECLARED, attacker=goblin, defender=wizard, action=action
+        )
         assert event.cancelled is True
 
     def test_charmed_goblin_can_still_attack_others(self):
@@ -220,12 +236,17 @@ class TestSpellEffectApplicationOnFailedSave:
             resolver.resolve(wizard, [goblin], spell)
 
         action = next(a for a in goblin.stat_block.actions if a.name == "Scimitar")
-        event = bus.emit(EventType.ATTACK_DECLARED,
-                         attacker=goblin, defender=bystander, action=action)
+        event = bus.emit(
+            EventType.ATTACK_DECLARED,
+            attacker=goblin,
+            defender=bystander,
+            action=action,
+        )
         assert event.cancelled is False
 
 
 # ── No condition catalogue — mechanics silently skipped ──────────────────────
+
 
 class TestSpellEffectsWithoutConditionRules:
 
@@ -242,19 +263,27 @@ class TestSpellEffectsWithoutConditionRules:
         spell = charm_person_spell(save_dc=30)  # save auto-fails → charm applies
         resolver.resolve(wizard, [goblin], spell)
 
-        charmed = [c for c in goblin.get_active_conditions()
-                   if c.condition_type.value == "charmed"]
-        assert len(charmed) == 1          # marker applied
+        charmed = [
+            c
+            for c in goblin.get_active_conditions()
+            if c.condition_type.value == "charmed"
+        ]
+        assert len(charmed) == 1  # marker applied
 
         # No rider installed without a registry: the charmed mechanics (a charmed
         # creature cannot attack its charmer) do not fire. The one lifetime present
         # is the marker's own duration clock, which every condition carries.
-        assert bus.emit(EventType.ATTACK_DECLARED, attacker=goblin,
-                        defender=wizard, action=None).cancelled is False
+        assert (
+            bus.emit(
+                EventType.ATTACK_DECLARED, attacker=goblin, defender=wizard, action=None
+            ).cancelled
+            is False
+        )
         assert goblin.lifetimes == [charmed[0].owning_scope]
 
 
 # ── Rule caching ──────────────────────────────────────────────────────────────
+
 
 class TestRuleCaching:
 
@@ -281,6 +310,7 @@ class TestRuleCaching:
 
 
 # ── CombatSystem integration ──────────────────────────────────────────────────
+
 
 class TestCombatSystemIntegration:
 
@@ -321,12 +351,14 @@ class TestCombatSystemIntegration:
         # attack the wizard (its captured charmer).
         assert len(goblin.lifetimes) == 1
         action = next(a for a in goblin.stat_block.actions if a.name == "Scimitar")
-        event = bus.emit(EventType.ATTACK_DECLARED,
-                         attacker=goblin, defender=wizard, action=action)
+        event = bus.emit(
+            EventType.ATTACK_DECLARED, attacker=goblin, defender=wizard, action=action
+        )
         assert event.cancelled is True
 
 
 # ── Longstrider spell integration ────────────────────────────────────────────
+
 
 def load_cleric() -> Entity:
     sb = StatBlockLoader.load_from_json(str(CHARACTERS_DIR / "cleric.json"))
@@ -334,6 +366,7 @@ def load_cleric() -> Entity:
 
 
 # ── Shield of Faith ───────────────────────────────────────────────────────────
+
 
 class TestShieldOfFaithEffect:
     """Shield of Faith adds +2 AC via AddModifier on_apply and tracks concentration."""
@@ -344,7 +377,9 @@ class TestShieldOfFaithEffect:
         goblin = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(cleric, goblin)
 
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "shield_of_faith.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "shield_of_faith.json")
+        )
         base_ac = cleric.ac
 
         resolver.resolve(cleric, [cleric], spell)
@@ -357,7 +392,9 @@ class TestShieldOfFaithEffect:
         goblin = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(cleric, goblin)
 
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "shield_of_faith.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "shield_of_faith.json")
+        )
         resolver.resolve(cleric, [cleric], spell)
 
         ac_mods = cleric.get_stat_modifiers("ac")
@@ -373,7 +410,9 @@ class TestShieldOfFaithEffect:
         goblin = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(cleric, goblin)
 
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "shield_of_faith.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "shield_of_faith.json")
+        )
         base_ac = cleric.stat_block.armor_class
         resolver.resolve(cleric, [cleric], spell)
 
@@ -388,7 +427,9 @@ class TestShieldOfFaithEffect:
         goblin = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(cleric, goblin)
 
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "shield_of_faith.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "shield_of_faith.json")
+        )
         resolver.resolve(cleric, [cleric], spell)
 
         assert cleric.concentrating_on == "shield_of_faith"
@@ -400,7 +441,9 @@ class TestShieldOfFaithEffect:
         goblin = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(cleric, goblin)
 
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "shield_of_faith.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "shield_of_faith.json")
+        )
         base_ac = cleric.ac
         resolver.resolve(cleric, [cleric], spell)
 
@@ -423,9 +466,15 @@ class TestShieldOfFaithEffect:
         bus, reg, resolver = setup_engine_and_resolver(cleric, goblin)
 
         # Load concentration rule so the engine enforces it
-        load_rule_file("rules/global/concentration.json", event_bus=bus, damage_processor=resolver._damage_processor)
+        load_rule_file(
+            "rules/global/concentration.json",
+            event_bus=bus,
+            damage_processor=resolver._damage_processor,
+        )
 
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "shield_of_faith.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "shield_of_faith.json")
+        )
         base_ac = cleric.ac
 
         # Cast 20 times — if 0-damage DAMAGE_DEALT could strip concentration,
@@ -435,9 +484,9 @@ class TestShieldOfFaithEffect:
             cleric.concentrating_on = None
             cleric.concentration_target = None
             resolver.resolve(cleric, [cleric], spell)
-            assert cleric.ac == base_ac + 2, (
-                "AC should be base+2 immediately after casting Shield of Faith"
-            )
+            assert (
+                cleric.ac == base_ac + 2
+            ), "AC should be base+2 immediately after casting Shield of Faith"
 
 
 def longstrider_spell() -> SpellAction:
@@ -487,15 +536,24 @@ class TestLongstriderSpellEffects:
         wizard = load_wizard()
         goblin = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(wizard, goblin)
-        load_rule_file("rules/global/action_economy_refill.json", event_bus=bus, damage_processor=resolver._damage_processor)
+        load_rule_file(
+            "rules/global/action_economy_refill.json",
+            event_bus=bus,
+            damage_processor=resolver._damage_processor,
+        )
 
         spell = longstrider_spell()
         resolver.resolve(wizard, [goblin], spell)
 
         # Emit TURN_START for the goblin
-        bus.emit(EventType.TURN_START, TurnEventData(
-            entity=goblin, round_num=2, turn_num=1,
-        ))
+        bus.emit(
+            EventType.TURN_START,
+            TurnEventData(
+                entity=goblin,
+                round_num=2,
+                turn_num=1,
+            ),
+        )
 
         # Base speed (30) + longstrider (+10) = 40
         assert goblin.resources.movement == 40
@@ -506,7 +564,11 @@ class TestLongstriderSpellEffects:
         goblin_a = load_goblin()
         goblin_b = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(wizard, goblin_a, goblin_b)
-        load_rule_file("rules/global/action_economy_refill.json", event_bus=bus, damage_processor=resolver._damage_processor)
+        load_rule_file(
+            "rules/global/action_economy_refill.json",
+            event_bus=bus,
+            damage_processor=resolver._damage_processor,
+        )
 
         spell = longstrider_spell()
         resolver.resolve(wizard, [goblin_a, goblin_b], spell)
@@ -515,12 +577,22 @@ class TestLongstriderSpellEffects:
         assert len(goblin_a.lifetimes) == 1
         assert len(goblin_b.lifetimes) == 1
 
-        bus.emit(EventType.TURN_START, TurnEventData(
-            entity=goblin_a, round_num=2, turn_num=1,
-        ))
+        bus.emit(
+            EventType.TURN_START,
+            TurnEventData(
+                entity=goblin_a,
+                round_num=2,
+                turn_num=1,
+            ),
+        )
         assert goblin_a.resources.movement == 40
 
-        bus.emit(EventType.TURN_START, TurnEventData(
-            entity=goblin_b, round_num=2, turn_num=2,
-        ))
+        bus.emit(
+            EventType.TURN_START,
+            TurnEventData(
+                entity=goblin_b,
+                round_num=2,
+                turn_num=2,
+            ),
+        )
         assert goblin_b.resources.movement == 40

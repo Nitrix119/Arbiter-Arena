@@ -179,6 +179,7 @@ def multiply_formula(formula: str, multiplier: int) -> str:
     Returns:
         New formula string with dice counts multiplied, e.g. "12d8" or "4d6+3"
     """
+
     def replace_token(m: re.Match) -> str:
         sign, number, sides = m.group(1), m.group(2), m.group(3)
         if sides:
@@ -190,7 +191,7 @@ def multiply_formula(formula: str, multiplier: int) -> str:
 
 def roll_with_advantage() -> int:
     """Roll with advantage (roll twice, take highest).
-    
+
     Returns:
         The higher of two d20 rolls
     """
@@ -199,7 +200,7 @@ def roll_with_advantage() -> int:
 
 def roll_with_disadvantage() -> int:
     """Roll with disadvantage (roll twice, take lowest).
-    
+
     Returns:
         The lower of two d20 rolls
     """

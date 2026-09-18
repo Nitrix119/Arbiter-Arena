@@ -37,13 +37,17 @@ def _attack_plan(target, name="Longsword"):
 
 def test_prefers_higher_threat_target_at_equal_hp(make_entity, make_combat):
     a = make_entity("A", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
-    cannon = make_entity("Cannon", team="b", pos=(5, 0, 0), hp=20, attacks=[_strong_attack()])
+    cannon = make_entity(
+        "Cannon", team="b", pos=(5, 0, 0), hp=20, attacks=[_strong_attack()]
+    )
     tank = make_entity("Tank", team="b", pos=(5, 5, 0), hp=20, attacks=[_weak_attack()])
     combat = make_combat([a, cannon, tank])
 
     prog_cannon, _ = features.offense(a, _attack_plan(cannon), combat, policy=POLICY)
     prog_tank, _ = features.offense(a, _attack_plan(tank), combat, policy=POLICY)
-    assert prog_cannon > prog_tank  # same damage/HP, but the cannon is worth more to remove
+    assert (
+        prog_cannon > prog_tank
+    )  # same damage/HP, but the cannon is worth more to remove
 
 
 def test_secures_available_kill(make_entity, make_combat):
@@ -52,8 +56,12 @@ def test_secures_available_kill(make_entity, make_combat):
     high = make_entity("High", team="b", pos=(5, 5, 0), hp=30, attacks=[_weak_attack()])
     combat = make_combat([a, low, high])
 
-    _, kill_low = features.offense(a, _attack_plan(low, "Greatsword"), combat, policy=POLICY)
-    _, kill_high = features.offense(a, _attack_plan(high, "Greatsword"), combat, policy=POLICY)
+    _, kill_low = features.offense(
+        a, _attack_plan(low, "Greatsword"), combat, policy=POLICY
+    )
+    _, kill_high = features.offense(
+        a, _attack_plan(high, "Greatsword"), combat, policy=POLICY
+    )
     assert kill_low > 0 and kill_high == 0
 
 
@@ -66,17 +74,25 @@ def test_score_prefers_finishing_over_chipping(make_entity, make_combat):
 
     s_low = score(
         TurnPlan(None, _attack_plan(low, "Greatsword"), None),
-        combat, a, policy=POLICY, weights=DEFAULT_WEIGHTS,
+        combat,
+        a,
+        policy=POLICY,
+        weights=DEFAULT_WEIGHTS,
     )
     s_high = score(
         TurnPlan(None, _attack_plan(high, "Greatsword"), None),
-        combat, a, policy=POLICY, weights=DEFAULT_WEIGHTS,
+        combat,
+        a,
+        policy=POLICY,
+        weights=DEFAULT_WEIGHTS,
     )
     assert s_low > s_high
 
 
 def test_exposure_penalises_being_in_melee_reach(make_entity, make_combat):
-    archer = make_entity("Archer", team="a", pos=(0, 0, 0), hp=20, attacks=[ranged_attack()])
+    archer = make_entity(
+        "Archer", team="a", pos=(0, 0, 0), hp=20, attacks=[ranged_attack()]
+    )
     chaser = make_entity("Chaser", team="b", pos=(10, 0, 0), attacks=[melee_attack()])
     combat = make_combat([archer, chaser])
 

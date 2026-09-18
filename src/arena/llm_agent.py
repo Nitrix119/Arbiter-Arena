@@ -27,7 +27,10 @@ next action. Wiring, credentials, cost, and how to run a live match are in
 from typing import Any, Dict, List, Optional
 
 from src.arena.agent import Agent
-from src.arena.llm_common import SYSTEM_PROMPT, decide_one_action  # noqa: F401 (re-export)
+from src.arena.llm_common import (
+    SYSTEM_PROMPT,
+    decide_one_action,
+)  # noqa: F401 (re-export)
 from src.arena.tools import ToolCall
 
 try:  # optional dependency — only this module needs it (pip install -e ".[agents]")
@@ -36,7 +39,9 @@ except ImportError:  # pragma: no cover - exercised via the missing-dep message
     anthropic = None
 
 DEFAULT_MODEL = "claude-opus-5"
-DEFAULT_EFFORT = "medium"  # step down from the API default (high) to hold first-run cost (E3)
+DEFAULT_EFFORT = (
+    "medium"  # step down from the API default (high) to hold first-run cost (E3)
+)
 DEFAULT_MAX_TOKENS = 8192
 
 
@@ -58,7 +63,7 @@ class LLMAgent(Agent):
             if anthropic is None:
                 raise ImportError(
                     "LLMAgent needs the 'anthropic' package. Install it with "
-                    "`pip install -e \".[agents]\"` (see docs/current/AGENT_ARENA_LLM_SETUP.md)."
+                    '`pip install -e ".[agents]"` (see docs/current/AGENT_ARENA_LLM_SETUP.md).'
                 )
             client = anthropic.Anthropic()
         self._client = client
@@ -66,7 +71,9 @@ class LLMAgent(Agent):
         self.effort = effort
         self.max_tokens = max_tokens
 
-    def decide(self, observation: Dict[str, Any], tools: List[Dict[str, Any]]) -> ToolCall:
+    def decide(
+        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
+    ) -> ToolCall:
         return decide_one_action(self._request_action, self, observation, tools)
 
     def _request_action(

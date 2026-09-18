@@ -39,14 +39,18 @@ def test_render_surfaces_rejected_actions_as_header_not_json():
     obs = {
         "round": 2,
         "rejected_actions": [
-            {"action": {"name": "move", "arguments": {"x": 5, "z": 0}},
-             "error": "destination overlaps Bandit"},
+            {
+                "action": {"name": "move", "arguments": {"x": 5, "z": 0}},
+                "error": "destination overlaps Bandit",
+            },
         ],
     }
     out = render_observation("", obs)
     assert "REJECTED" in out
     assert "destination overlaps Bandit" in out  # the reason is shown
-    assert '"rejected_actions"' not in out  # pulled out of the JSON dump (not duplicated)
+    assert (
+        '"rejected_actions"' not in out
+    )  # pulled out of the JSON dump (not duplicated)
 
 
 def test_capture_notes_strips_and_stores():
