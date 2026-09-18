@@ -172,16 +172,17 @@ focused Claude Code work block. Phase 3 overlaps Phase 2's background runs on pu
 ### Phase 0 — Decide & consolidate (≈1–2 sessions)
 - [x] Decide on the condition definitions (§3.1), including whether C2+M is in the final run.
       _(C2+M is **in** — 4 conditions. See the decisions log below.)_
-- [~] Choose two models, check tool support, top up OpenRouter if using free models.
-      _(Top-up done; throughput unconstrained. Slate tentative; tool support still to preflight.)_
+- [x] Choose two models, check tool support, top up OpenRouter if using free models.
+      _(Nemotron 3.5 + Gemini 3.8 confirmed, Claude Sonnet conditional on budget; **all via
+      OpenRouter**. Tool-support preflight remains a Phase 1 build item.)_
 - [x] Check whether any scenario exercises AoE, and decide whether to keep the expressivity question.
 - [x] Decide the licence (keep PolyForm NC and call it "source-available", or move to MIT/Apache-2.0).
 - [~] Decide the name (keep, or neutral name plus "SRD 5.1-compatible" and a non-affiliation note).
-- [ ] Review, then merge `feat/agent-arena` and `feat/deterministic-rng` to `main`.
+- [x] Review, then merge `feat/agent-arena` and `feat/deterministic-rng` to `main`.
       Bump to `0.2.0` per the branch workflow.
-- [ ] Add GitHub Actions: `pytest`, `black --check` (pinned 23.12.1), `flake8`, on 3.11/3.13.
-- [ ] Create branch `feat/interface-study`.
-- [ ] Fill in `docs/PREREGISTRATION.md` from §3 as a draft. Freeze it in Phase 2.
+- [x] Add GitHub Actions: `pytest`, `black --check` (pinned **26.5.1**), `flake8`, **mypy**, on 3.11/3.13.
+- [x] Create branch `feat/interface-study`.
+- [x] Fill in `docs/current/PREREGISTRATION.md` from §3 as a draft. Freeze it in Phase 2.
 
 #### Phase 0 decisions log (2026-09-19)
 
@@ -337,3 +338,31 @@ studies, new spells/creatures/rules, hosting, more providers, GA tuning, the reg
 - **Mocked model for all build work.** Real API calls only in the Phase 2 pilot and final run, per
   the standing cost rule.
 - **Heaviest token week is Phase 1.** Start it at the beginning of a weekly-limit window if you can.
+
+---
+
+## 7. Phase 0 closing note (2026-09-19)
+
+Phase 0 is **complete** apart from two items deliberately carried into Phase 3 (the
+final repository name, and implementing the Apache-2.0 relicence — both decided, not
+yet executed).
+
+Landed on `main`: the arena + deterministic-RNG merge (#4), `0.2.0`, and the toolchain
+branch (#5) — whole-tree Black 26.5.1 reformat, **mypy 43 errors → 0**, **flake8 → 0
+with E501 enforced at 88**, and GitHub Actions running tests on 3.11/3.13 plus
+format/lint/types. First CI run was green on all three jobs.
+
+One real bug was found on the way, by mypy, behind what looked like a typing nit:
+`move_entity` spent fractional Euclidean movement costs against an `int` budget, so any
+diagonal move drifted (`30 → 22.9 → 15.799999999999999`). The residue reached
+`can_afford`, the web UI, and the movement budget shown to LLM agents. Fixed in
+`2280157`; the SRD reasoning for continuous measurement is recorded in the code.
+
+**Sizing changed.** Adding the AoE scenario makes the grid 4 conditions × **4**
+scenarios × 10 seeds = **160 matches per model** (~5,600 calls), up a third from the
+original 3-scenario figure in §3.5. Accepted deliberately: H4 (expressivity cost) is
+untestable without a spell in play, since no existing scenario casts one.
+
+Next: Phase 1, beginning with recording and instrumentation (typed error codes, token
+and latency capture, raw model output, manifest, state hashes, `ReplayVerifier`) before
+the three interfaces are built.
