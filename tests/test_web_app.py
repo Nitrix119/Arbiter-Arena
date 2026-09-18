@@ -26,7 +26,7 @@ def client():
 class TestAppCreation:
     def test_app_creates_successfully(self):
         app = create_app()
-        assert app.title == "D&D Auto Battler"
+        assert app.title == "Arbiter Arena"
 
     def test_spell_registry_loaded(self):
         app = create_app()

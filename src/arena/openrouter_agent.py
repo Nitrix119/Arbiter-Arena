@@ -38,8 +38,8 @@ DEFAULT_MAX_TOKENS = 4096
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # Optional OpenRouter attribution headers (harmless; used only for their leaderboards).
 _RANKING_HEADERS = {
-    "HTTP-Referer": "https://github.com/Nitrix119/DnD-Auto-Battler",
-    "X-Title": "DnD Auto-Battler Arena",
+    "HTTP-Referer": "https://github.com/Nitrix119/arbiter-arena",
+    "X-Title": "Arbiter Arena",
 }
 
 
