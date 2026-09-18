@@ -20,10 +20,13 @@ from typing import Any, Callable, Dict, FrozenSet
 from .block import Block
 from .contract import BlockContract
 
-# Handler signature: (block, invocation) -> None. The invocation context type is
-# introduced in the next slice (the evaluator); typed loosely here to avoid a
-# forward dependency.
-BlockHandler = Callable[[Block, Any], None]
+# Handler signature: (block, invocation). The invocation context type is introduced
+# in the next slice (the evaluator); typed loosely here to avoid a forward dependency.
+# The return is ``Any`` because the dispatcher (``runner.run_block``) discards it,
+# while some handlers do return a value for *direct* callers — ``damage`` returns the
+# damage dealt, ``select_target`` the chosen entity. Declaring ``None`` here made
+# registering either one a type error.
+BlockHandler = Callable[[Block, Any], Any]
 
 
 @dataclass(frozen=True)

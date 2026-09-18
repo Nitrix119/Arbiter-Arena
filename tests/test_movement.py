@@ -11,10 +11,10 @@ from src.models.stat_block import StatBlock
 from src.models.spell_properties import AOEProperties, AOEShape
 from src.spatial.geometry import Point3D, Vector3D
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_entity(
     name: str = "Fighter",
@@ -32,7 +32,12 @@ def _make_entity(
         hit_points_max=hp,
         armor_class=10,
         size=size,
-        resource_defaults={"actions": 1, "bonus_actions": 1, "reactions": 1, "speed": speed},
+        resource_defaults={
+            "actions": 1,
+            "bonus_actions": 1,
+            "reactions": 1,
+            "speed": speed,
+        },
     )
     e = Entity(sb, x=x, y=y, z=z, team=team)
     return e
@@ -55,6 +60,7 @@ def _make_combat(*entities) -> CombatSystem:
 # move_entity (willing movement)
 # ---------------------------------------------------------------------------
 
+
 class TestMoveEntity:
     def test_successful_move_deducts_movement(self):
         mover = _make_entity(speed=30)
@@ -65,8 +71,10 @@ class TestMoveEntity:
         assert mover.x == 10.0
         assert mover.resources.movement == 20  # 30 - 10
 
-    def test_move_cost_is_ceiling_of_euclidean_distance(self):
-        # 3-4-5 triangle: dist=5, cost=5
+    def test_move_cost_is_euclidean_distance(self):
+        # 3-4-5 triangle: dist=5, cost=5. Note this case cannot distinguish
+        # continuous cost from a ceiling or a round — see the two tests below,
+        # which use a distance that is not already a whole number.
         mover = _make_entity(speed=30)
         combat = _make_combat(mover)
 
@@ -75,6 +83,39 @@ class TestMoveEntity:
         assert mover.x == 3.0
         assert mover.y == 4.0
         assert mover.resources.movement == 25  # 30 - 5
+
+    def test_move_cost_is_continuous_not_rounded_to_a_grid(self):
+        """Movement is measured in feet, continuously — not snapped to 5-ft squares.
+
+        SRD 5.1 measures movement, range and reach in feet and contains no grid
+        rules at all; the 5-ft square (and counting a diagonal as 5 ft) is the
+        PHB's *"Variant: Playing on a Grid"* sidebar, which the SRD omits. A
+        5-ft diagonal step is therefore sqrt(50) = 7.07 ft, not 5 ft, and not
+        the 8 ft a ceiling would charge.
+        """
+        mover = _make_entity(speed=30)
+        combat = _make_combat(mover)
+
+        combat.move_entity(mover, 5.0, 0.0, 5.0)
+
+        # 30 - 7.1. A ceiling would leave 22; a 5-ft grid step would leave 25.
+        assert mover.resources.movement == 22.9
+
+    def test_repeated_diagonal_moves_do_not_accumulate_float_drift(self):
+        """The movement budget must stay exact across repeated diagonal steps.
+
+        Subtracting 7.1 repeatedly in binary floating point yields
+        15.799999999999999 and 1.5999999999999996. That matters beyond
+        tidiness: the budget feeds ``can_afford`` comparisons, is serialised to
+        the web UI, and is shown to LLM agents as their remaining movement.
+        """
+        mover = _make_entity(speed=30)
+        combat = _make_combat(mover)
+
+        for _ in range(4):
+            combat.move_entity(mover, mover.x + 5.0, 0.0, mover.z + 5.0)
+
+        assert mover.resources.movement == 1.6
 
     def test_move_fails_insufficient_movement(self):
         mover = _make_entity(speed=5)
@@ -130,6 +171,7 @@ class TestMoveEntity:
 # push_entity (forced movement)
 # ---------------------------------------------------------------------------
 
+
 class TestPushEntity:
     def test_push_does_not_consume_movement(self):
         mover = _make_entity(speed=30)
@@ -173,6 +215,7 @@ class TestPushEntity:
 # ---------------------------------------------------------------------------
 # get_targets_in_aoe
 # ---------------------------------------------------------------------------
+
 
 class TestGetTargetsInAoe:
     def test_fireball_hits_entities_in_radius(self):

@@ -2,10 +2,21 @@
 
 import pytest
 from src.models import (
-    AbilityScores, StatBlock, Entity, AttackAction, SpellAction,
-    Damage, DamageType, ActionCost, ActionResources,
-    ACTION_COST, BONUS_ACTION_COST, REACTION_COST, NO_COST,
-    CastingTimeType, CastingTime,
+    AbilityScores,
+    StatBlock,
+    Entity,
+    AttackAction,
+    SpellAction,
+    Damage,
+    DamageType,
+    ActionCost,
+    ActionResources,
+    ACTION_COST,
+    BONUS_ACTION_COST,
+    REACTION_COST,
+    NO_COST,
+    CastingTimeType,
+    CastingTime,
 )
 from src.combat import CombatSystem, CombatState
 from src.combat.event_bus import EventBus
@@ -13,10 +24,10 @@ from src.combat.events import EventType
 from src.combat.event_data import TurnEventData
 from src.spells.rules import load_rule_file
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_stat_block(name="Test", hp=30, ac=15, **kwargs):
     abilities = AbilityScores(14, 14, 14, 10, 10, 10)
@@ -44,6 +55,7 @@ def _make_attack(name="Sword", bonus=5, cost=None):
 # ---------------------------------------------------------------------------
 # ActionCost / ActionResources unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestActionCost:
     def test_defaults_are_zero(self):
@@ -112,6 +124,7 @@ class TestActionResources:
 # Entity resource management
 # ---------------------------------------------------------------------------
 
+
 class TestEntityResources:
     def test_default_resources(self):
         sb = _make_stat_block()
@@ -123,7 +136,12 @@ class TestEntityResources:
 
     def test_custom_resource_defaults(self):
         sb = _make_stat_block(
-            resource_defaults={"actions": 2, "bonus_actions": 1, "reactions": 1, "speed": 40},
+            resource_defaults={
+                "actions": 2,
+                "bonus_actions": 1,
+                "reactions": 1,
+                "speed": 40,
+            },
         )
         entity = Entity(sb)
         assert entity.resources.actions == 2
@@ -162,6 +180,7 @@ class TestEntityResources:
 # ---------------------------------------------------------------------------
 # Action cost field and spell auto-derive
 # ---------------------------------------------------------------------------
+
 
 class TestActionCostField:
     def test_attack_default_cost(self):
@@ -212,6 +231,7 @@ class TestActionCostField:
 # CombatSystem enforcement
 # ---------------------------------------------------------------------------
 
+
 class TestCombatSystemResourceEnforcement:
     @pytest.fixture
     def combat_pair(self):
@@ -251,7 +271,12 @@ class TestCombatSystemResourceEnforcement:
             description="Cantrip",
             program=[
                 {"block": "attack_roll", "attack_bonus": "use_caster_bonus"},
-                {"block": "damage", "damage_type": "FIRE", "formula": "1d10", "requires_hit": True},
+                {
+                    "block": "damage",
+                    "damage_type": "FIRE",
+                    "formula": "1d10",
+                    "requires_hit": True,
+                },
             ],
         )
         combat.resolve_spell(fighter, [goblin], spell)
@@ -289,6 +314,7 @@ class TestCombatSystemResourceEnforcement:
 # Refill game rule integration
 # ---------------------------------------------------------------------------
 
+
 class TestRefillRule:
     def test_refill_on_turn_start(self):
         """Resources are refilled when TURN_START fires with the refill rule loaded."""
@@ -300,24 +326,34 @@ class TestRefillRule:
         entity.spend_resources(BONUS_ACTION_COST)
         assert entity.resources.actions == 0
 
-        bus.emit(EventType.TURN_START, TurnEventData(
-            entity=entity, round_num=1, turn_num=1,
-        ))
+        bus.emit(
+            EventType.TURN_START,
+            TurnEventData(
+                entity=entity,
+                round_num=1,
+                turn_num=1,
+            ),
+        )
         assert entity.resources.actions == 1
         assert entity.resources.bonus_actions == 1
-
 
 
 # ---------------------------------------------------------------------------
 # StatBlockLoader round-trip
 # ---------------------------------------------------------------------------
 
+
 class TestLoaderRoundTrip:
     def test_resource_defaults_round_trip(self):
         from src.loaders.stat_block_loader import StatBlockLoader
 
         original = _make_stat_block(
-            resource_defaults={"actions": 2, "bonus_actions": 1, "reactions": 1, "speed": 40},
+            resource_defaults={
+                "actions": 2,
+                "bonus_actions": 1,
+                "reactions": 1,
+                "speed": 40,
+            },
         )
         data = StatBlockLoader.to_dict(original)
         assert data["resource_defaults"]["actions"] == 2

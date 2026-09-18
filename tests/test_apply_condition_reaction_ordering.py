@@ -29,7 +29,9 @@ _BLEEDING_RULE = {
     "name": "poisoned",
     "program": [
         {
-            "block": "trigger", "event": "DAMAGE_DEALT", "holder": "defender",
+            "block": "trigger",
+            "event": "DAMAGE_DEALT",
+            "holder": "defender",
             "then": [{"block": "damage", "formula": "1d1", "damage_type": "NECROTIC"}],
         },
     ],
@@ -38,8 +40,10 @@ _BLEEDING_RULE = {
 
 def _entity(name="E", hp=100):
     sb = StatBlock(
-        name=name, ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-        hit_points_max=hp, armor_class=10,
+        name=name,
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+        hit_points_max=hp,
+        armor_class=10,
     )
     return Entity(sb)
 
@@ -62,15 +66,22 @@ def test_a_condition_rider_does_not_fire_on_its_own_casts_damage():
     dp = DamageProcessor(bus)
     condition_rules = _registry_with_reactive_condition()
 
-    program = parse_program([
-        {"block": "damage", "formula": "10", "damage_type": "FIRE"},
-        {"block": "apply_condition", "condition_type": "poisoned"},
-    ])
+    program = parse_program(
+        [
+            {"block": "damage", "formula": "10", "damage_type": "FIRE"},
+            {"block": "apply_condition", "condition_type": "poisoned"},
+        ]
+    )
     with patch("src.spells.blocks.damage.roll_formula", return_value=10):
-        resolve_blocks(caster, target, SpellAction(name="Blight", description="",
-                                                   spell_level=2),
-                       program, event_bus=bus, damage_processor=dp,
-                       condition_rules=condition_rules)
+        resolve_blocks(
+            caster,
+            target,
+            SpellAction(name="Blight", description="", spell_level=2),
+            program,
+            event_bus=bus,
+            damage_processor=dp,
+            condition_rules=condition_rules,
+        )
 
     # The spell's own 10 fire damage, and nothing from the rider it just installed.
     assert target.hp == 100 - 10

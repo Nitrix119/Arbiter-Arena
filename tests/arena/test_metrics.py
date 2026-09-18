@@ -16,7 +16,6 @@ from src.arena.transcript import Transcript
 
 from .conftest import melee_attack
 
-
 # ---------------------------------------------------------------------------
 # Hand-built transcript helpers
 # ---------------------------------------------------------------------------
@@ -38,7 +37,12 @@ def _match_start(combatants, seed=1):
     teams = {}
     for c in combatants:
         teams.setdefault(c["team"], []).append(c["entity_id"])
-    return {"kind": "match_start", "seed": seed, "teams": teams, "combatants": combatants}
+    return {
+        "kind": "match_start",
+        "seed": seed,
+        "teams": teams,
+        "combatants": combatants,
+    }
 
 
 def _turn_start(eid, rnd=1, turn=1):
@@ -46,11 +50,18 @@ def _turn_start(eid, rnd=1, turn=1):
 
 
 def _act(eid, name, ok, **result):
-    return {"kind": "action", "actor_id": eid, "call": {"name": name, "arguments": {}}, "result": {"ok": ok, **result}}
+    return {
+        "kind": "action",
+        "actor_id": eid,
+        "call": {"name": name, "arguments": {}},
+        "result": {"ok": ok, **result},
+    }
 
 
 def _attack(eid, target, dmg, ok=True):
-    return _act(eid, "attack", ok, action="attack", target_id=target, hit=dmg > 0, damage=dmg)
+    return _act(
+        eid, "attack", ok, action="attack", target_id=target, hit=dmg > 0, damage=dmg
+    )
 
 
 def _entity_state(eid, hp, max_hp, x=0.0, z=0.0, alive=None):
@@ -64,8 +75,11 @@ def _entity_state(eid, hp, max_hp, x=0.0, z=0.0, alive=None):
 
 
 def _turn_end(entities, rnd=1, turn=1):
-    return {"kind": "turn_end", "entity_id": entities[0]["entity_id"],
-            "state": {"round": rnd, "turn": turn, "entities": entities}}
+    return {
+        "kind": "turn_end",
+        "entity_id": entities[0]["entity_id"],
+        "state": {"round": rnd, "turn": turn, "entities": entities},
+    }
 
 
 def _match_end(winner, reason="last_standing", rounds=1):
@@ -82,7 +96,12 @@ def test_global_metrics_from_a_real_scripted_match(make_entity, make_combat):
     b = make_entity("Bandit", team="b", pos=(5, 0, 0), hp=12, attacks=[melee_attack()])
     combat = make_combat([a, b])
     transcript = Transcript()
-    run_match(combat, {"a": ScriptedAgent("A", "a"), "b": ScriptedAgent("B", "b")}, seed=7, transcript=transcript)
+    run_match(
+        combat,
+        {"a": ScriptedAgent("A", "a"), "b": ScriptedAgent("B", "b")},
+        seed=7,
+        transcript=transcript,
+    )
 
     report = compute_report(transcript.records)
 
@@ -104,15 +123,26 @@ def test_global_metrics_from_a_real_scripted_match(make_entity, make_combat):
 
 
 def test_end_cause_classifies_agent_budget_and_skip():
-    assert _end_cause([_act("x", "attack", True), _act("x", "end_turn", True, ended_turn=True)]) == "agent"
-    assert _end_cause([_act("x", "move", False) for _ in range(5)]) == "budget"  # 5 total failures
-    assert _end_cause([_act("x", "move", False) for _ in range(3)]) == "budget"  # 3 consecutive
+    assert (
+        _end_cause(
+            [_act("x", "attack", True), _act("x", "end_turn", True, ended_turn=True)]
+        )
+        == "agent"
+    )
+    assert (
+        _end_cause([_act("x", "move", False) for _ in range(5)]) == "budget"
+    )  # 5 total failures
+    assert (
+        _end_cause([_act("x", "move", False) for _ in range(3)]) == "budget"
+    )  # 3 consecutive
     assert _end_cause([]) == "skip"
 
 
 def test_forfeit_turns_counted_per_team():
     records = [
-        _match_start([_combatant("A", "Ann", "a", 20), _combatant("B", "Bob", "b", 20)]),
+        _match_start(
+            [_combatant("A", "Ann", "a", 20), _combatant("B", "Bob", "b", 20)]
+        ),
         _turn_start("A"),
         *[_act("A", "move", False) for _ in range(5)],  # budget-forced
         _turn_end([_entity_state("A", 20, 20), _entity_state("B", 20, 20)]),
@@ -150,7 +180,9 @@ def test_damage_overkill_and_damage_taken():
 
 def test_no_tool_call_counted_separately_from_illegal():
     records = [
-        _match_start([_combatant("A", "Ann", "a", 20), _combatant("B", "Bob", "b", 20)]),
+        _match_start(
+            [_combatant("A", "Ann", "a", 20), _combatant("B", "Bob", "b", 20)]
+        ),
         _turn_start("A"),
         _act("A", "(no_tool_call)", False, error="no tool call"),
         _act("A", "attack", False, error="bad target"),
@@ -161,7 +193,9 @@ def test_no_tool_call_counted_separately_from_illegal():
     ]
     tm = compute_report(records).teams["a"]
     assert tm.no_tool_calls == 1
-    assert tm.rejected == 2  # the no-tool-call and the bad attack both count as rejected
+    assert (
+        tm.rejected == 2
+    )  # the no-tool-call and the bad attack both count as rejected
     assert tm.illegal_rate == 2 / 4
 
 
@@ -173,24 +207,31 @@ def test_no_tool_call_counted_separately_from_illegal():
 def _protect_records(fragile_final_hp):
     """A protect_squishy-shaped match team 'a' wins, with the fragile unit's final HP set."""
     return [
-        _match_start([
-            _combatant("TANK", "Tank", "a", 50),
-            _combatant("SHARP", "Sharpshooter", "a", 14, ranges=(80.0,)),
-            _combatant("R1", "Raider 1", "b", 30),
-        ]),
+        _match_start(
+            [
+                _combatant("TANK", "Tank", "a", 50),
+                _combatant("SHARP", "Sharpshooter", "a", 14, ranges=(80.0,)),
+                _combatant("R1", "Raider 1", "b", 30),
+            ]
+        ),
         _turn_start("R1"),
         _attack("R1", "SHARP", 14 - fragile_final_hp if fragile_final_hp < 14 else 0),
         _act("R1", "end_turn", True, ended_turn=True),
-        _turn_end([
-            _entity_state("TANK", 50, 50), _entity_state("SHARP", fragile_final_hp, 14),
-            _entity_state("R1", 0, 30),
-        ]),
+        _turn_end(
+            [
+                _entity_state("TANK", 50, 50),
+                _entity_state("SHARP", fragile_final_hp, 14),
+                _entity_state("R1", 0, 30),
+            ]
+        ),
         _match_end("a"),
     ]
 
 
 def test_protected_survival_flags_won_but_died():
-    report = compute_report(_protect_records(fragile_final_hp=0), scenario="protect_squishy")
+    report = compute_report(
+        _protect_records(fragile_final_hp=0), scenario="protect_squishy"
+    )
     scoped = {s.name: s for s in report.scoped}
     ps = scoped["protected_survival"]
     assert report.winner == "a"  # the match was WON
@@ -200,7 +241,10 @@ def test_protected_survival_flags_won_but_died():
 
 
 def test_protected_survival_reports_a_survivor():
-    ps = {s.name: s for s in compute_report(_protect_records(9), scenario="protect_squishy").scoped}["protected_survival"]
+    ps = {
+        s.name: s
+        for s in compute_report(_protect_records(9), scenario="protect_squishy").scoped
+    }["protected_survival"]
     assert ps.values["survived"] is True
     assert ps.values["final_hp"] == 9
 
@@ -218,16 +262,27 @@ def test_unknown_scenario_is_reported_not_guessed():
 def test_kiting_declines_when_ranged_unit_not_unique():
     # Two ranged units -> the subject is ambiguous, so the metric must NOT guess.
     records = [
-        _match_start([
-            _combatant("A1", "Archer1", "a", 18, ranges=(80.0,)),
-            _combatant("A2", "Archer2", "a", 18, ranges=(80.0,)),
-            _combatant("B", "Bruiser", "b", 40),
-        ]),
-        _turn_start("B"), _act("B", "end_turn", True, ended_turn=True),
-        _turn_end([_entity_state("A1", 18, 18, x=40), _entity_state("A2", 18, 18, x=40), _entity_state("B", 40, 40)]),
+        _match_start(
+            [
+                _combatant("A1", "Archer1", "a", 18, ranges=(80.0,)),
+                _combatant("A2", "Archer2", "a", 18, ranges=(80.0,)),
+                _combatant("B", "Bruiser", "b", 40),
+            ]
+        ),
+        _turn_start("B"),
+        _act("B", "end_turn", True, ended_turn=True),
+        _turn_end(
+            [
+                _entity_state("A1", 18, 18, x=40),
+                _entity_state("A2", 18, 18, x=40),
+                _entity_state("B", 40, 40),
+            ]
+        ),
         _match_end("b"),
     ]
-    ka = {s.name: s for s in compute_report(records, scenario="kiting").scoped}["kiting_adherence"]
+    ka = {s.name: s for s in compute_report(records, scenario="kiting").scoped}[
+        "kiting_adherence"
+    ]
     assert ka.applicable is False
     assert "not unique" in ka.reason
 
@@ -239,15 +294,25 @@ def test_kiting_declines_when_ranged_unit_not_unique():
 
 def _kiting_records(archer_x_track):
     """A kiting-shaped match; the archer's x-position at each snapshot follows archer_x_track."""
-    recs = [_match_start([
-        _combatant("ARCH", "Archer", "a", 18, ranges=(80.0,)),
-        _combatant("BRUTE", "Bruiser", "b", 40),
-    ])]
+    recs = [
+        _match_start(
+            [
+                _combatant("ARCH", "Archer", "a", 18, ranges=(80.0,)),
+                _combatant("BRUTE", "Bruiser", "b", 40),
+            ]
+        )
+    ]
     for i, ax in enumerate(archer_x_track):
         recs += [
             _turn_start("ARCH", rnd=i + 1),
             _act("ARCH", "end_turn", True, ended_turn=True),
-            _turn_end([_entity_state("ARCH", 18, 18, x=ax), _entity_state("BRUTE", 40, 40, x=0.0)], rnd=i + 1),
+            _turn_end(
+                [
+                    _entity_state("ARCH", 18, 18, x=ax),
+                    _entity_state("BRUTE", 40, 40, x=0.0),
+                ],
+                rnd=i + 1,
+            ),
         ]
     recs.append(_match_end("b"))
     return recs
@@ -255,7 +320,10 @@ def _kiting_records(archer_x_track):
 
 def test_kiting_adherence_high_when_out_of_reach():
     # Archer holds 40 ft from the melee Bruiser every snapshot -> always out of reach.
-    ka = {s.name: s for s in compute_report(_kiting_records([40, 40, 40]), scenario="kiting").scoped}["kiting_adherence"]
+    ka = {
+        s.name: s
+        for s in compute_report(_kiting_records([40, 40, 40]), scenario="kiting").scoped
+    }["kiting_adherence"]
     assert ka.applicable and ka.subject_name == "Archer"
     assert ka.values["frac_out_of_melee"] == 1.0
     assert ka.values["in_melee_snapshots"] == 0
@@ -263,7 +331,10 @@ def test_kiting_adherence_high_when_out_of_reach():
 
 def test_kiting_adherence_low_when_standing_in_melee():
     # Archer sits at 5 ft (within Bruiser reach = 5 + 2.5 + 2.5 = 10 ft) every snapshot.
-    ka = {s.name: s for s in compute_report(_kiting_records([5, 5, 5]), scenario="kiting").scoped}["kiting_adherence"]
+    ka = {
+        s.name: s
+        for s in compute_report(_kiting_records([5, 5, 5]), scenario="kiting").scoped
+    }["kiting_adherence"]
     assert ka.values["frac_out_of_melee"] == 0.0
     assert ka.values["in_melee_snapshots"] == 3
 
@@ -274,10 +345,16 @@ def test_kiting_adherence_low_when_standing_in_melee():
 
 
 def test_roster_reads_ranges_and_flags_ranged():
-    roster = build_roster([_match_start([
-        _combatant("A", "Archer", "a", 18, ranges=(80.0,)),
-        _combatant("B", "Bruiser", "b", 40, ranges=(5.0,)),
-    ])])
+    roster = build_roster(
+        [
+            _match_start(
+                [
+                    _combatant("A", "Archer", "a", 18, ranges=(80.0,)),
+                    _combatant("B", "Bruiser", "b", 40, ranges=(5.0,)),
+                ]
+            )
+        ]
+    )
     assert roster["A"].is_ranged is True
     assert roster["B"].is_ranged is False
     assert roster["A"].max_attack_range_ft == 80.0
@@ -286,7 +363,9 @@ def test_roster_reads_ranges_and_flags_ranged():
 def test_group_turns_handles_orphan_turn_end_as_skip():
     records = [
         _match_start([_combatant("A", "Ann", "a", 20)]),
-        _turn_end([_entity_state("A", 0, 20, alive=False)]),  # downed actor skipped: bare turn_end
+        _turn_end(
+            [_entity_state("A", 0, 20, alive=False)]
+        ),  # downed actor skipped: bare turn_end
     ]
     turns = group_turns(records)
     assert len(turns) == 1 and turns[0].end_cause == "skip"

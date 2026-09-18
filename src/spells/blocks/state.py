@@ -27,12 +27,18 @@ from ..runner import run_program
 from .targeting import TARGET_FIELD as _TARGET, select_target as _target
 from .triggers import _capture_bindings
 
-_SOURCE = Field("source", "str", description="Label for what applied this (a spell name).")
-_EFFECT_NAME = Field("effect_name", "str",
-                     description="Effect name, used to remove this by name later.")
-_BINDINGS = Field("bindings", "map_expr",
-                  description="Per-application values captured once at install and "
-                              "read later as instance_fields.<name>.")
+_SOURCE = Field(
+    "source", "str", description="Label for what applied this (a spell name)."
+)
+_EFFECT_NAME = Field(
+    "effect_name", "str", description="Effect name, used to remove this by name later."
+)
+_BINDINGS = Field(
+    "bindings",
+    "map_expr",
+    description="Per-application values captured once at install and "
+    "read later as instance_fields.<name>.",
+)
 
 
 def _own(inv: Invocation, handle) -> None:
@@ -63,13 +69,15 @@ def _condition_rule(inv: Invocation, ctype: ConditionType):
 
 
 def _install_condition_rider(inv, rule, conditioned, bindings, scope) -> None:
-    """Subscribe a condition's reactive rule as triggers held by *conditioned*, into *scope*.
+    """Subscribe a condition's reactive rule as triggers held by *conditioned*,
+    into *scope*.
 
     Runs the rule's native ``program`` (its trigger blocks) on a child invocation whose
     **caster and target are the conditioned entity**, so each rider's default
-    ``holder: "caster"`` binds ``entity``/``event.caster`` to that entity — the same
-    convention :func:`src.spells.entity_effects.install_entity_effect` uses, and the
-    reason the condition rule files need no baked ``holder``. Works regardless of whether
+    ``holder: "caster"`` binds ``entity``/``event.caster`` to that entity — the
+    same convention :func:`src.spells.entity_effects.install_entity_effect`
+    uses, and the reason the condition rule files need no baked ``holder``.
+    Works regardless of whether
     the spell conditioned its target or itself. The child's ``active_scope`` is *scope*,
     so each trigger registers its own unsubscribe as a handle the scope owns — disposing
     the scope (on expiry, concentration loss, or dispel) tears the mechanics down with
@@ -101,7 +109,9 @@ def apply_condition(block: Block, inv: Invocation) -> None:
     target = _target(block, inv)
     ctype = ConditionType[str(block.get("condition_type", "")).upper()]
     raw_duration = block.get("duration")
-    duration = resolve(raw_duration, eval_context(inv)) if raw_duration is not None else None
+    duration = (
+        resolve(raw_duration, eval_context(inv)) if raw_duration is not None else None
+    )
     condition = Condition(
         condition_type=ctype,
         duration_rounds=duration,
@@ -201,8 +211,11 @@ def grant_action(block: Block, inv: Invocation) -> None:
     except Exception:
         bonus = 0
     damages = [
-        Damage(DamageType[str(d.get("type", "GENERIC")).upper()], 0,
-               formula=d.get("formula", ""))
+        Damage(
+            DamageType[str(d.get("type", "GENERIC")).upper()],
+            0,
+            formula=d.get("formula", ""),
+        )
         for d in block.get("damage", [])
     ]
     action = AttackAction(
@@ -218,19 +231,31 @@ def grant_action(block: Block, inv: Invocation) -> None:
 
 
 REGISTRY.register(
-    "apply_condition", apply_condition,
+    "apply_condition",
+    apply_condition,
     BlockContract(
         fields=(
             _TARGET,
-            Field("condition_type", "enum", required=True, enum=ConditionType,
-                  description="Which condition to apply."),
-            Field("duration", "expr",
-                  description="Rounds the condition lasts; omitted = until dispelled."),
+            Field(
+                "condition_type",
+                "enum",
+                required=True,
+                enum=ConditionType,
+                description="Which condition to apply.",
+            ),
+            Field(
+                "duration",
+                "expr",
+                description="Rounds the condition lasts; omitted = until dispelled.",
+            ),
             _SOURCE,
             _EFFECT_NAME,
             _BINDINGS,
-            Field("instance_fields", "map_expr",
-                  description="Deprecated spelling of `bindings`; prefer `bindings`."),
+            Field(
+                "instance_fields",
+                "map_expr",
+                description="Deprecated spelling of `bindings`; prefer `bindings`.",
+            ),
         ),
         target_arity=TargetArity.SINGLE,
         # This block subscribes handlers (the condition's reactive rule), so the
@@ -240,16 +265,25 @@ REGISTRY.register(
     ),
 )
 REGISTRY.register(
-    "add_modifier", add_modifier,
+    "add_modifier",
+    add_modifier,
     BlockContract(
         fields=(
             _TARGET,
             # `stat` is an open namespace by design (see StatModifier) — not a choice.
-            Field("stat", "str", required=True,
-                  description="Stat to modify: 'ac', 'spell_save_dc', "
-                              "'saving_throw.<ability>', 'max_hp', …"),
-            Field("value", "expr", required=True,
-                  description="How much to add (negative to subtract)."),
+            Field(
+                "stat",
+                "str",
+                required=True,
+                description="Stat to modify: 'ac', 'spell_save_dc', "
+                "'saving_throw.<ability>', 'max_hp', …",
+            ),
+            Field(
+                "value",
+                "expr",
+                required=True,
+                description="How much to add (negative to subtract).",
+            ),
             _SOURCE,
             _EFFECT_NAME,
         ),
@@ -257,47 +291,72 @@ REGISTRY.register(
     ),
 )
 REGISTRY.register(
-    "grant_temporary_hp", grant_temporary_hp,
+    "grant_temporary_hp",
+    grant_temporary_hp,
     BlockContract(
         fields=(
             _TARGET,
-            Field("amount", "expr", required=True,
-                  description="Temporary hit points to grant (non-stacking)."),
+            Field(
+                "amount",
+                "expr",
+                required=True,
+                description="Temporary hit points to grant (non-stacking).",
+            ),
         ),
         writes=("temp_hp_granted",),
         target_arity=TargetArity.SINGLE,
     ),
 )
 REGISTRY.register(
-    "add_resource", add_resource,
+    "add_resource",
+    add_resource,
     BlockContract(
         fields=(
             _TARGET,
-            Field("resource", "choice", required=True,
-                  choices=("actions", "bonus_actions", "reactions", "movement"),
-                  description="Which per-turn resource to top up."),
-            Field("amount", "expr", required=True,
-                  description="How much to add."),
+            Field(
+                "resource",
+                "choice",
+                required=True,
+                choices=("actions", "bonus_actions", "reactions", "movement"),
+                description="Which per-turn resource to top up.",
+            ),
+            Field("amount", "expr", required=True, description="How much to add."),
         ),
         target_arity=TargetArity.SINGLE,
     ),
 )
 REGISTRY.register(
-    "grant_action", grant_action,
+    "grant_action",
+    grant_action,
     BlockContract(
         fields=(
             _TARGET,
-            Field("name", "str", required=True,
-                  description="Name of the granted action."),
+            Field(
+                "name", "str", required=True, description="Name of the granted action."
+            ),
             Field("description", "str", description="Flavour text for the action."),
-            Field("bonus_to_hit", "expr",
-                  description="Attack bonus for the granted action."),
+            Field(
+                "bonus_to_hit",
+                "expr",
+                description="Attack bonus for the granted action.",
+            ),
             Field("range_ft", "number", description="Reach in feet. Default 5."),
-            Field("damage", "list", subfields=(
-                Field("type", "enum", enum=DamageType,
-                      description="Damage type name. Default GENERIC."),
-                Field("formula", "formula", description="Dice formula for this entry."),
-            ), description="Damage entries the granted action deals."),
+            Field(
+                "damage",
+                "list",
+                subfields=(
+                    Field(
+                        "type",
+                        "enum",
+                        enum=DamageType,
+                        description="Damage type name. Default GENERIC.",
+                    ),
+                    Field(
+                        "formula", "formula", description="Dice formula for this entry."
+                    ),
+                ),
+                description="Damage entries the granted action deals.",
+            ),
         ),
         target_arity=TargetArity.SINGLE,
     ),

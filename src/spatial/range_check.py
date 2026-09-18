@@ -9,10 +9,10 @@ import: geometry.py is imported by Entity, and Entity is imported here.
 """
 
 import math
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import Optional, Tuple, TYPE_CHECKING, cast
 
-from src.spatial.geometry import BoundingBox, Point3D, Vector3D
-from src.models.spell_properties import AOEShape, RangeType
+from src.spatial.geometry import Point3D, Vector3D
+from src.models.spell_properties import AOEProperties, AOEShape, RangeType
 from src.models.action import AttackAction, SpellAction
 
 if TYPE_CHECKING:
@@ -30,7 +30,9 @@ def effective_range_ft(action: SpellAction) -> Optional[float]:
     """
     rt = action.spell_range.range_type
     if rt == RangeType.FEET:
-        return float(action.spell_range.distance_ft)
+        # SpellRange.__post_init__ rejects a None distance_ft for FEET, so the
+        # value is always present here. cast is a no-op at run time.
+        return float(cast(int, action.spell_range.distance_ft))
     if rt == RangeType.TOUCH:
         return TOUCH_REACH_FT
     return None  # SELF, SIGHT, UNLIMITED, SPECIAL → no clamping
@@ -73,7 +75,7 @@ def check_attack_range(
     gap_x = max(0.0, a.min_corner.x - d.max_corner.x, d.min_corner.x - a.max_corner.x)
     gap_y = max(0.0, a.min_corner.y - d.max_corner.y, d.min_corner.y - a.max_corner.y)
     gap_z = max(0.0, a.min_corner.z - d.max_corner.z, d.min_corner.z - a.max_corner.z)
-    dist = math.sqrt(gap_x ** 2 + gap_y ** 2 + gap_z ** 2)
+    dist = math.sqrt(gap_x**2 + gap_y**2 + gap_z**2)
     if dist > action.range_ft:
         raise ValueError(
             f"{attacker.name} cannot use {action.name}: "
@@ -125,11 +127,13 @@ def derive_aoe_origin(
         those volumes are symmetric and need no orientation.
     """
     caster_center = caster.bounding_box.center()
-    shape = action.aoe.shape
+    # Only ever called for an AoE action, which always carries aoe properties.
+    # cast is a no-op at run time, so a misuse still raises AttributeError here.
+    shape = cast(AOEProperties, action.aoe).shape
 
     diff = target - caster_center
     try:
-        direction: Optional[Vector3D] = diff.normalized()
+        direction: Vector3D = diff.normalized()
     except ValueError:
         direction = Vector3D(1.0, 0.0, 0.0)
 

@@ -36,8 +36,9 @@ def install_entity_effect(
     """Install *rule* as holder-scoped block triggers on *entity*, owned by a scope.
 
     Returns ``True`` when the rule was installed, ``False`` when it carries no blocks
-    to install. The rider's holder is *entity*, so its ``entity``/``event.caster`` resolves
-    to it; ``instance_fields`` ride each trigger as captured ``bindings``. The triggers
+    to install. The rider's holder is *entity*, so its ``entity``/``event.caster``
+    resolves to it; ``instance_fields`` ride each trigger as captured
+    ``bindings``. The triggers
     are owned by a lifetime scope on ``entity.lifetimes`` keyed to ``rule.name``, so a
     ``duration_rounds`` rule expires on the holder's turn and ``remove_effect`` can
     dispose it by name.

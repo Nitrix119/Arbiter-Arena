@@ -10,8 +10,11 @@ from .conftest import force_turn
 
 def _big_melee():
     return AttackAction(
-        name="Maul", description="", bonus_to_hit=8,
-        damage=[Damage(DamageType.BLUDGEONING, formula="3d8+5")], range_ft=5.0,
+        name="Maul",
+        description="",
+        bonus_to_hit=8,
+        damage=[Damage(DamageType.BLUDGEONING, formula="3d8+5")],
+        range_ft=5.0,
     )
 
 
@@ -54,4 +57,6 @@ def test_ledger_resets_between_rounds(make_entity, make_combat):
     later = build_observation(combat, a1)
     later["round"] = later["round"] + 1
     agent.decide(later, TOOLS)
-    assert agent._ledger == round_one_reserved  # reset, then this round's single commitment
+    assert (
+        agent._ledger == round_one_reserved
+    )  # reset, then this round's single commitment

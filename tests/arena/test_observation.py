@@ -42,7 +42,9 @@ def test_observation_shape_and_viewpoint(make_entity, make_combat):
     assert obs["self"]["position"] == {"x": 0, "y": 0, "z": 0}
 
 
-def test_legal_actions_menu_includes_move_options_and_relations(make_entity, make_combat):
+def test_legal_actions_menu_includes_move_options_and_relations(
+    make_entity, make_combat
+):
     me = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
     enemy = make_entity("Goblin", team="b", pos=(40, 0, 0))
     combat = make_combat([me, enemy])
@@ -50,8 +52,18 @@ def test_legal_actions_menu_includes_move_options_and_relations(make_entity, mak
     la = build_observation(combat, me)["legal_actions"]
 
     assert "moves" in la
-    toward = next(m for m in la["moves"] if m["option_id"] == f"toward_melee:{enemy.entity_id}")
-    assert set(toward) == {"option_id", "label", "description", "x", "y", "z", "cost_ft"}
+    toward = next(
+        m for m in la["moves"] if m["option_id"] == f"toward_melee:{enemy.entity_id}"
+    )
+    assert set(toward) == {
+        "option_id",
+        "label",
+        "description",
+        "x",
+        "y",
+        "z",
+        "cost_ft",
+    }
     # Attack targets carry their relation to the actor.
     assert la["attacks"][0]["targets"] == []  # enemy is out of melee range at 40 ft
 
@@ -106,7 +118,10 @@ def test_bucketed_hp_shows_label_not_number(make_entity, make_combat):
 def test_enemy_capabilities_gated_by_policy(make_entity, make_combat):
     me = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
     enemy = make_entity(
-        "Mage", team="b", pos=(5, 0, 0), attacks=[melee_attack("Dagger")],
+        "Mage",
+        team="b",
+        pos=(5, 0, 0),
+        attacks=[melee_attack("Dagger")],
         known_spells=["Fireball"],
     )
     combat = make_combat([me, enemy])

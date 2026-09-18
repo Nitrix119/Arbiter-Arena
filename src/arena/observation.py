@@ -1,14 +1,15 @@
 """Build an agent's view of the battle — its sensory input for one turn.
 
-``build_observation`` produces a plain ``dict`` (JSON-serializable) from *one entity's*
-point of view: itself and its allies in full, each enemy filtered through the
-:class:`~src.arena.information_policy.InformationPolicy`, the battle's round/turn state, and
-the entity's legal-action menu (:func:`~src.arena.action_space.legal_actions`).
+``build_observation`` produces a plain ``dict`` (JSON-serializable) from *one
+entity's* point of view: itself and its allies in full, each enemy filtered through
+the :class:`~src.arena.information_policy.InformationPolicy`, the battle's round/turn
+state, and the entity's legal-action menu
+(:func:`~src.arena.action_space.legal_actions`).
 
-Positions are reported in **backend feet** ``(x, y, z)`` — the engine's own coordinates — so
-the observation is honest to the model the engine runs. The web layer's cell-coordinate swap
-is a presentation concern that a future web spectator bridge applies; it does not belong in
-the agent's view.
+Positions are reported in **backend feet** ``(x, y, z)`` — the engine's own
+coordinates — so the observation is honest to the model the engine runs. The web
+layer's cell-coordinate swap is a presentation concern that a future web spectator
+bridge applies; it does not belong in the agent's view.
 """
 
 from typing import TYPE_CHECKING, Any, Dict, Optional
@@ -104,7 +105,9 @@ def _serialize_enemy(entity: Entity, policy: InformationPolicy) -> Dict[str, Any
     if policy.reveal_enemy_spell_slots:
         view["spell_slots"] = _spell_slots(entity)
     if policy.reveal_enemy_actions:
-        view["actions"] = [a.name for a in entity.stat_block.actions + entity.granted_actions]
+        view["actions"] = [
+            a.name for a in entity.stat_block.actions + entity.granted_actions
+        ]
         view["known_spells"] = list(entity.stat_block.known_spells)
 
     return view
@@ -135,9 +138,7 @@ def build_observation(
         "is_my_turn": current is not None and current.entity_id == entity.entity_id,
         "self": _serialize_ally(entity),
         "allies": [_serialize_ally(a) for a in combat.get_allies(entity)],
-        "enemies": [
-            _serialize_enemy(e, policy) for e in combat.get_enemies(entity)
-        ],
+        "enemies": [_serialize_enemy(e, policy) for e in combat.get_enemies(entity)],
         "legal_actions": legal_actions(combat, entity).to_dict(),
     }
 
@@ -195,9 +196,9 @@ def serialize_stat_block(entity: Entity) -> Dict[str, Any]:
 def snapshot_state(combat: "CombatSystem") -> Dict[str, Any]:
     """Return a neutral, **ungated** full-state snapshot of *combat* for the transcript.
 
-    Unlike :func:`build_observation` (one agent's policy-filtered view), this is ground
-    truth — every combatant in full — so replay and scoring have complete data regardless
-    of what any agent was allowed to see. Positions are in backend feet.
+    Unlike :func:`build_observation` (one agent's policy-filtered view), this is
+    ground truth — every combatant in full — so replay and scoring have complete data
+    regardless of what any agent was allowed to see. Positions are in backend feet.
     """
     current = combat.get_current_entity()
     return {

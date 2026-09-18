@@ -22,7 +22,8 @@ DEFAULT_MATCH_DIR = "matches"
 
 
 def _slugify(label: str) -> str:
-    """Reduce *label* to a filename-safe token (letters, digits, dot, dash, underscore)."""
+    """Reduce *label* to a filename-safe token (letters, digits, dot, dash,
+    underscore)."""
     return re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("-")
 
 
@@ -96,11 +97,11 @@ class Transcript:
     def save_auto(self, directory: str = DEFAULT_MATCH_DIR, label: str = "") -> Path:
         """Write the transcript under *directory* with a unique, sortable filename.
 
-        Names are ``YYYYMMDD_HHMMSS_<label>_seed<seed>.jsonl`` (Windows-safe — no colons),
-        so runs sort chronologically and never overwrite each other. A same-second collision
-        gets a ``_2``/``_3`` suffix. Returns the path written. The directory is created if
-        needed; ``matches/`` is git-ignored, so logs stay out of Git. Open any of them in the
-        ``/playback`` page via its file picker.
+        Names are ``YYYYMMDD_HHMMSS_<label>_seed<seed>.jsonl`` (Windows-safe — no
+        colons), so runs sort chronologically and never overwrite each other. A
+        same-second collision gets a ``_2``/``_3`` suffix. Returns the path written.
+        The directory is created if needed; ``matches/`` is git-ignored, so logs stay
+        out of Git. Open any of them in the ``/playback`` page via its file picker.
         """
         target = Path(directory)
         target.mkdir(parents=True, exist_ok=True)

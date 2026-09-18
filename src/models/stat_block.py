@@ -8,7 +8,6 @@ the :class:`~src.models.entity.Entity` wrapper instead.
 from dataclasses import dataclass, field
 from typing import Dict, List
 
-from typing import Optional
 from .ability import AbilityScores
 from .skill import Skill, STANDARD_SKILLS
 from .action import Action
@@ -36,7 +35,8 @@ class StatBlock:
         skills: Dictionary of skills with proficiency
         actions: List of available combat actions
         saving_throws: Ability scores with saving throw proficiency
-        resource_defaults: Per-turn action economy defaults (actions, bonus_actions, reactions, speed)
+        resource_defaults: Per-turn action economy defaults
+            (actions, bonus_actions, reactions, speed)
     """
 
     name: str
@@ -47,11 +47,17 @@ class StatBlock:
     skills: Dict[str, Skill] = field(default_factory=dict)
     actions: List[Action] = field(default_factory=list)
     saving_throws: Dict[str, int] = field(default_factory=dict)
-    resource_defaults: Dict[str, int] = field(default_factory=lambda: dict(DEFAULT_RESOURCE_DEFAULTS))
+    resource_defaults: Dict[str, int] = field(
+        default_factory=lambda: dict(DEFAULT_RESOURCE_DEFAULTS)
+    )
     size: CreatureSize = field(default=CreatureSize.MEDIUM)
     known_spells: List[str] = field(default_factory=list)
-    spellcasting_ability: str = ""  # e.g. "intelligence", "wisdom", "charisma"; "" = non-caster
-    spell_slot_defaults: Dict[str, int] = field(default_factory=dict)  # {level_str: max_count}; empty = no slots
+    spellcasting_ability: str = (
+        ""  # e.g. "intelligence", "wisdom", "charisma"; "" = non-caster
+    )
+    spell_slot_defaults: Dict[str, int] = field(
+        default_factory=dict
+    )  # {level_str: max_count}; empty = no slots
     legendary_action_count: int = 0  # 0 = not a legendary creature
     damage_vulnerabilities: List[DamageType] = field(default_factory=list)
     damage_resistances: List[DamageType] = field(default_factory=list)

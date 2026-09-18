@@ -46,8 +46,11 @@ class DamageProcessor:
             self._event_bus.emit(
                 EventType.DAMAGE_DEALT,
                 DamageDealtData(
-                    defender=defender, damage_list=damage_list, total=total_damage,
-                    source=source, action_name=action_name,
+                    defender=defender,
+                    damage_list=damage_list,
+                    total=total_damage,
+                    source=source,
+                    action_name=action_name,
                 ),
             )
 

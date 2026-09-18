@@ -19,16 +19,24 @@ from src.rules import RuleLoader
 from src.spells.rules import apply_entity_rule
 
 CONDITIONS_DIR = os.path.join(
-    os.path.dirname(__file__), "..", "..", "..", "..",
-    "rules", "entity_effects", "conditions",
+    os.path.dirname(__file__),
+    "..",
+    "..",
+    "..",
+    "..",
+    "rules",
+    "entity_effects",
+    "conditions",
 )
 PETRIFIED_JSON = os.path.join(CONDITIONS_DIR, "petrified.json")
 
 
 def _entity(name="Statue", hp=40):
     sb = StatBlock(
-        name=name, ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-        hit_points_max=hp, armor_class=10,
+        name=name,
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+        hit_points_max=hp,
+        armor_class=10,
     )
     return Entity(sb)
 
@@ -39,8 +47,9 @@ def _wire():
 
 
 def _petrify(bus, dp, entity):
-    apply_entity_rule(entity, RuleLoader.load(PETRIFIED_JSON),
-                      event_bus=bus, damage_processor=dp)
+    apply_entity_rule(
+        entity, RuleLoader.load(PETRIFIED_JSON), event_bus=bus, damage_processor=dp
+    )
 
 
 class TestPetrifiedDamageResistance:
@@ -71,8 +80,9 @@ class TestPetrifiedIncapacitation:
         bus, dp = _wire()
         _petrify(bus, dp, victim)
 
-        event = bus.emit(EventType.ATTACK_DECLARED,
-                         attacker=victim, defender=other, action=None)
+        event = bus.emit(
+            EventType.ATTACK_DECLARED, attacker=victim, defender=other, action=None
+        )
         assert event.cancelled is True
 
     def test_attacks_against_a_petrified_creature_have_advantage(self):
@@ -80,7 +90,8 @@ class TestPetrifiedIncapacitation:
         bus, dp = _wire()
         _petrify(bus, dp, victim)
 
-        event = bus.emit(EventType.ATTACK_DECLARED,
-                         attacker=other, defender=victim, action=None)
+        event = bus.emit(
+            EventType.ATTACK_DECLARED, attacker=other, defender=victim, action=None
+        )
         assert event.data.get("advantage") is True
         assert event.cancelled is False

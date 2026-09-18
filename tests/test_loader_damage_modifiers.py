@@ -25,6 +25,7 @@ STONE_GOLEM_JSON = os.path.join(EXAMPLES_DIR, "creatures", "stone_golem.json")
 # from_dict parses the three modifier lists
 # ---------------------------------------------------------------------------
 
+
 class TestLoaderParsesDamageModifiers:
     def _load(self, **fields):
         data = {
@@ -81,6 +82,7 @@ class TestLoaderParsesDamageModifiers:
 # End-to-end: a JSON-loaded creature actually benefits from its immunity
 # ---------------------------------------------------------------------------
 
+
 class TestJsonCreatureDamageModifierEndToEnd:
     def _setup(self):
         # Mirror web/routers/combat.py: the damage-modifier globals are native block
@@ -91,7 +93,8 @@ class TestJsonCreatureDamageModifierEndToEnd:
         bus = EventBus()
         processor = DamageProcessor(bus)
         rules = load_rules_from_directory(
-            GLOBAL_RULES_DIR, event_bus=bus, damage_processor=processor)
+            GLOBAL_RULES_DIR, event_bus=bus, damage_processor=processor
+        )
         handled = install_global_rules(rules, event_bus=bus, damage_processor=processor)
         for r in rules:
             if r.name in handled:

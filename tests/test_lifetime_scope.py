@@ -70,7 +70,7 @@ class TestScopeCountdown:
     def test_timed_scope_expires_after_its_rounds(self):
         scope = LifetimeScope(rounds_remaining=2)
         assert scope.tick() is False  # 2 -> 1
-        assert scope.tick() is True   # 1 -> 0, expired
+        assert scope.tick() is True  # 1 -> 0, expired
         assert scope.rounds_remaining == 0
 
     def test_disposed_scope_tick_is_a_noop(self):

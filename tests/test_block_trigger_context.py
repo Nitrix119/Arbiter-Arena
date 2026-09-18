@@ -12,7 +12,14 @@ in isolation so they are pinned independently of that spell:
    enum name — so an on-hit rider can deal *the weapon's own type*.
 """
 
-from src.models import AbilityScores, StatBlock, Entity, AttackAction, Damage, DamageType
+from src.models import (
+    AbilityScores,
+    StatBlock,
+    Entity,
+    AttackAction,
+    Damage,
+    DamageType,
+)
 from src.combat.event_bus import EventBus
 from src.combat.damage_processor import DamageProcessor
 from src.combat.events import EventType
@@ -26,8 +33,10 @@ from src.spells.runner import run_program
 
 def _entity(name="E", hp=40, ac=10):
     sb = StatBlock(
-        name=name, ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-        hit_points_max=hp, armor_class=ac,
+        name=name,
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+        hit_points_max=hp,
+        armor_class=ac,
     )
     return Entity(sb)
 
@@ -41,12 +50,15 @@ def _install(bus, dp, holder, program):
 
 # A rider that deals a flat "2d1" (deterministic: 2) on any ATTACK_HIT to the
 # event's defender. On a crit the damage block doubles the dice → "4d1" = 4.
-_ONHIT_DAMAGE = [{
-    "block": "trigger", "event": "ATTACK_HIT", "holder": "caster",
-    "rebind_target": "event.defender",
-    "then": [{"block": "damage", 
-              "damage_type": "FIRE", "formula": "2d1"}],
-}]
+_ONHIT_DAMAGE = [
+    {
+        "block": "trigger",
+        "event": "ATTACK_HIT",
+        "holder": "caster",
+        "rebind_target": "event.defender",
+        "then": [{"block": "damage", "damage_type": "FIRE", "formula": "2d1"}],
+    }
+]
 
 
 class TestCritSeed:
@@ -60,8 +72,13 @@ class TestCritSeed:
         before = target.hp
         bus.emit(
             EventType.ATTACK_HIT,
-            AttackHitData(attacker=attacker, defender=target, action=None,
-                          roll=25, critical_hit=critical_hit),
+            AttackHitData(
+                attacker=attacker,
+                defender=target,
+                action=None,
+                roll=25,
+                critical_hit=critical_hit,
+            ),
         )
         return before - target.hp
 
@@ -82,7 +99,9 @@ class TestDynamicDamageType:
         attacker = _entity("A")
         target = _entity("T", hp=40)
         weapon = AttackAction(
-            name="Sword", description="", bonus_to_hit=0,
+            name="Sword",
+            description="",
+            bonus_to_hit=0,
             damage=[Damage(DamageType.SLASHING, 0, formula="1d8")],
         )
         # Capture the type the rider actually deals off the damage event.
@@ -91,13 +110,21 @@ class TestDynamicDamageType:
             EventType.DAMAGE_INCOMING,
             lambda e: seen.append(e.data.damage_list[0].damage_type),
         )
-        rider = [{
-            "block": "trigger", "event": "ATTACK_HIT", "holder": "caster",
-            "rebind_target": "event.defender",
-            "then": [{"block": "damage", 
-                      "damage_type": "event.action.primary_damage_type",
-                      "formula": "1d1"}],
-        }]
+        rider = [
+            {
+                "block": "trigger",
+                "event": "ATTACK_HIT",
+                "holder": "caster",
+                "rebind_target": "event.defender",
+                "then": [
+                    {
+                        "block": "damage",
+                        "damage_type": "event.action.primary_damage_type",
+                        "formula": "1d1",
+                    }
+                ],
+            }
+        ]
         _install(bus, dp, attacker, rider)
         bus.emit(
             EventType.ATTACK_HIT,

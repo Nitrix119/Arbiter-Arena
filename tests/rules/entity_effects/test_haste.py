@@ -25,24 +25,37 @@ REFILL_RULE_PATH = "rules/global/action_economy_refill.json"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def _make_entity(name="Fighter", hp=30, ac=15):
     abilities = AbilityScores(14, 14, 14, 10, 10, 10)
-    sb = StatBlock(name=name, ability_scores=abilities, hit_points_max=hp, armor_class=ac)
+    sb = StatBlock(
+        name=name, ability_scores=abilities, hit_points_max=hp, armor_class=ac
+    )
     return Entity(sb)
 
 
 def _emit_turn(bus, entity, round_num=1, turn_num=1):
     """Emit a TURN_START event for *entity*."""
-    bus.emit(EventType.TURN_START, TurnEventData(
-        entity=entity, round_num=round_num, turn_num=turn_num,
-    ))
+    bus.emit(
+        EventType.TURN_START,
+        TurnEventData(
+            entity=entity,
+            round_num=round_num,
+            turn_num=turn_num,
+        ),
+    )
 
 
 def _emit_turn_end(bus, entity, round_num=1, turn_num=1):
     """Emit a TURN_END event for *entity* (ticks lifetimes/durations)."""
-    bus.emit(EventType.TURN_END, TurnEventData(
-        entity=entity, round_num=round_num, turn_num=turn_num,
-    ))
+    bus.emit(
+        EventType.TURN_END,
+        TurnEventData(
+            entity=entity,
+            round_num=round_num,
+            turn_num=turn_num,
+        ),
+    )
 
 
 def _wire(bus, entities):
@@ -60,8 +73,9 @@ def _cast_haste_on(entity, *others):
     install_lifetime_clock(bus)  # ticks the concentration duration on TURN_END
     reg, dp = _wire(bus, [entity, *others])
     resolver = SpellResolver(bus, dp, condition_rules=reg)
-    resolver.resolve(entity, [entity],
-                     StatBlockLoader.load_spell_from_json(HASTE_SPELL_PATH))
+    resolver.resolve(
+        entity, [entity], StatBlockLoader.load_spell_from_json(HASTE_SPELL_PATH)
+    )
     return bus, reg
 
 
@@ -71,6 +85,7 @@ def _setup(entity):
 
 
 # ── Tests ────────────────────────────────────────────────────────────────────
+
 
 class TestHaste:
     def test_grants_extra_action_after_refill(self):

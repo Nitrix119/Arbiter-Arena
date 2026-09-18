@@ -10,17 +10,24 @@ from src.models.ability import AbilityScores
 from src.models.action_resources import ACTION_COST, BONUS_ACTION_COST
 from src.models.creature_size import CreatureSize
 from src.models.spell_properties import (
-    AOEProperties, AOEShape, CastingTime, CastingTimeType,
-    Duration, DurationUnit, RangeType, SpellComponents, SpellRange,
+    AOEProperties,
+    AOEShape,
+    CastingTime,
+    CastingTimeType,
+    Duration,
+    DurationUnit,
+    RangeType,
+    SpellComponents,
+    SpellRange,
     TargetingType,
 )
 from src.models.stat_block import StatBlock
 from src.spatial.geometry import Point3D, Vector3D
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_entity(
     name: str = "Creature",
@@ -39,7 +46,12 @@ def _make_entity(
         hit_points_max=hp,
         armor_class=ac,
         size=size,
-        resource_defaults={"actions": 1, "bonus_actions": 1, "reactions": 1, "speed": speed},
+        resource_defaults={
+            "actions": 1,
+            "bonus_actions": 1,
+            "reactions": 1,
+            "speed": speed,
+        },
     )
     e = Entity(sb, team=team)
     e.x, e.y, e.z = x, y, z
@@ -64,13 +76,20 @@ def _fireball(
         components=SpellComponents(verbal=True, somatic=True),
         program=[
             {"block": "saving_throw", "attribute": "dexterity", "dc": save_dc},
-            {"block": "damage", "damage_type": "FIRE", "formula": "8d6",
-             "roll_once": True, "save_result": {"on_success": "half_damage"}},
+            {
+                "block": "damage",
+                "damage_type": "FIRE",
+                "formula": "8d6",
+                "roll_once": True,
+                "save_result": {"on_success": "half_damage"},
+            },
         ],
     )
 
 
-def _cone_spell(range_type: RangeType = RangeType.SELF, length_ft: int = 15) -> SpellAction:
+def _cone_spell(
+    range_type: RangeType = RangeType.SELF, length_ft: int = 15
+) -> SpellAction:
     return SpellAction(
         name="Burning Hands",
         description="",
@@ -83,13 +102,20 @@ def _cone_spell(range_type: RangeType = RangeType.SELF, length_ft: int = 15) -> 
         components=SpellComponents(verbal=True, somatic=True),
         program=[
             {"block": "saving_throw", "attribute": "dexterity", "dc": 13},
-            {"block": "damage", "damage_type": "FIRE", "formula": "3d6",
-             "roll_once": True, "save_result": {"on_success": "half_damage"}},
+            {
+                "block": "damage",
+                "damage_type": "FIRE",
+                "formula": "3d6",
+                "roll_once": True,
+                "save_result": {"on_success": "half_damage"},
+            },
         ],
     )
 
 
-def _line_spell(range_type: RangeType = RangeType.SELF, length_ft: int = 60) -> SpellAction:
+def _line_spell(
+    range_type: RangeType = RangeType.SELF, length_ft: int = 60
+) -> SpellAction:
     return SpellAction(
         name="Lightning Bolt",
         description="",
@@ -102,8 +128,13 @@ def _line_spell(range_type: RangeType = RangeType.SELF, length_ft: int = 60) -> 
         components=SpellComponents(verbal=True, somatic=True),
         program=[
             {"block": "saving_throw", "attribute": "dexterity", "dc": 15},
-            {"block": "damage", "damage_type": "LIGHTNING", "formula": "8d6",
-             "roll_once": True, "save_result": {"on_success": "half_damage"}},
+            {
+                "block": "damage",
+                "damage_type": "LIGHTNING",
+                "formula": "8d6",
+                "roll_once": True,
+                "save_result": {"on_success": "half_damage"},
+            },
         ],
     )
 
@@ -120,8 +151,12 @@ def _touch_spell() -> SpellAction:
         components=SpellComponents(verbal=True, somatic=True),
         program=[
             {"block": "attack_roll", "attack_bonus": "use_caster_bonus"},
-            {"block": "damage", "damage_type": "NECROTIC", "formula": "3d10",
-             "requires_hit": True},
+            {
+                "block": "damage",
+                "damage_type": "NECROTIC",
+                "formula": "3d10",
+                "requires_hit": True,
+            },
         ],
     )
 
@@ -138,8 +173,12 @@ def _ranged_spell(range_ft: int = 120) -> SpellAction:
         components=SpellComponents(verbal=True, somatic=True),
         program=[
             {"block": "attack_roll", "attack_bonus": "use_caster_bonus"},
-            {"block": "damage", "damage_type": "FIRE", "formula": "1d10",
-             "requires_hit": True},
+            {
+                "block": "damage",
+                "damage_type": "FIRE",
+                "formula": "1d10",
+                "requires_hit": True,
+            },
         ],
     )
 
@@ -174,6 +213,7 @@ def _make_combat(*entities) -> CombatSystem:
 # AOE requires a target
 # ---------------------------------------------------------------------------
 
+
 class TestAoERequiresTarget:
     def test_aoe_without_target_raises(self):
         caster = _make_entity("Wizard")
@@ -191,13 +231,16 @@ class TestAoERequiresTarget:
         spell = _fireball()
 
         # Should not raise
-        results = combat.resolve_spell(caster, [], spell, target=Point3D(10.0, 0.0, 0.0))
+        results = combat.resolve_spell(
+            caster, [], spell, target=Point3D(10.0, 0.0, 0.0)
+        )
         assert isinstance(results, list)
 
 
 # ---------------------------------------------------------------------------
 # Auto-targeting
 # ---------------------------------------------------------------------------
+
 
 class TestAoEAutoTargeting:
     def test_sphere_hits_entities_in_radius(self):
@@ -214,7 +257,9 @@ class TestAoEAutoTargeting:
         combat.resolve_spell(caster, [], spell, target=Point3D(25.0, 0.0, 0.0))
 
         assert inside.hp < initial_inside, "Entity inside radius should take damage"
-        assert outside.hp == initial_outside, "Entity outside radius should be unaffected"
+        assert (
+            outside.hp == initial_outside
+        ), "Entity outside radius should be unaffected"
 
     def test_caster_can_be_caught_in_own_aoe(self):
         caster = _make_entity("Wizard", x=0.0, hp=50)
@@ -233,7 +278,9 @@ class TestAoEAutoTargeting:
         spell = _fireball(radius_ft=5)
 
         # Blast far from the caster
-        results = combat.resolve_spell(caster, [], spell, target=Point3D(200.0, 0.0, 0.0))
+        results = combat.resolve_spell(
+            caster, [], spell, target=Point3D(200.0, 0.0, 0.0)
+        )
         assert results == []
 
     def test_dead_entities_not_targeted(self):
@@ -251,6 +298,7 @@ class TestAoEAutoTargeting:
 # ---------------------------------------------------------------------------
 # Range clamping
 # ---------------------------------------------------------------------------
+
 
 class TestRangeClamping:
     def test_target_beyond_range_is_clamped(self):
@@ -276,7 +324,9 @@ class TestRangeClamping:
         combat.resolve_spell(caster, [], spell, target=Point3D(200.0, 0.0, 0.0))
 
         assert at_150.hp < initial_150, "Entity at clamped range should be hit"
-        assert beyond.hp == initial_beyond, "Entity beyond clamped range should be unaffected"
+        assert (
+            beyond.hp == initial_beyond
+        ), "Entity beyond clamped range should be unaffected"
 
     def test_target_within_range_not_clamped(self):
         """Target within range stays unchanged."""
@@ -310,6 +360,7 @@ class TestRangeClamping:
 # ---------------------------------------------------------------------------
 # Cone and line: origin at caster's token edge
 # ---------------------------------------------------------------------------
+
 
 class TestConeAndLineOrigin:
     def test_cone_origin_is_caster_edge(self):
@@ -373,6 +424,7 @@ class TestConeAndLineOrigin:
 # Single-target range checking
 # ---------------------------------------------------------------------------
 
+
 class TestSingleTargetRange:
     def test_in_range_target_succeeds(self):
         caster = _make_entity("Wizard", x=0.0)
@@ -392,7 +444,9 @@ class TestSingleTargetRange:
         spell = _ranged_spell(range_ft=120)
 
         with pytest.raises(ValueError, match="out of range"):
-            combat.resolve_spell(caster, [target], spell, target=Point3D(200.0, 0.0, 0.0))
+            combat.resolve_spell(
+                caster, [target], spell, target=Point3D(200.0, 0.0, 0.0)
+            )
 
     def test_touch_spell_succeeds_at_4ft(self):
         caster = _make_entity("Cleric", x=0.0)
@@ -402,7 +456,12 @@ class TestSingleTargetRange:
         spell = _touch_spell()
 
         # Should not raise (nearest point is within 5 ft touch range)
-        assert isinstance(combat.resolve_spell(caster, [target], spell, target=Point3D(4.0, 0.0, 0.0)), list)
+        assert isinstance(
+            combat.resolve_spell(
+                caster, [target], spell, target=Point3D(4.0, 0.0, 0.0)
+            ),
+            list,
+        )
 
     def test_touch_spell_fails_beyond_5ft(self):
         caster = _make_entity("Cleric", x=0.0)
@@ -413,7 +472,9 @@ class TestSingleTargetRange:
         spell = _touch_spell()
 
         with pytest.raises(ValueError, match="out of range"):
-            combat.resolve_spell(caster, [target], spell, target=Point3D(11.0, 0.0, 0.0))
+            combat.resolve_spell(
+                caster, [target], spell, target=Point3D(11.0, 0.0, 0.0)
+            )
 
     def test_sight_range_never_fails(self):
         """SIGHT range imposes no distance limit."""
@@ -423,7 +484,12 @@ class TestSingleTargetRange:
         spell = _sight_spell()
 
         # Should not raise regardless of distance
-        assert isinstance(combat.resolve_spell(caster, [target], spell, target=Point3D(10000.0, 0.0, 0.0)), list)
+        assert isinstance(
+            combat.resolve_spell(
+                caster, [target], spell, target=Point3D(10000.0, 0.0, 0.0)
+            ),
+            list,
+        )
 
     def test_no_target_kwarg_skips_range_check(self):
         """Backward compat: omitting target= skips range check for single-target."""
@@ -439,6 +505,7 @@ class TestSingleTargetRange:
 # ---------------------------------------------------------------------------
 # Zero-vector edge case
 # ---------------------------------------------------------------------------
+
 
 class TestZeroVectorEdgeCase:
     def test_target_at_caster_position_does_not_crash(self):

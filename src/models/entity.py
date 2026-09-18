@@ -30,7 +30,10 @@ class Entity:
     entity_id: str = field(default_factory=dice.new_id)
     initiative_roll: Optional[int] = None
     is_player_controlled: bool = False
-    current_hp: Optional[int] = None  # None → set to max in __post_init__
+    # Declared ``int`` because ``__post_init__`` always resolves it; the ``None``
+    # default only means "start at the stat block's maximum" and never survives
+    # construction. (mypy cannot express "Optional in, non-Optional after init".)
+    current_hp: int = None  # type: ignore[assignment]
     temporary_hp: int = 0
     conditions: List[Condition] = field(default_factory=list)
     team: Optional[str] = None  # faction/team identifier; None = hostile to everyone
@@ -45,8 +48,12 @@ class Entity:
     # ticks them down yet; they carry their revoke handles for future teardown.
     lifetimes: List[LifetimeScope] = field(default_factory=list)
     stat_modifiers: List[StatModifier] = field(default_factory=list)
-    granted_actions: List[Action] = field(default_factory=list)  # Temporary actions from effects
-    resources: Optional[ActionResources] = None
+    granted_actions: List[Action] = field(
+        default_factory=list
+    )  # Temporary actions from effects
+    # As with ``current_hp``: ``__post_init__`` always builds these from the stat
+    # block's resource defaults, so they are never ``None`` after construction.
+    resources: ActionResources = None  # type: ignore[assignment]
     spell_slots: Optional[SpellSlots] = None
     legendary_actions: Optional[LegendaryActions] = None
     x: float = 0.0
@@ -69,7 +76,10 @@ class Entity:
             )
         if self.spell_slots is None and self.stat_block.spell_slot_defaults:
             self.spell_slots = SpellSlots.from_dict(self.stat_block.spell_slot_defaults)
-        if self.legendary_actions is None and self.stat_block.legendary_action_count > 0:
+        if (
+            self.legendary_actions is None
+            and self.stat_block.legendary_action_count > 0
+        ):
             self.legendary_actions = LegendaryActions(
                 count_per_round=self.stat_block.legendary_action_count
             )
@@ -179,7 +189,9 @@ class Entity:
 
     def remove_condition_by_type(self, condition_type: ConditionType) -> None:
         """Remove all conditions of the given type."""
-        self.conditions = [c for c in self.conditions if c.condition_type != condition_type]
+        self.conditions = [
+            c for c in self.conditions if c.condition_type != condition_type
+        ]
 
     # ------------------------------------------------------------------
     # Effect management (for rule engine)
@@ -199,7 +211,9 @@ class Entity:
                 scope.dispose()
             self.lifetimes = [s for s in self.lifetimes if s.source != name]
         self.stat_modifiers = [m for m in self.stat_modifiers if m.effect_name != name]
-        self.granted_actions = [a for a in self.granted_actions if a.source_effect != name]
+        self.granted_actions = [
+            a for a in self.granted_actions if a.source_effect != name
+        ]
         self.conditions = [c for c in self.conditions if c.effect_name != name]
 
     def grant_action(self, action: Action) -> RevokeHandle:
@@ -251,8 +265,11 @@ class Entity:
             "spell_attack_bonus": self.stat_block.proficiency_bonus + _sc_mod,
         }
         breakdown = [{"source": "Base", "value": base_map.get(stat, 0)}]
-        breakdown += [{"source": m.source, "value": m.value}
-                      for m in self.stat_modifiers if m.stat == stat]
+        breakdown += [
+            {"source": m.source, "value": m.value}
+            for m in self.stat_modifiers
+            if m.stat == stat
+        ]
         return breakdown
 
     # ------------------------------------------------------------------
@@ -375,23 +392,30 @@ class Entity:
 
     @property
     def spell_save_dc(self) -> int:
-        """Computed spell save DC: 8 + proficiency + spellcasting ability mod + bonuses."""
+        """Computed spell save DC: 8 + proficiency + spellcasting ability mod
+        + bonuses."""
         ability = self.stat_block.spellcasting_ability
         base_mod = self.get_ability_modifier(ability) if ability else 0
         base = 8 + self.stat_block.proficiency_bonus + base_mod
-        return base + sum(m.value for m in self.stat_modifiers if m.stat == "spell_save_dc")
+        return base + sum(
+            m.value for m in self.stat_modifiers if m.stat == "spell_save_dc"
+        )
 
     @property
     def spell_attack_bonus(self) -> int:
-        """Computed spell attack bonus: proficiency + spellcasting ability mod + bonuses."""
+        """Computed spell attack bonus: proficiency + spellcasting ability mod
+        + bonuses."""
         ability = self.stat_block.spellcasting_ability
         base_mod = self.get_ability_modifier(ability) if ability else 0
         base = self.stat_block.proficiency_bonus + base_mod
-        return base + sum(m.value for m in self.stat_modifiers if m.stat == "spell_attack_bonus")
+        return base + sum(
+            m.value for m in self.stat_modifiers if m.stat == "spell_attack_bonus"
+        )
 
     @property
     def spellcasting_modifier(self) -> int:
-        """Raw ability modifier for the entity's spellcasting ability, or 0 if non-caster."""
+        """Raw ability modifier for the entity's spellcasting ability, or 0 if
+        non-caster."""
         ability = self.stat_block.spellcasting_ability
         return self.get_ability_modifier(ability) if ability else 0
 
@@ -410,6 +434,7 @@ class Entity:
             BoundingBox: The AABB representing this entity's occupied space.
         """
         from src.spatial.geometry import BoundingBox, Point3D
+
         s = self.stat_block.size.size_ft
         half = s / 2.0
         return BoundingBox(

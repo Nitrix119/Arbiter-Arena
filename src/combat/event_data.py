@@ -45,7 +45,9 @@ class EventData:
         return getattr(self, key, default)
 
     def keys(self) -> list:
-        result = [f.name for f in fields(self)]
+        # Every concrete subclass is a @dataclass; the base itself is not, so
+        # mypy cannot see that `self` satisfies DataclassInstance here.
+        result = [f.name for f in fields(self)]  # type: ignore[arg-type]
         for k in self.__dict__:
             if k not in result and not k.startswith("_"):
                 result.append(k)
@@ -60,21 +62,25 @@ class EventData:
 
 # ── Turn lifecycle ────────────────────────────────────────────────────────────
 
+
 @dataclass
 class RoundEventData(EventData):
     """Data for ROUND_START and ROUND_END events."""
+
     round_num: int
 
 
 @dataclass
 class TurnEventData(EventData):
     """Data for TURN_START and TURN_END events."""
+
     entity: Entity
     round_num: int
     turn_num: int
 
 
 # ── Attack flow ───────────────────────────────────────────────────────────────
+
 
 @dataclass
 class AttackDeclaredData(EventData):
@@ -85,6 +91,7 @@ class AttackDeclaredData(EventData):
     ForceCriticalHit).  They are declared here so they are part of the event's
     field schema rather than untyped dynamic attributes.
     """
+
     attacker: Entity
     defender: Entity
     action: Action
@@ -92,6 +99,7 @@ class AttackDeclaredData(EventData):
     disadvantage: bool = False
     critical_hit: bool = False
     critical_miss: bool = False
+
 
 @dataclass
 class AttackRolledData(EventData):
@@ -101,6 +109,7 @@ class AttackRolledData(EventData):
     effect handlers (e.g. ForceCriticalHit); declared here so they are part of
     the event's field schema.
     """
+
     attacker: Entity
     defender: Entity
     action: Action
@@ -108,6 +117,7 @@ class AttackRolledData(EventData):
     total: int
     critical_hit: bool = False
     critical_miss: bool = False
+
 
 @dataclass
 class AttackHitData(EventData):
@@ -119,6 +129,7 @@ class AttackHitData(EventData):
     ``context["critical_hit"]``. Declared here so it is part of the event's field
     schema rather than an untyped dynamic attribute.
     """
+
     attacker: Entity
     defender: Entity
     action: Action
@@ -129,6 +140,7 @@ class AttackHitData(EventData):
 @dataclass
 class AttackMissData(EventData):
     """Data for ATTACK_MISS events."""
+
     attacker: Entity
     defender: Entity
     action: Action
@@ -137,9 +149,11 @@ class AttackMissData(EventData):
 
 # ── Spell flow ────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class SpellCastData(EventData):
     """Data for SPELL_CAST events."""
+
     caster: Entity
     defenders: List[Entity]
     action: SpellAction
@@ -149,15 +163,17 @@ class SpellCastData(EventData):
 @dataclass
 class SpellHitData(EventData):
     """Data for SPELL_HIT events."""
+
     caster: Entity
     defender: Entity
     action: SpellAction
     roll: Optional[int]
-    save_success: bool = True   # True when no save required or defender succeeded
+    save_success: bool = True  # True when no save required or defender succeeded
     save_roll: Optional[int] = None  # d20 total for the saving throw, if one was made
 
 
 # ── Saving throw flow ─────────────────────────────────────────────────────────
+
 
 @dataclass
 class SavingThrowDeclaredData(EventData):
@@ -168,6 +184,7 @@ class SavingThrowDeclaredData(EventData):
     (e.g. a Restrained creature has disadvantage on Dexterity saving throws).
     Per D&D 5e, if both are set they cancel to a normal roll.
     """
+
     defender: Entity
     ability: str
     dc: int
@@ -177,9 +194,11 @@ class SavingThrowDeclaredData(EventData):
 
 # ── Damage flow ───────────────────────────────────────────────────────────────
 
+
 @dataclass
 class DamageIncomingData(EventData):
     """Data for DAMAGE_INCOMING events."""
+
     defender: Entity
     damage_list: List[Damage]
 
@@ -187,28 +206,32 @@ class DamageIncomingData(EventData):
 @dataclass
 class DamageDealtData(EventData):
     """Data for DAMAGE_DEALT events."""
+
     defender: Entity
     damage_list: List[Damage]
     total: int
-    source: Optional[Entity] = None      # entity that caused the damage
-    action_name: Optional[str] = None    # name of the action that caused the damage
-
+    source: Optional[Entity] = None  # entity that caused the damage
+    action_name: Optional[str] = None  # name of the action that caused the damage
 
 
 # ── Healing flow ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class HealingAppliedData(EventData):
     """Data for HEALING_APPLIED events."""
+
     target: Entity
     amount: int
 
 
 # ── Entity lifecycle ─────────────────────────────────────────────────────────
 
+
 @dataclass
 class EntityDiesData(EventData):
     """Data for ENTITY_DIES events."""
+
     entity: Entity
     killer: Optional[Entity]
 
@@ -216,6 +239,7 @@ class EntityDiesData(EventData):
 @dataclass
 class ConditionAddedData(EventData):
     """Data for CONDITION_ADDED events."""
+
     entity: Entity
     condition: Condition
 
@@ -223,6 +247,7 @@ class ConditionAddedData(EventData):
 @dataclass
 class ConditionRemovedData(EventData):
     """Data for CONDITION_REMOVED events."""
+
     entity: Entity
     condition_type: ConditionType
 

@@ -40,7 +40,7 @@ class Vector3D:
 
     def magnitude(self) -> float:
         """Euclidean length."""
-        return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
+        return math.sqrt(self.x**2 + self.y**2 + self.z**2)
 
     def normalized(self) -> "Vector3D":
         """Return a unit vector in the same direction.
@@ -72,9 +72,7 @@ class Point3D:
     def distance_to(self, other: "Point3D") -> float:
         """Euclidean distance to another point."""
         return math.sqrt(
-            (self.x - other.x) ** 2
-            + (self.y - other.y) ** 2
-            + (self.z - other.z) ** 2
+            (self.x - other.x) ** 2 + (self.y - other.y) ** 2 + (self.z - other.z) ** 2
         )
 
     def __add__(self, v: Vector3D) -> "Point3D":  # type: ignore[override]

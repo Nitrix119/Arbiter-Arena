@@ -220,7 +220,8 @@ def _check_expression(expr: str, where: str) -> None:
         raise ProgramValidationError(f"{where}: {exc}") from None
 
     roots = {
-        node.id for node in ast.walk(tree)
+        node.id
+        for node in ast.walk(tree)
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
     }
     unknown = sorted(roots - set(EXPRESSION_ROOTS))
@@ -355,8 +356,7 @@ def _check_object(value: Any, spec: Field, where: str) -> None:
     for key, sub_value in value.items():
         if key.startswith("_"):
             continue
-        sub: Optional[Field] = next(
-            (f for f in spec.subfields if f.name == key), None)
+        sub: Optional[Field] = next((f for f in spec.subfields if f.name == key), None)
         if sub is None:
             suggestion = difflib.get_close_matches(key, valid, n=1, cutoff=0.6)
             hint = f" — did you mean {suggestion[0]!r}?" if suggestion else ""
@@ -376,7 +376,8 @@ def _check_field_kinds(
         for spec in _allowed_fields(contract):
             if spec.name in block.args:
                 _check_value(
-                    block.args[spec.name], spec,
+                    block.args[spec.name],
+                    spec,
                     f"spell {spell_name!r}: block {block.type!r} arg {spec.name!r}",
                 )
         _check_field_kinds(block.then, registry, spell_name)

@@ -34,7 +34,7 @@ class SpellResolver:
         *,
         origin=None,
         slot_level: Optional[int] = None,
-    ) -> List[Tuple[bool, int, str, Optional[dict]]]:
+    ) -> List[Tuple[bool, int, str, Optional[dict], int, Optional[Entity]]]:
         """Resolve a spell action against one or more targets.
 
         Damage is rolled once and applied to every target, matching D&D rules
@@ -54,8 +54,8 @@ class SpellResolver:
                 SPELL_CAST event so listeners can know where the area was placed.
 
         Returns:
-            List of (hit, damage_dealt, log_message) per defender, in the same
-            order as defenders.
+            List of (hit, damage_dealt, log_message, roll_detail, healing_total,
+            healed_entity) per defender, in the same order as defenders.
         """
         self._event_bus.emit(
             EventType.SPELL_CAST,
@@ -72,9 +72,7 @@ class SpellResolver:
         # with no program has nothing to resolve — an authoring error we raise on
         # rather than silently doing nothing.
         if not action.program:
-            raise ValueError(
-                f"Spell {action.name!r} has no block program to resolve."
-            )
+            raise ValueError(f"Spell {action.name!r} has no block program to resolve.")
         return self._resolve_via_blocks(caster, defenders, action, slot_level)
 
     def _resolve_via_blocks(
@@ -130,7 +128,8 @@ class SpellResolver:
             roll_mode = ""  # advantage/disadvantage label already logged by pipeline
             log_msg = (
                 f"cast {action.name} at {defender.name}. "
-                f"Spell attack{roll_mode}: {result.attack_roll}+...={result.attack_total}"
+                f"Spell attack{roll_mode}: {result.attack_roll}"
+                f"+...={result.attack_total}"
                 f" vs AC {defender.ac}. {hit_str}"
             )
             roll_detail: Optional[dict] = {

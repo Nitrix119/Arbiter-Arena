@@ -14,6 +14,7 @@ def setup_function():
 
 # ── Accepted expressions ──────────────────────────────────────────────────────
 
+
 class TestValidateAstAccepted:
     """All expressions that appear in real data files must pass validation."""
 
@@ -36,7 +37,9 @@ class TestValidateAstAccepted:
         _validate_ast("not save_success")
 
     def test_bool_and_comparison(self):
-        _validate_ast("event.attacker == entity and event.defender.hp < event.defender.max_hp")
+        _validate_ast(
+            "event.attacker == entity and event.defender.hp < event.defender.max_hp"
+        )
 
     def test_gt_comparison(self):
         _validate_ast("entity.temporary_hp > 0")
@@ -100,6 +103,7 @@ class TestValidateAstAccepted:
 
 
 # ── Rejected expressions ──────────────────────────────────────────────────────
+
 
 class TestValidateAstRejected:
     """Dangerous expressions must raise ValueError before eval() is reached."""
@@ -167,6 +171,7 @@ class TestValidateAstRejected:
 
 # ── Caching behaviour ─────────────────────────────────────────────────────────
 
+
 class TestValidateAstCaching:
 
     def setup_method(self):
@@ -197,6 +202,7 @@ class TestValidateAstCaching:
 
 # ── Integration: evaluate() ───────────────────────────────────────────────────
 
+
 class TestEvaluateIntegration:
 
     def setup_method(self):
@@ -214,6 +220,7 @@ class TestEvaluateIntegration:
 
     def test_evaluate_valid_string(self):
         from types import SimpleNamespace
+
         ctx = {"event": SimpleNamespace(hp=15), **expr_mod.SAFE_BUILTINS}
         assert evaluate("event.hp > 0", ctx) is True
 
@@ -223,6 +230,7 @@ class TestEvaluateIntegration:
 
 
 # ── Integration: resolve() ────────────────────────────────────────────────────
+
 
 class TestResolveIntegration:
 
@@ -240,5 +248,6 @@ class TestResolveIntegration:
 
     def test_resolve_valid_string(self):
         from types import SimpleNamespace
+
         ctx = {"event": SimpleNamespace(hp=5), **expr_mod.SAFE_BUILTINS}
         assert resolve("event.hp", ctx) == 5

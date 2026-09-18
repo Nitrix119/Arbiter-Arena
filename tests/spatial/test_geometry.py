@@ -5,10 +5,10 @@ import pytest
 
 from src.spatial.geometry import BoundingBox, Point3D, Vector3D
 
-
 # ---------------------------------------------------------------------------
 # Point3D
 # ---------------------------------------------------------------------------
+
 
 class TestPoint3D:
     def test_distance_to_self_is_zero(self):
@@ -41,6 +41,7 @@ class TestPoint3D:
 # ---------------------------------------------------------------------------
 # Vector3D
 # ---------------------------------------------------------------------------
+
 
 class TestVector3D:
     def test_dot_perpendicular_is_zero(self):
@@ -98,6 +99,7 @@ class TestVector3D:
 # ---------------------------------------------------------------------------
 # BoundingBox
 # ---------------------------------------------------------------------------
+
 
 def _box(x0, y0, z0, x1, y1, z1) -> BoundingBox:
     return BoundingBox(Point3D(x0, y0, z0), Point3D(x1, y1, z1))

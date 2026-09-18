@@ -10,7 +10,7 @@ class EventType(Enum):
 
     # Attack flow
     ATTACK_DECLARED = "attack_declared"  # before roll; can be cancelled
-    ATTACK_ROLLED = "attack_rolled" # after rolling to hit, before evaluating hit/miss
+    ATTACK_ROLLED = "attack_rolled"  # after rolling to hit, before evaluating hit/miss
     ATTACK_HIT = "attack_hit"
     ATTACK_MISS = "attack_miss"
 
@@ -19,10 +19,14 @@ class EventType(Enum):
     SPELL_HIT = "spell_hit"
 
     # Saving throw flow
-    SAVING_THROW_DECLARED = "saving_throw_declared"  # before roll; handlers can set advantage/disadvantage
+    SAVING_THROW_DECLARED = (
+        "saving_throw_declared"  # before roll; handlers can set advantage/disadvantage
+    )
 
     # Damage flow
-    DAMAGE_INCOMING = "damage_incoming"  # before HP reduction; handlers can modify damage
+    DAMAGE_INCOMING = (
+        "damage_incoming"  # before HP reduction; handlers can modify damage
+    )
     DAMAGE_DEALT = "damage_dealt"  # after damage is applied to the target
 
     # Healing flow

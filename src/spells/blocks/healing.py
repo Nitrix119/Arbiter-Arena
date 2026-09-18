@@ -37,7 +37,11 @@ def healing(block: Block, inv: Invocation) -> None:
     elif formula:
         amount = roll_formula(formula)
         try:
-            bonus = int(resolve(bonus_spec, ec)) if isinstance(bonus_spec, str) else int(bonus_spec)
+            bonus = (
+                int(resolve(bonus_spec, ec))
+                if isinstance(bonus_spec, str)
+                else int(bonus_spec)
+            )
         except Exception:
             bonus = 0
         amount += bonus
@@ -48,7 +52,9 @@ def healing(block: Block, inv: Invocation) -> None:
         return
 
     target.heal(amount)
-    inv.event_bus.emit(EventType.HEALING_APPLIED, HealingAppliedData(target=target, amount=amount))
+    inv.event_bus.emit(
+        EventType.HEALING_APPLIED, HealingAppliedData(target=target, amount=amount)
+    )
     inv.context["healing_amount"] = amount
     inv.healing_total += amount
     inv.healed_entity = target
@@ -63,13 +69,20 @@ REGISTRY.register(
         # `Field.required` cannot express. See SPELL_SYSTEM_REMAINING §4.
         fields=(
             TARGET_FIELD,
-            Field("amount", "expr",
-                  description="Expression for a computed amount; takes precedence "
-                              "over formula."),
-            Field("formula", "formula",
-                  description="Dice formula rolled at cast time."),
-            Field("bonus", "expr",
-                  description="Added to the formula roll (a number or an expression)."),
+            Field(
+                "amount",
+                "expr",
+                description="Expression for a computed amount; takes precedence "
+                "over formula.",
+            ),
+            Field(
+                "formula", "formula", description="Dice formula rolled at cast time."
+            ),
+            Field(
+                "bonus",
+                "expr",
+                description="Added to the formula roll (a number or an expression).",
+            ),
         ),
         reads=("damage_dealt",),
         writes=("healing_amount",),

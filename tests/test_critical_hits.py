@@ -11,7 +11,14 @@ resolve on the block engine; the nat-1/nat-20 crit rules ride the shared bus.
 import os
 from unittest.mock import patch
 
-from src.models import AbilityScores, StatBlock, Entity, AttackAction, Damage, DamageType
+from src.models import (
+    AbilityScores,
+    StatBlock,
+    Entity,
+    AttackAction,
+    Damage,
+    DamageType,
+)
 from src.models.action import SpellAction
 from src.models.spell_properties import TargetingType
 from src.combat.event_bus import EventBus
@@ -25,6 +32,7 @@ GLOBAL_RULES_DIR = os.path.join(os.path.dirname(__file__), "..", "rules", "globa
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_entity(name: str, ac: int = 10, hp: int = 100) -> Entity:
     sb = StatBlock(
@@ -52,8 +60,9 @@ def _resolve_spell(caster, defender, spell):
     dp = DamageProcessor(bus)
     load_rules_from_directory(GLOBAL_RULES_DIR, event_bus=bus)  # nat-20/nat-1
     program = parse_program(spell.program)
-    return resolve_blocks(caster, defender, spell, program,
-                          event_bus=bus, damage_processor=dp)
+    return resolve_blocks(
+        caster, defender, spell, program, event_bus=bus, damage_processor=dp
+    )
 
 
 def _sword(bonus_to_hit: int = 0, die_sides: int = 8) -> AttackAction:
@@ -90,6 +99,7 @@ def _attack_spell(die_sides: int = 8) -> SpellAction:
 # Natural 1 – weapon attacks
 # ---------------------------------------------------------------------------
 
+
 class TestNatural1WeaponAttack:
     """A natural 1 on a weapon attack roll must always be a miss."""
 
@@ -121,6 +131,7 @@ class TestNatural1WeaponAttack:
 # ---------------------------------------------------------------------------
 # Natural 20 – weapon attacks
 # ---------------------------------------------------------------------------
+
 
 class TestNatural20WeaponAttack:
     """A natural 20 on a weapon attack roll must always hit and double damage dice."""
@@ -160,18 +171,21 @@ class TestNatural20WeaponAttack:
         resolver, _ = _make_resolver()
         sword = _sword(bonus_to_hit=0, die_sides=8)
 
-        with patch("src.spells.blocks.rolls.roll_d20", return_value=20), \
-             patch("src.utils.dice.roll_dice", side_effect=lambda n, _s: n * 4):
+        with (
+            patch("src.spells.blocks.rolls.roll_d20", return_value=20),
+            patch("src.utils.dice.roll_dice", side_effect=lambda n, _s: n * 4),
+        ):
             _hit, damage, _log, _detail = resolver.resolve(attacker, defender, sword)
 
-        assert damage == 8, (
-            f"Critical hit with 1d8 (pinned to 4/die) should deal 8 (2d8), got {damage}"
-        )
+        assert (
+            damage == 8
+        ), f"Critical hit with 1d8 (pinned to 4/die) should deal 8 (2d8), got {damage}"
 
 
 # ---------------------------------------------------------------------------
 # Natural 1 – spell attack roll
 # ---------------------------------------------------------------------------
+
 
 class TestNatural1SpellAttack:
     """A natural 1 on a spell attack roll must always be a miss."""
@@ -203,6 +217,7 @@ class TestNatural1SpellAttack:
 # ---------------------------------------------------------------------------
 # Natural 20 – spell attack roll
 # ---------------------------------------------------------------------------
+
 
 class TestNatural20SpellAttack:
     """A natural 20 on a spell attack roll must always hit and double damage dice."""
@@ -236,8 +251,10 @@ class TestNatural20SpellAttack:
         caster = _make_entity("Caster")
         defender = _make_entity("Defender", ac=1, hp=200)
 
-        with patch("src.spells.blocks.rolls.roll_d20", return_value=20), \
-             patch("src.utils.dice.roll_dice", side_effect=lambda n, _s: n * 4):
+        with (
+            patch("src.spells.blocks.rolls.roll_d20", return_value=20),
+            patch("src.utils.dice.roll_dice", side_effect=lambda n, _s: n * 4),
+        ):
             result = _resolve_spell(caster, defender, _attack_spell(die_sides=8))
 
         assert result.damage_dealt == 8, (

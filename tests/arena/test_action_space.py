@@ -97,7 +97,9 @@ def test_out_of_range_single_target_spell_lists_no_targets(
     make_entity, make_combat, registry_with
 ):
     short = single_target_spell("Shocking Grasp", spell_level=0, distance_ft=5)
-    caster = make_entity("Wizard", team="a", pos=(0, 0, 0), known_spells=["Shocking Grasp"])
+    caster = make_entity(
+        "Wizard", team="a", pos=(0, 0, 0), known_spells=["Shocking Grasp"]
+    )
     enemy = make_entity("Goblin", team="b", pos=(60, 0, 0))
     combat = make_combat([caster, enemy], registry=registry_with(short))
 
@@ -158,7 +160,9 @@ def test_toward_melee_backs_off_a_blocking_third_body(make_entity, make_combat):
     force_turn(combat, fighter)
 
     toward = next(
-        o for o in move_candidates(combat, fighter) if o.option_id == f"toward_melee:{goblin.entity_id}"
+        o
+        for o in move_candidates(combat, fighter)
+        if o.option_id == f"toward_melee:{goblin.entity_id}"
     )
     # Naive standoff (~54 ft) is unreachable in 30 ft anyway, but the 30 ft point overlaps the
     # blocker at x=30; the option must be backed off to a clear point and be legal to execute.
@@ -180,10 +184,15 @@ def test_kite_option_only_for_ranged_attackers(make_entity, make_combat):
     assert f"kite_range:{goblin.entity_id}" not in melee_ids
 
 
-def test_attacks_exclude_allies_but_spells_tag_every_relation(make_entity, make_combat, registry_with):
+def test_attacks_exclude_allies_but_spells_tag_every_relation(
+    make_entity, make_combat, registry_with
+):
     caster = make_entity(
-        "Cleric", team="a", pos=(0, 0, 0),
-        attacks=[melee_attack()], known_spells=["Firebolt"],
+        "Cleric",
+        team="a",
+        pos=(0, 0, 0),
+        attacks=[melee_attack()],
+        known_spells=["Firebolt"],
     )
     ally = make_entity("Ally", team="a", pos=(5, 0, 5))
     enemy = make_entity("Goblin", team="b", pos=(5, 0, 0))

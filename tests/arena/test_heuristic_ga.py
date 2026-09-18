@@ -6,7 +6,6 @@ import random
 from src.arena.heuristic import ga
 from src.arena.heuristic.score import DEFAULT_WEIGHTS, HeuristicWeights
 
-
 # --- genome operations -------------------------------------------------------
 
 
@@ -24,10 +23,28 @@ def test_random_weights_within_bounds():
 
 
 def test_crossover_takes_each_gene_from_a_parent():
-    a = HeuristicWeights(damage=1, kill=1, exposure=1, engagement=1, friendly_fire=1,
-                         control=1, resource=1, aggression=1, end_turn_threshold=0.01)
-    b = HeuristicWeights(damage=2, kill=2, exposure=2, engagement=2, friendly_fire=2,
-                         control=2, resource=2, aggression=2, end_turn_threshold=0.02)
+    a = HeuristicWeights(
+        damage=1,
+        kill=1,
+        exposure=1,
+        engagement=1,
+        friendly_fire=1,
+        control=1,
+        resource=1,
+        aggression=1,
+        end_turn_threshold=0.01,
+    )
+    b = HeuristicWeights(
+        damage=2,
+        kill=2,
+        exposure=2,
+        engagement=2,
+        friendly_fire=2,
+        control=2,
+        resource=2,
+        aggression=2,
+        end_turn_threshold=0.02,
+    )
     child = ga.crossover(a, b, random.Random(3))
     for name in ga.WEIGHT_BOUNDS:
         assert getattr(child, name) in (getattr(a, name), getattr(b, name))
@@ -97,16 +114,27 @@ def test_small_ga_run_completes_and_logs(tmp_path):
     sample = individuals[0]
     assert set(sample["weights"]) == set(ga.WEIGHT_BOUNDS)
     assert len(sample["matches"]) == 1 * 2  # one scenario, two seeds
-    assert {"scenario", "seed", "winner", "llm_won", "margin", "rounds", "reason"} <= set(
-        sample["matches"][0]
-    )
+    assert {
+        "scenario",
+        "seed",
+        "winner",
+        "llm_won",
+        "margin",
+        "rounds",
+        "reason",
+    } <= set(sample["matches"][0])
 
 
 def test_ga_is_reproducible_under_its_seed(tmp_path):
     def run():
         config = ga.GAConfig(
-            scenario_names=("kiting",), population_size=5, generations=2,
-            seeds_per_gen=2, processes=1, ga_seed=99, out_dir=str(tmp_path),
+            scenario_names=("kiting",),
+            population_size=5,
+            generations=2,
+            seeds_per_gen=2,
+            processes=1,
+            ga_seed=99,
+            out_dir=str(tmp_path),
         )
         return ga.run_ga(config, log_path=str(tmp_path / "r.jsonl")).best_fitness
 

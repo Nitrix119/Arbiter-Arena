@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 class ConditionType(Enum):
     """Standard D&D 5e conditions."""
+
     BLINDED = "blinded"
     CHARMED = "charmed"
     DEAFENED = "deafened"

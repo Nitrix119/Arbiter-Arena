@@ -26,8 +26,10 @@ from src.spells.runner import run_block
 
 def _ent(name="E", ac=10, hp=30):
     sb = StatBlock(
-        name=name, ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-        hit_points_max=hp, armor_class=ac,
+        name=name,
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+        hit_points_max=hp,
+        armor_class=ac,
     )
     return Entity(sb)
 
@@ -43,17 +45,22 @@ def _wire(*entities, with_registry=True):
 
 def _apply_condition(bus, dp, reg, *, caster, target, ctype, **extra):
     """Run an `apply_condition` block on a wired invocation (caster casts on target)."""
-    env = CastEnv(action=None, event_bus=bus, damage_processor=dp,
-                  condition_rules=reg)
+    env = CastEnv(action=None, event_bus=bus, damage_processor=dp, condition_rules=reg)
     inv = Invocation(env=env, caster=caster, target=target, context=seed_context(0))
-    run_block(Block.from_dict({"block": "apply_condition", "condition_type": ctype, **extra}), inv)
+    run_block(
+        Block.from_dict({"block": "apply_condition", "condition_type": ctype, **extra}),
+        inv,
+    )
 
 
 def _declare(bus, attacker, defender):
-    return bus.emit(EventType.ATTACK_DECLARED, attacker=attacker, defender=defender, action=None)
+    return bus.emit(
+        EventType.ATTACK_DECLARED, attacker=attacker, defender=defender, action=None
+    )
 
 
 # ── The headline: reactive mechanics actually fire ────────────────────────────
+
 
 class TestConditionMechanicsFire:
 
@@ -108,13 +115,15 @@ class TestConditionMechanicsFire:
 
 # ── Lifetime: the mechanics end with the condition ────────────────────────────
 
+
 class TestConditionLifetime:
 
     def test_expires_after_duration(self):
         caster, blind, other = _ent("Caster"), _ent("Blind"), _ent("Other")
         bus, dp, reg = _wire(caster, blind, other)
-        _apply_condition(bus, dp, reg, caster=caster, target=blind,
-                         ctype="blinded", duration=2)
+        _apply_condition(
+            bus, dp, reg, caster=caster, target=blind, ctype="blinded", duration=2
+        )
 
         # Still blinded before expiry.
         assert _declare(bus, blind, other).data.get("disadvantage") is True
@@ -122,8 +131,10 @@ class TestConditionLifetime:
         blind.tick_lifetimes()  # end of turn 1: 2 → 1
         blind.tick_lifetimes()  # end of turn 2: 1 → 0 → dispose
 
-        assert blind.conditions == []                      # marker gone
-        assert _declare(bus, blind, other).data.get("disadvantage", False) is False  # rider gone
+        assert blind.conditions == []  # marker gone
+        assert (
+            _declare(bus, blind, other).data.get("disadvantage", False) is False
+        )  # rider gone
 
     def test_permanent_condition_persists(self):
         caster, blind, other = _ent("Caster"), _ent("Blind"), _ent("Other")
@@ -148,13 +159,26 @@ class TestConditionLifetime:
         """A condition applied inside a concentration spell ends when it does."""
         caster, blind, other = _ent("Caster"), _ent("Blind"), _ent("Other")
         bus, dp, reg = _wire(caster, blind, other)
-        program = parse_program([{
-            "block": "lifetime", "concentration": True,
-            "then": [{"block": "apply_condition", "condition_type": "blinded"}],
-        }])
+        program = parse_program(
+            [
+                {
+                    "block": "lifetime",
+                    "concentration": True,
+                    "then": [{"block": "apply_condition", "condition_type": "blinded"}],
+                }
+            ]
+        )
         from src.spells.evaluator import resolve as resolve_blocks
-        resolve_blocks(caster, blind, SpellAction(name="Hold", description="", spell_level=2),
-                       program, event_bus=bus, damage_processor=dp, condition_rules=reg)
+
+        resolve_blocks(
+            caster,
+            blind,
+            SpellAction(name="Hold", description="", spell_level=2),
+            program,
+            event_bus=bus,
+            damage_processor=dp,
+            condition_rules=reg,
+        )
 
         assert _declare(bus, blind, other).data.get("disadvantage") is True
         caster.end_concentration()
@@ -163,6 +187,7 @@ class TestConditionLifetime:
 
 
 # ── Graceful degradation + end-to-end cast ────────────────────────────────────
+
 
 class TestWiringSeams:
 
@@ -183,8 +208,9 @@ class TestWiringSeams:
         """
         caster, blind = _ent("Caster"), _ent("Blind")
         bus, dp, reg = _wire(caster, blind, with_registry=False)
-        _apply_condition(bus, dp, reg, caster=caster, target=blind,
-                         ctype="blinded", duration=2)
+        _apply_condition(
+            bus, dp, reg, caster=caster, target=blind, ctype="blinded", duration=2
+        )
 
         assert [c.condition_type for c in blind.conditions] == [ConditionType.BLINDED]
         blind.tick_lifetimes()  # end of turn 1: 2 → 1
@@ -206,8 +232,15 @@ class TestWiringSeams:
         so a charm-shaped condition works through `apply_condition` too."""
         charmer, victim, other = _ent("Charmer"), _ent("Victim"), _ent("Other")
         bus, dp, reg = _wire(charmer, victim, other)
-        _apply_condition(bus, dp, reg, caster=charmer, target=victim,
-                         ctype="charmed", bindings={"charmer": "event.caster"})
+        _apply_condition(
+            bus,
+            dp,
+            reg,
+            caster=charmer,
+            target=victim,
+            ctype="charmed",
+            bindings={"charmer": "event.caster"},
+        )
 
         # The charmed victim cannot attack the charmer (event cancelled)...
         assert _declare(bus, attacker=victim, defender=charmer).cancelled is True
@@ -221,7 +254,9 @@ class TestWiringSeams:
         bus, dp, reg = _wire(caster, target, other)
         resolver = SpellResolver(bus, dp, condition_rules=reg)
         spell = SpellAction(
-            name="Blind", description="", spell_level=2,
+            name="Blind",
+            description="",
+            spell_level=2,
             program=[{"block": "apply_condition", "condition_type": "blinded"}],
         )
         resolver.resolve(caster, [target], spell)

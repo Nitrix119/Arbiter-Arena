@@ -1,7 +1,14 @@
 """Tests for combat system."""
 
 import pytest
-from src.models import AbilityScores, StatBlock, Entity, AttackAction, Damage, DamageType
+from src.models import (
+    AbilityScores,
+    StatBlock,
+    Entity,
+    AttackAction,
+    Damage,
+    DamageType,
+)
 from src.combat import CombatSystem, CombatState
 
 
@@ -25,7 +32,7 @@ class TestCombatSystem:
             ability_scores=abilities_1,
             hit_points_max=30,
             armor_class=16,
-            proficiency_bonus=2
+            proficiency_bonus=2,
         )
 
         abilities_2 = AbilityScores(10, 16, 12, 11, 12, 8)
@@ -34,7 +41,7 @@ class TestCombatSystem:
             ability_scores=abilities_2,
             hit_points_max=20,
             armor_class=15,
-            proficiency_bonus=2
+            proficiency_bonus=2,
         )
 
         return Entity(stat_block_1, is_player_controlled=True), Entity(stat_block_2)
@@ -79,7 +86,7 @@ class TestCombatSystem:
             name="Sword Attack",
             description="A basic melee attack",
             bonus_to_hit=5,
-            damage=[Damage(DamageType.SLASHING, 8)]
+            damage=[Damage(DamageType.SLASHING, 8)],
         )
 
         combat = CombatSystem()
@@ -210,6 +217,7 @@ class TestAttackRange:
         # Edge-to-edge gap = 5 - 2.5 = 2.5 ft ≤ 5 ft → IN RANGE.
         # A naive centre-to-centre check (10 ft) would wrongly reject this.
         from src.models import CreatureSize
+
         sb = StatBlock(
             name="Golem",
             ability_scores=AbilityScores(20, 9, 20, 3, 11, 1),
@@ -228,6 +236,7 @@ class TestAttackRange:
         # Large defender (half=5) at x=15: left edge at x=10.
         # Edge-to-edge gap = 10 - 2.5 = 7.5 ft > 5 ft → OUT OF RANGE.
         from src.models import CreatureSize
+
         sb = StatBlock(
             name="Golem",
             ability_scores=AbilityScores(20, 9, 20, 3, 11, 1),
@@ -244,7 +253,14 @@ class TestAttackRange:
     def test_loaded_melee_weapon_has_5ft_range(self):
         from src.loaders.stat_block_loader import StatBlockLoader
         from pathlib import Path
-        path = str(Path(__file__).parent.parent / "examples" / "creatures" / "characters" / "fighter.json")
+
+        path = str(
+            Path(__file__).parent.parent
+            / "examples"
+            / "creatures"
+            / "characters"
+            / "fighter.json"
+        )
         sb = StatBlockLoader.load_from_json(path)
         longsword = next(a for a in sb.actions if a.name == "Longsword")
         assert longsword.range_ft == 5.0
@@ -252,7 +268,10 @@ class TestAttackRange:
     def test_loaded_ranged_weapon_has_extended_range(self):
         from src.loaders.stat_block_loader import StatBlockLoader
         from pathlib import Path
-        path = str(Path(__file__).parent.parent / "examples" / "creatures" / "goblin.json")
+
+        path = str(
+            Path(__file__).parent.parent / "examples" / "creatures" / "goblin.json"
+        )
         sb = StatBlockLoader.load_from_json(path)
         shortbow = next(a for a in sb.actions if a.name == "Shortbow")
         assert shortbow.range_ft == 80.0

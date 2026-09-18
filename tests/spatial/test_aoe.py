@@ -17,13 +17,17 @@ from src.models.stat_block import StatBlock
 from src.models.ability import AbilityScores
 from src.models.entity import Entity
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_entity(x: float = 0.0, y: float = 0.0, z: float = 0.0,
-                 size: CreatureSize = CreatureSize.MEDIUM) -> Entity:
+
+def _make_entity(
+    x: float = 0.0,
+    y: float = 0.0,
+    z: float = 0.0,
+    size: CreatureSize = CreatureSize.MEDIUM,
+) -> Entity:
     """Create a minimal entity at the given position with the given size."""
     sb = StatBlock(
         name="Test",
@@ -40,6 +44,7 @@ def _make_entity(x: float = 0.0, y: float = 0.0, z: float = 0.0,
 # ---------------------------------------------------------------------------
 # SphereVolume
 # ---------------------------------------------------------------------------
+
 
 class TestSphereVolume:
     def test_entity_at_center_inside(self):
@@ -83,6 +88,7 @@ class TestSphereVolume:
 # CylinderVolume
 # ---------------------------------------------------------------------------
 
+
 class TestCylinderVolume:
     def test_entity_inside(self):
         cyl = CylinderVolume(center_x=0, center_z=0, base_y=0, radius=10, height=20)
@@ -115,6 +121,7 @@ class TestCylinderVolume:
 # ---------------------------------------------------------------------------
 # ConeVolume
 # ---------------------------------------------------------------------------
+
 
 class TestConeVolume:
     def test_entity_directly_in_front_hit(self):
@@ -184,6 +191,7 @@ class TestConeVolume:
 # CubeVolume
 # ---------------------------------------------------------------------------
 
+
 class TestCubeVolume:
     def test_entity_directly_ahead_hit(self):
         cube = CubeVolume(
@@ -239,6 +247,7 @@ class TestCubeVolume:
 # ---------------------------------------------------------------------------
 # LineVolume
 # ---------------------------------------------------------------------------
+
 
 class TestLineVolume:
     def test_entity_along_line_hit(self):
@@ -296,6 +305,7 @@ class TestLineVolume:
 # SAT — the cross-product axis edge case
 # ---------------------------------------------------------------------------
 
+
 class TestSATOBBvsAABB:
     """Verify the SAT implementation handles the tricky cross-product axis case.
 
@@ -307,7 +317,7 @@ class TestSATOBBvsAABB:
     def test_aligned_boxes_overlap(self):
         # OBB aligned with world axes, clearly overlapping AABB
         obb_center = Point3D(0, 0, 0)
-        obb_axes = (Vector3D(1,0,0), Vector3D(0,1,0), Vector3D(0,0,1))
+        obb_axes = (Vector3D(1, 0, 0), Vector3D(0, 1, 0), Vector3D(0, 0, 1))
         obb_half = (5.0, 5.0, 5.0)
         aabb_center = Point3D(4, 0, 0)
         aabb_half = (2.0, 2.0, 2.0)
@@ -315,7 +325,7 @@ class TestSATOBBvsAABB:
 
     def test_separated_along_world_x(self):
         obb_center = Point3D(0, 0, 0)
-        obb_axes = (Vector3D(1,0,0), Vector3D(0,1,0), Vector3D(0,0,1))
+        obb_axes = (Vector3D(1, 0, 0), Vector3D(0, 1, 0), Vector3D(0, 0, 1))
         obb_half = (3.0, 3.0, 3.0)
         aabb_center = Point3D(10, 0, 0)
         aabb_half = (2.0, 2.0, 2.0)
@@ -324,7 +334,7 @@ class TestSATOBBvsAABB:
     def test_separated_along_obb_local_axis(self):
         # OBB rotated 45° around Y
         s = math.sqrt(0.5)
-        obb_axes = (Vector3D(s,0,s), Vector3D(0,1,0), Vector3D(-s,0,s))
+        obb_axes = (Vector3D(s, 0, s), Vector3D(0, 1, 0), Vector3D(-s, 0, s))
         obb_center = Point3D(0, 0, 0)
         obb_half = (10.0, 5.0, 0.5)  # very thin along w
         # AABB clearly separated along the obb's thin (w) axis
@@ -343,7 +353,7 @@ class TestSATOBBvsAABB:
         """
         s = math.sqrt(0.5)
         # OBB: very long along (1,0,1)/√2, thin in the perpendicular directions
-        obb_axes = (Vector3D(s,0,s), Vector3D(0,1,0), Vector3D(-s,0,s))
+        obb_axes = (Vector3D(s, 0, s), Vector3D(0, 1, 0), Vector3D(-s, 0, s))
         obb_center = Point3D(0, 0, 0)
         obb_half = (20.0, 0.1, 0.1)  # long needle along diagonal
 
@@ -358,7 +368,7 @@ class TestSATOBBvsAABB:
 
     def test_touching_boxes_overlap(self):
         obb_center = Point3D(0, 0, 0)
-        obb_axes = (Vector3D(1,0,0), Vector3D(0,1,0), Vector3D(0,0,1))
+        obb_axes = (Vector3D(1, 0, 0), Vector3D(0, 1, 0), Vector3D(0, 0, 1))
         obb_half = (5.0, 5.0, 5.0)
         aabb_center = Point3D(7, 0, 0)
         aabb_half = (2.0, 2.0, 2.0)

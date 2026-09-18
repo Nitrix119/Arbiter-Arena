@@ -32,6 +32,7 @@ _CREATURES_DIR = Path(__file__).parent.parent.parent / "examples" / "creatures"
 # Per-connection rate limiter
 # ---------------------------------------------------------------------------
 
+
 class _RateLimiter:
     """Token-bucket rate limiter — 20 messages per second per connection."""
 
@@ -74,6 +75,7 @@ def backend_to_frontend(entity: Entity) -> dict[str, float]:
 # State serialization
 # ---------------------------------------------------------------------------
 
+
 def serialize_combat_state(combat: CombatSystem) -> dict[str, Any]:
     """Build a full combat state snapshot for the frontend."""
     current = combat.get_current_entity()
@@ -84,8 +86,7 @@ def serialize_combat_state(combat: CombatSystem) -> dict[str, Any]:
         n = len(tracker.initiative_order)
         idx = tracker.current_turn_index
         turn_order = [
-            tracker.initiative_order[(idx + i) % n].entity.entity_id
-            for i in range(n)
+            tracker.initiative_order[(idx + i) % n].entity.entity_id for i in range(n)
         ]
     else:
         turn_order = []
@@ -119,7 +120,8 @@ def serialize_combat_state(combat: CombatSystem) -> dict[str, Any]:
                         str(level): remaining
                         for level, remaining in e.spell_slots.remaining.items()
                     }
-                    if e.spell_slots is not None else None
+                    if e.spell_slots is not None
+                    else None
                 ),
                 "conditions": [c.condition_type.value for c in e.conditions],
                 "stat_breakdowns": {
@@ -150,6 +152,7 @@ def serialize_initiative_order(combat: CombatSystem) -> list[dict[str, Any]]:
 # HTTP endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.get("/api/creatures")
 async def list_creatures() -> list[dict]:
     """Scan examples/creatures/ recursively and return each creature's name and path."""
@@ -157,10 +160,12 @@ async def list_creatures() -> list[dict]:
     for path in sorted(_CREATURES_DIR.rglob("*.json")):
         with path.open() as f:
             data = json.load(f)
-        creatures.append({
-            "name": data["name"],
-            "path": path.relative_to(_CREATURES_DIR).as_posix(),
-        })
+        creatures.append(
+            {
+                "name": data["name"],
+                "path": path.relative_to(_CREATURES_DIR).as_posix(),
+            }
+        )
     return creatures
 
 
@@ -191,23 +196,31 @@ async def get_spell_by_name(name: str, request: Request) -> dict:
 # WebSocket combat session
 # ---------------------------------------------------------------------------
 
+
 async def _send(ws: WebSocket, msg: dict[str, Any]) -> None:
     """Send a JSON message, merging in common fields."""
     await ws.send_json(msg)
 
 
 async def _send_error(
-    ws: WebSocket, seq: int | None, command: str | None, message: str,
+    ws: WebSocket,
+    seq: int | None,
+    command: str | None,
+    message: str,
 ) -> None:
-    await _send(ws, {
-        "type": "error",
-        "seq": seq,
-        "command": command,
-        "message": message,
-    })
+    await _send(
+        ws,
+        {
+            "type": "error",
+            "seq": seq,
+            "command": command,
+            "message": message,
+        },
+    )
 
 
 # ── Handler: start_combat ──────────────────────────────────────────────────
+
 
 async def handle_start_combat(
     ws: WebSocket,
@@ -261,8 +274,9 @@ async def handle_start_combat(
         # Attach global spell registry
         combat.spell_registry = ws.app.state.spell_registry
 
-        # Install the global rules on this session's bus. Every rule is a block program,
-        # so loading it *is* installing it on the block engine — the one resolution path.
+        # Install the global rules on this session's bus. Every rule is a block
+        # program, so loading it *is* installing it on the block engine — the one
+        # resolution path.
         load_rules_from_directory(
             str(_GLOBAL_RULES_DIR),
             event_bus=combat.event_bus,
@@ -274,17 +288,21 @@ async def handle_start_combat(
 
         combat.start_combat()
 
-    await _send(ws, {
-        "type": "combat_started",
-        "seq": seq,
-        "seed": seed,
-        "id_map": id_map,
-        "initiative_order": serialize_initiative_order(combat),
-        "combat_state": serialize_combat_state(combat),
-    })
+    await _send(
+        ws,
+        {
+            "type": "combat_started",
+            "seq": seq,
+            "seed": seed,
+            "id_map": id_map,
+            "initiative_order": serialize_initiative_order(combat),
+            "combat_state": serialize_combat_state(combat),
+        },
+    )
 
 
 # ── Handler: attack ────────────────────────────────────────────────────────
+
 
 async def handle_attack(
     ws: WebSocket,
@@ -300,8 +318,11 @@ async def handle_attack(
 
     action_name = msg["action_name"]
     action = next(
-        (a for a in attacker.stat_block.actions + attacker.granted_actions
-         if isinstance(a, AttackAction) and a.name == action_name),
+        (
+            a
+            for a in attacker.stat_block.actions + attacker.granted_actions
+            if isinstance(a, AttackAction) and a.name == action_name
+        ),
         None,
     )
     if action is None:
@@ -326,24 +347,31 @@ async def handle_attack(
     new_logs = combat.get_combat_log()[log_before:]
 
     result: dict[str, Any] = {
-        "target_id": defender.entity_id, "hit": hit, "damage": damage, "roll": roll_detail,
+        "target_id": defender.entity_id,
+        "hit": hit,
+        "damage": damage,
+        "roll": roll_detail,
     }
     if healing_total > 0:
         result["healing"] = healing_total
         result["healed_id"] = healed_entity.entity_id if healed_entity else None
 
-    await _send(ws, {
-        "type": "action_result",
-        "seq": seq,
-        "action_type": "attack",
-        "attacker_id": attacker.entity_id,
-        "results": [result],
-        "log": new_logs,
-        "combat_state": serialize_combat_state(combat),
-    })
+    await _send(
+        ws,
+        {
+            "type": "action_result",
+            "seq": seq,
+            "action_type": "attack",
+            "attacker_id": attacker.entity_id,
+            "results": [result],
+            "log": new_logs,
+            "combat_state": serialize_combat_state(combat),
+        },
+    )
 
 
 # ── Handler: cast_spell ────────────────────────────────────────────────────
+
 
 async def handle_cast_spell(
     ws: WebSocket,
@@ -375,7 +403,10 @@ async def handle_cast_spell(
 
     log_before = len(combat.log)
     results = combat.resolve_spell(
-        caster, defenders, spell_action, target=target_point,
+        caster,
+        defenders,
+        spell_action,
+        target=target_point,
         slot_level=msg.get("slot_level"),
     )
     new_logs = combat.get_combat_log()[log_before:]
@@ -392,20 +423,24 @@ async def handle_cast_spell(
         for entity, hit, damage, roll_detail, healing, healed in results
     ]
 
-    await _send(ws, {
-        "type": "action_result",
-        "seq": seq,
-        "action_type": "spell",
-        "attacker_id": caster.entity_id,
-        "results": per_target,
-        "animation": spell_action.animation if spell_action.animation else [],
-        "target_point": {"x": tp["x"], "y": tp["y"]} if tp else None,
-        "log": new_logs,
-        "combat_state": serialize_combat_state(combat),
-    })
+    await _send(
+        ws,
+        {
+            "type": "action_result",
+            "seq": seq,
+            "action_type": "spell",
+            "attacker_id": caster.entity_id,
+            "results": per_target,
+            "animation": spell_action.animation if spell_action.animation else [],
+            "target_point": {"x": tp["x"], "y": tp["y"]} if tp else None,
+            "log": new_logs,
+            "combat_state": serialize_combat_state(combat),
+        },
+    )
 
 
 # ── Handler: move ──────────────────────────────────────────────────────────
+
 
 async def handle_move(
     ws: WebSocket,
@@ -422,17 +457,21 @@ async def handle_move(
     bx, by, bz = frontend_to_backend(pos["x"], pos["y"])
     combat.move_entity(entity, bx, by, bz)
 
-    await _send(ws, {
-        "type": "move_result",
-        "seq": seq,
-        "entity_id": entity.entity_id,
-        "position": backend_to_frontend(entity),
-        "movement_remaining": entity.resources.movement,
-        "combat_state": serialize_combat_state(combat),
-    })
+    await _send(
+        ws,
+        {
+            "type": "move_result",
+            "seq": seq,
+            "entity_id": entity.entity_id,
+            "position": backend_to_frontend(entity),
+            "movement_remaining": entity.resources.movement,
+            "combat_state": serialize_combat_state(combat),
+        },
+    )
 
 
 # ── Handler: legendary_action ─────────────────────────────────────────────
+
 
 async def handle_legendary_action(
     ws: WebSocket,
@@ -447,12 +486,17 @@ async def handle_legendary_action(
 
     action_name = msg["action_name"]
     action = next(
-        (a for a in entity.stat_block.actions + entity.granted_actions
-         if a.name == action_name and a.legendary_action_cost > 0),
+        (
+            a
+            for a in entity.stat_block.actions + entity.granted_actions
+            if a.name == action_name and a.legendary_action_cost > 0
+        ),
         None,
     )
     if action is None:
-        raise ValueError(f"{entity.name} has no legendary action called '{action_name}'")
+        raise ValueError(
+            f"{entity.name} has no legendary action called '{action_name}'"
+        )
 
     # Build optional targets
     defender: Entity | None = None
@@ -475,7 +519,8 @@ async def handle_legendary_action(
 
     log_before = len(combat.log)
     result_data = combat.resolve_legendary_action(
-        entity, action,
+        entity,
+        action,
         defender=defender,
         defenders=defenders if defenders else None,
         target=target_point,
@@ -484,7 +529,14 @@ async def handle_legendary_action(
 
     if isinstance(action, AttackAction) and result_data is not None:
         hit, damage, roll_detail = result_data
-        results = [{"target_id": defender.entity_id, "hit": hit, "damage": damage, "roll": roll_detail}]
+        results = [
+            {
+                "target_id": defender.entity_id,
+                "hit": hit,
+                "damage": damage,
+                "roll": roll_detail,
+            }
+        ]
     elif isinstance(action, SpellAction) and result_data is not None:
         results = [
             {
@@ -500,18 +552,22 @@ async def handle_legendary_action(
     else:
         results = []
 
-    await _send(ws, {
-        "type": "action_result",
-        "seq": seq,
-        "action_type": "legendary_action",
-        "attacker_id": entity.entity_id,
-        "results": results,
-        "log": new_logs,
-        "combat_state": serialize_combat_state(combat),
-    })
+    await _send(
+        ws,
+        {
+            "type": "action_result",
+            "seq": seq,
+            "action_type": "legendary_action",
+            "attacker_id": entity.entity_id,
+            "results": results,
+            "log": new_logs,
+            "combat_state": serialize_combat_state(combat),
+        },
+    )
 
 
 # ── Handler: end_turn ──────────────────────────────────────────────────────
+
 
 async def handle_end_turn(
     ws: WebSocket,
@@ -529,24 +585,30 @@ async def handle_end_turn(
         # Determine winning team
         alive = combat.get_alive_entities()
         winner = alive[0].team if alive else None
-        await _send(ws, {
-            "type": "combat_ended",
-            "seq": seq,
-            "winner": winner,
-            "log": new_logs,
-            "combat_state": serialize_combat_state(combat),
-        })
+        await _send(
+            ws,
+            {
+                "type": "combat_ended",
+                "seq": seq,
+                "winner": winner,
+                "log": new_logs,
+                "combat_state": serialize_combat_state(combat),
+            },
+        )
     else:
         current = combat.get_current_entity()
-        await _send(ws, {
-            "type": "turn_changed",
-            "seq": seq,
-            "round": combat.round,
-            "turn": combat.turn,
-            "current_entity_id": current.entity_id if current else None,
-            "log": new_logs,
-            "combat_state": serialize_combat_state(combat),
-        })
+        await _send(
+            ws,
+            {
+                "type": "turn_changed",
+                "seq": seq,
+                "round": combat.round,
+                "turn": combat.turn,
+                "current_entity_id": current.entity_id if current else None,
+                "log": new_logs,
+                "combat_state": serialize_combat_state(combat),
+            },
+        )
 
 
 # ── WebSocket entry point ─────────────────────────────────────────────────
@@ -569,15 +631,18 @@ async def combat_websocket(websocket: WebSocket) -> None:
     # from every other — reseeding it can never disturb another connection's rolls.
     combat = CombatSystem(seed=random.randrange(2**31))
 
-    id_map: dict[str, str] = {}            # frontend_id → entity_id
+    id_map: dict[str, str] = {}  # frontend_id → entity_id
     entity_lookup: dict[str, Entity] = {}  # entity_id → Entity
 
     rate_limiter = _RateLimiter()
 
-    await _send(websocket, {
-        "type": "connected",
-        "state": combat.state.name,
-    })
+    await _send(
+        websocket,
+        {
+            "type": "connected",
+            "state": combat.state.name,
+        },
+    )
 
     try:
         while True:
@@ -592,7 +657,9 @@ async def combat_websocket(websocket: WebSocket) -> None:
 
             handler = _HANDLERS.get(msg_type)
             if handler is None:
-                await _send_error(websocket, seq, msg_type, f"Unknown command: {msg_type}")
+                await _send_error(
+                    websocket, seq, msg_type, f"Unknown command: {msg_type}"
+                )
                 continue
 
             try:

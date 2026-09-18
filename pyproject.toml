@@ -7,7 +7,10 @@ name = "dnd-auto-battler"
 version = "0.2.0"
 description = "D&D 5e combat simulator for automated battles"
 readme = "README.md"
-requires-python = ">=3.9"
+# Matches what CI actually tests (3.11 and 3.13). Claiming an older floor would
+# be an unverified promise, and 3.9/3.10 buy nothing here — current cloud
+# runtimes are on 3.11+.
+requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
     { name = "Nitrix119" }
@@ -19,9 +22,11 @@ dependencies = []
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "black==23.12.1",  # pinned: repo is formatted to Black's 2023 style; 24.0+ rewraps the whole tree
-    "flake8>=6.0",
-    "mypy>=1.0",
+    "black==26.5.1",  # pinned exactly: any drift rewraps the tree (see CLAUDE.md §9, 2026-08-29)
+    # Linters pinned exactly, for the same reason as Black: a new release can add
+    # a check and turn CI red on an unrelated change. Bump deliberately.
+    "flake8==7.3.0",
+    "mypy==2.3.1",
     "pyyaml>=6.0",
     "httpx>=0.27.0",
 ]
@@ -41,3 +46,10 @@ agents = [
 
 [project.urls]
 homepage = "https://github.com/Nitrix119/DnD-Auto-Battler"
+
+# Formatter/linter settings live here so every environment and CI agree.
+# Black's default line length is 88; flake8 defaults to 79, and that mismatch
+# was the source of ~460 phantom E501s. They are reconciled below.
+[tool.black]
+line-length = 88
+target-version = ["py311", "py313"]

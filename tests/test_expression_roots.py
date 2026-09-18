@@ -23,8 +23,10 @@ from src.spells.context import (
 
 def _invocation(**kwargs) -> Invocation:
     sb = StatBlock(
-        name="Caster", ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-        hit_points_max=20, armor_class=10,
+        name="Caster",
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+        hit_points_max=20,
+        armor_class=10,
     )
     entity = Entity(sb)
     env = CastEnv(action=None, event_bus=EventBus(), damage_processor=None)

@@ -7,12 +7,14 @@ happens in combat:
 
 * to-hit follows ``src/spells/blocks/rolls.py`` — a natural 20 always hits, a natural 1
   always misses, otherwise ``d20 + bonus >= AC``;
-* crits double the *dice* (not flat modifiers), matching ``src/spells/blocks/damage.py``;
+* crits double the *dice* (not flat modifiers), matching
+  ``src/spells/blocks/damage.py``;
 * saving throws use the defender's real save bonus and have no crit.
 
-``tests/arena/test_heuristic_estimate.py`` checks :func:`expected_formula` against a large
-sample of ``roll_formula`` (parity), so a drift between an estimate and the engine is
-caught rather than shipped silently (the discipline of CLAUDE.md §9 2026-09-03).
+``tests/arena/test_heuristic_estimate.py`` checks :func:`expected_formula` against a
+large sample of ``roll_formula`` (parity), so a drift between an estimate and the
+engine is caught rather than shipped silently (the discipline of CLAUDE.md §9
+2026-09-03).
 """
 
 from __future__ import annotations
@@ -33,7 +35,8 @@ MAX_HIT_CHANCE = 0.95
 _CRIT_FACE_CHANCE = 1.0 / 20.0
 
 # A stand-in armour class for *threat* estimation, when we score how dangerous an enemy
-# is in the abstract (its expected damage per turn) rather than against a concrete target.
+# is in the abstract (its expected damage per turn) rather than against a concrete
+# target.
 TYPICAL_AC = 14
 
 
@@ -76,7 +79,7 @@ def crit_chance(*, advantage: bool = False, disadvantage: bool = False) -> float
     if advantage and not disadvantage:
         return 1.0 - (1.0 - _CRIT_FACE_CHANCE) ** 2
     if disadvantage and not advantage:
-        return _CRIT_FACE_CHANCE ** 2
+        return _CRIT_FACE_CHANCE**2
     return _CRIT_FACE_CHANCE
 
 
@@ -123,10 +126,9 @@ def damage_multiplier(defender: Entity, damage_type: DamageType) -> float:
     return 1.0
 
 
-def _damage_ev(
-    dice_mean: float, flat: float, p_normal: float, p_crit: float
-) -> float:
-    """Expected damage of one hit-gated component: crit doubles the dice, not the flat."""
+def _damage_ev(dice_mean: float, flat: float, p_normal: float, p_crit: float) -> float:
+    """Expected damage of one hit-gated component: crit doubles the dice, not the
+    flat."""
     return p_normal * (dice_mean + flat) + p_crit * (2.0 * dice_mean + flat)
 
 
@@ -145,8 +147,10 @@ def expected_attack_damage(
     a hidden-information caller can decline to use resistances it shouldn't know.
     """
     p_hit = hit_chance(
-        attack.bonus_to_hit, defender.ac,
-        advantage=advantage, disadvantage=disadvantage,
+        attack.bonus_to_hit,
+        defender.ac,
+        advantage=advantage,
+        disadvantage=disadvantage,
     )
     p_crit = crit_chance(advantage=advantage, disadvantage=disadvantage)
     p_normal = max(0.0, p_hit - p_crit)  # hits that are not crits
@@ -173,8 +177,10 @@ def attack_ev_vs_ac(
     there is no concrete defender, only a stand-in :data:`TYPICAL_AC`.
     """
     p_hit = hit_chance(
-        attack.bonus_to_hit, target_ac,
-        advantage=advantage, disadvantage=disadvantage,
+        attack.bonus_to_hit,
+        target_ac,
+        advantage=advantage,
+        disadvantage=disadvantage,
     )
     p_crit = crit_chance(advantage=advantage, disadvantage=disadvantage)
     p_normal = max(0.0, p_hit - p_crit)
@@ -221,7 +227,8 @@ def _to_damage_type(name: str) -> Optional[DamageType]:
 
 
 def _unwrap_iterators(program: list) -> list:
-    """Flatten a ``for_each_target`` iterator to its ``then`` body for per-target scanning.
+    """Flatten a ``for_each_target`` iterator to its ``then`` body for per-target
+    scanning.
 
     An AoE spell wraps its save/damage in ``for_each_target``; the body runs once per
     affected creature, so its per-target expected damage is the expected damage of that
@@ -248,11 +255,11 @@ def spell_expected_damage(
     Scans the spell's block ``program`` for a leading gate (``attack_roll`` or
     ``saving_throw``) and its ``damage`` blocks, and applies the same to-hit / crit /
     save-halving rules the engine uses. It covers the common single-target damage shapes
-    (Fire Bolt: attack + hit-gated damage; Sacred Flame: save + no-damage-on-success) and,
-    by unwrapping a ``for_each_target`` iterator to its ``then`` body, the *per-target*
-    damage of an AoE spell (Fireball: save + half-on-success) — so an AoE placement search
-    can sum this over the creatures a volume catches. Conditional/multi-gate spells fall
-    back to a coarse sum of their ``damage`` blocks.
+    (Fire Bolt: attack + hit-gated damage; Sacred Flame: save + no-damage-on-success)
+    and, by unwrapping a ``for_each_target`` iterator to its ``then`` body, the
+    *per-target* damage of an AoE spell (Fireball: save + half-on-success) — so an AoE
+    placement search can sum this over the creatures a volume catches.
+    Conditional/multi-gate spells fall back to a coarse sum of their ``damage`` blocks.
     """
     program = _unwrap_iterators(spell.program or [])
     p_hit: Optional[float] = None
@@ -263,7 +270,9 @@ def spell_expected_damage(
         kind = block.get("block")
         if kind == "attack_roll":
             spec = block.get("attack_bonus", 0)
-            bonus = caster.spell_attack_bonus if spec == "use_caster_bonus" else int(spec)
+            bonus = (
+                caster.spell_attack_bonus if spec == "use_caster_bonus" else int(spec)
+            )
             p_hit = hit_chance(bonus, defender.ac)
             p_crit = crit_chance()
         elif kind == "saving_throw":

@@ -17,13 +17,16 @@ from src.spells.validate import validate_program, ProgramValidationError
 
 def _entity(name="E", hp=100):
     sb = StatBlock(
-        name=name, ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-        hit_points_max=hp, armor_class=10,
+        name=name,
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+        hit_points_max=hp,
+        armor_class=10,
     )
     return Entity(sb)
 
 
 # ── The old names are rejected at load ────────────────────────────────────────
+
 
 @pytest.mark.parametrize("old_value", ["caster", "defender"])
 def test_old_selector_values_fail_validation(old_value):
@@ -35,6 +38,7 @@ def test_old_selector_values_fail_validation(old_value):
 
 
 # ── The new names load and resolve ────────────────────────────────────────────
+
 
 @pytest.mark.parametrize("value", ["self", "current"])
 def test_new_selector_values_validate(value):
@@ -48,10 +52,16 @@ def _run_heal(target_value):
     caster.current_hp = 90  # leave headroom so a heal is observable
     defender.current_hp = 90
     bus = EventBus()
-    program = parse_program([{"block": "healing", "target": target_value, "amount": "5"}])
+    program = parse_program(
+        [{"block": "healing", "target": target_value, "amount": "5"}]
+    )
     resolve_blocks(
-        caster, defender, SpellAction(name="Heal", description="", spell_level=1),
-        program, event_bus=bus, damage_processor=DamageProcessor(bus),
+        caster,
+        defender,
+        SpellAction(name="Heal", description="", spell_level=1),
+        program,
+        event_bus=bus,
+        damage_processor=DamageProcessor(bus),
     )
     return caster, defender
 

@@ -1,6 +1,6 @@
 import bisect
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from .event_data import EventData
 from .events import EventType
@@ -20,16 +20,19 @@ class EventBus:
     same priority fire in subscription order (FIFO).
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Each entry is (-priority, insertion_order, handler).
         # Sorted ascending so that the *highest* priority (most negative
         # negated value) comes first; ties broken by insertion order.
         self._handlers: Dict[EventType, List[Tuple[int, int, Callable]]] = {}
         self._insertion_counter = 0
 
-    def subscribe(self, event_type: EventType,
-                  handler: Callable[[CombatEvent], None],
-                  priority: int = 0) -> None:
+    def subscribe(
+        self,
+        event_type: EventType,
+        handler: Callable[[CombatEvent], None],
+        priority: int = 0,
+    ) -> None:
         """Register a handler for *event_type*.
 
         Args:
@@ -42,14 +45,20 @@ class EventBus:
         bucket = self._handlers.setdefault(event_type, [])
         bisect.insort(bucket, entry)
 
-    def unsubscribe(self, event_type: EventType,
-                    handler: Callable[[CombatEvent], None]) -> None:
+    def unsubscribe(
+        self, event_type: EventType, handler: Callable[[CombatEvent], None]
+    ) -> None:
         if event_type in self._handlers:
             self._handlers[event_type] = [
                 e for e in self._handlers[event_type] if e[2] is not handler
             ]
 
-    def emit(self, event_type: EventType, data: EventData = None, **kwargs) -> CombatEvent:
+    def emit(
+        self,
+        event_type: EventType,
+        data: Optional[Union[EventData, Dict[str, Any]]] = None,
+        **kwargs: Any,
+    ) -> CombatEvent:
         """Fire an event with typed EventData or legacy **kwargs.
 
         Preferred:  ``emit(EventType.X, SomeData(field=val))``

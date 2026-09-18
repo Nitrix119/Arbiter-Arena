@@ -100,6 +100,7 @@ def _install_native_trigger(bus, block_dict):
 # 1. The live-event handle
 # ---------------------------------------------------------------------------
 
+
 class TestModifyDamageHandle:
     def _run(self, multiplier, damage_list, damage_type=None):
         bus = EventBus()
@@ -107,8 +108,7 @@ class TestModifyDamageHandle:
             event_type=EventType.DAMAGE_INCOMING,
             data=DamageIncomingData(defender=_entity(), damage_list=damage_list),
         )
-        inv = _new_inv(bus, _entity(), live_event=event,
-                       event_data=dict(event.data))
+        inv = _new_inv(bus, _entity(), live_event=event, event_data=dict(event.data))
         args = {"block": "modify_damage", "multiplier": multiplier}
         if damage_type is not None:
             args["damage_type"] = damage_type.name
@@ -154,6 +154,7 @@ class TestModifyDamageHandle:
 # 2. The resistance trigger's numbers
 # ---------------------------------------------------------------------------
 
+
 class TestResistanceOutcome:
     # These figures are the ones the pre-block resistance rule produced; they are
     # asserted directly now that it is the only implementation.
@@ -178,14 +179,18 @@ class TestResistanceOutcome:
 # 2b. force_critical — the crit-rule primitive
 # ---------------------------------------------------------------------------
 
+
 class TestForceCriticalHandle:
     def _run(self, outcome, roll):
         bus = EventBus()
         event = CombatEvent(
             event_type=EventType.ATTACK_ROLLED,
             data=AttackRolledData(
-                attacker=_entity(), defender=_entity(), action=None,
-                roll=roll, total=roll,
+                attacker=_entity(),
+                defender=_entity(),
+                action=None,
+                roll=roll,
+                total=roll,
             ),
         )
         inv = _new_inv(bus, _entity(), live_event=event, event_data=dict(event.data))
@@ -206,8 +211,9 @@ class TestForceCriticalHandle:
         bus = EventBus()
         event = CombatEvent(
             event_type=EventType.ATTACK_ROLLED,
-            data=AttackRolledData(attacker=_entity(), defender=_entity(),
-                                  action=None, roll=20, total=20),
+            data=AttackRolledData(
+                attacker=_entity(), defender=_entity(), action=None, roll=20, total=20
+            ),
         )
         inv = _new_inv(bus, _entity(), live_event=event, event_data=dict(event.data))
         run_block(Block.from_dict({"block": "force_critical"}), inv)
@@ -231,8 +237,13 @@ class TestForceCriticalParity:
             _install_native_trigger(bus, trigger)
         event = bus.emit(
             EventType.ATTACK_ROLLED,
-            AttackRolledData(attacker=_entity(), defender=_entity(),
-                             action=None, roll=roll, total=roll),
+            AttackRolledData(
+                attacker=_entity(),
+                defender=_entity(),
+                action=None,
+                roll=roll,
+                total=roll,
+            ),
         )
         return event.data["critical_hit"], event.data["critical_miss"]
 
@@ -255,6 +266,7 @@ class TestForceCriticalParity:
 # ---------------------------------------------------------------------------
 # 3. The condition-library event-modifiers: advantage / disadvantage / cancel
 # ---------------------------------------------------------------------------
+
 
 class TestConditionEventModifiers:
     def _event(self):

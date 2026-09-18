@@ -25,9 +25,12 @@ REFILL_RULE_PATH = "rules/global/action_economy_refill.json"
 
 # -- Helpers ------------------------------------------------------------------
 
+
 def _make_entity(name="Fighter", hp=30, ac=15, speed=30):
     abilities = AbilityScores(14, 14, 14, 10, 10, 10)
-    sb = StatBlock(name=name, ability_scores=abilities, hit_points_max=hp, armor_class=ac)
+    sb = StatBlock(
+        name=name, ability_scores=abilities, hit_points_max=hp, armor_class=ac
+    )
     sb.resource_defaults["speed"] = speed
     entity = Entity(sb)
     entity.refill_resources()
@@ -36,16 +39,26 @@ def _make_entity(name="Fighter", hp=30, ac=15, speed=30):
 
 def _emit_turn(bus, entity, round_num=1, turn_num=1):
     """Emit a TURN_START event for *entity*."""
-    bus.emit(EventType.TURN_START, TurnEventData(
-        entity=entity, round_num=round_num, turn_num=turn_num,
-    ))
+    bus.emit(
+        EventType.TURN_START,
+        TurnEventData(
+            entity=entity,
+            round_num=round_num,
+            turn_num=turn_num,
+        ),
+    )
 
 
 def _emit_turn_end(bus, entity, round_num=1, turn_num=1):
     """Emit a TURN_END event for *entity* (ticks lifetimes/durations)."""
-    bus.emit(EventType.TURN_END, TurnEventData(
-        entity=entity, round_num=round_num, turn_num=turn_num,
-    ))
+    bus.emit(
+        EventType.TURN_END,
+        TurnEventData(
+            entity=entity,
+            round_num=round_num,
+            turn_num=turn_num,
+        ),
+    )
 
 
 def _cast_longstrider_on(entity, *others):
@@ -57,8 +70,9 @@ def _cast_longstrider_on(entity, *others):
     dp = DamageProcessor(bus)
     load_rule_file(REFILL_RULE_PATH, event_bus=bus, damage_processor=dp)
     resolver = SpellResolver(bus, dp, condition_rules=reg)
-    resolver.resolve(entity, [entity],
-                     StatBlockLoader.load_spell_from_json(LONGSTRIDER_SPELL_PATH))
+    resolver.resolve(
+        entity, [entity], StatBlockLoader.load_spell_from_json(LONGSTRIDER_SPELL_PATH)
+    )
     return bus, reg
 
 
@@ -68,6 +82,7 @@ def _setup(entity):
 
 
 # -- Tests --------------------------------------------------------------------
+
 
 class TestLongstrider:
     def test_grants_extra_movement_after_refill(self):
@@ -122,7 +137,9 @@ class TestLongstrider:
 
         for r in range(1, 6):
             _emit_turn(bus, entity, round_num=r)
-            assert entity.resources.movement == 40, f"Round {r}: should still have longstrider"
+            assert (
+                entity.resources.movement == 40
+            ), f"Round {r}: should still have longstrider"
             _emit_turn_end(bus, entity, round_num=r)
 
         # Still active after many rounds

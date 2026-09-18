@@ -2,8 +2,31 @@
 
 import json
 import re
-from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
+
+from src.models import (
+    AbilityScores,
+    StatBlock,
+    AttackAction,
+    SpellAction,
+    Damage,
+    DamageType,
+    Action,
+    ActionType,
+    ActionCost,
+    RangeType,
+    SpellRange,
+    TargetingType,
+    AOEShape,
+    AOEProperties,
+    CastingTimeType,
+    CastingTime,
+    DurationUnit,
+    Duration,
+    SpellComponents,
+)
+from src.models.creature_size import CreatureSize
+from src.models.stat_block import DEFAULT_RESOURCE_DEFAULTS
 
 # Full-match validator for damage formulas. Accepts one or more terms, each a
 # dice term (NdM) or flat modifier (N), joined by + / -, e.g. "3d8+6",
@@ -30,9 +53,7 @@ def _enum_lookup(enum_cls, raw: Any, field_name: str):
         return enum_cls[str(raw).upper()]
     except KeyError:
         valid = ", ".join(m.name for m in enum_cls)
-        raise ValueError(
-            f"Unknown {field_name} {raw!r}; valid values: {valid}"
-        )
+        raise ValueError(f"Unknown {field_name} {raw!r}; valid values: {valid}")
 
 
 def _parse_damage_types(values: Any, field_name: str) -> list:
@@ -41,20 +62,6 @@ def _parse_damage_types(values: Any, field_name: str) -> list:
     Accepts case-insensitive names (e.g. ``"fire"`` or ``"FIRE"``).
     """
     return [_enum_lookup(DamageType, raw, field_name) for raw in (values or [])]
-
-from src.models import (
-    AbilityScores, StatBlock, AttackAction, SpellAction, Damage, DamageType,
-    Action, ActionType, ActionCost,
-    RangeType, SpellRange,
-    TargetingType,
-    AOEShape, AOEProperties,
-    CastingTimeType, CastingTime,
-    DurationUnit, Duration,
-    SpellComponents,
-)
-from src.models.creature_size import CreatureSize
-from src.models.spell_slots import SpellSlots
-from src.models.stat_block import DEFAULT_RESOURCE_DEFAULTS
 
 
 class StatBlockLoader:
@@ -74,11 +81,13 @@ class StatBlockLoader:
             FileNotFoundError: If file doesn't exist
             ValueError: If JSON is invalid
         """
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             try:
                 data = json.load(f)
             except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON in creature file {filepath!r}: {exc}") from exc
+                raise ValueError(
+                    f"Invalid JSON in creature file {filepath!r}: {exc}"
+                ) from exc
         return StatBlockLoader.from_dict(data)
 
     @staticmethod
@@ -99,11 +108,13 @@ class StatBlockLoader:
             FileNotFoundError: If file doesn't exist
             ValueError: If the action is not a spell
         """
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             try:
                 data = json.load(f)
             except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON in spell file {filepath!r}: {exc}") from exc
+                raise ValueError(
+                    f"Invalid JSON in spell file {filepath!r}: {exc}"
+                ) from exc
         action = StatBlockLoader._parse_action(data)
         if not isinstance(action, SpellAction):
             raise ValueError(f"Expected a spell action in {filepath!r}")
@@ -163,13 +174,18 @@ class StatBlockLoader:
             known_spells=list(data.get("known_spells", [])),
             spellcasting_ability=data.get("spellcasting_ability", ""),
             spell_slot_defaults=dict(data.get("spell_slots", {})),
-            legendary_action_count=data.get("legendary_actions", {}).get("count_per_round", 0),
+            legendary_action_count=data.get("legendary_actions", {}).get(
+                "count_per_round", 0
+            ),
             damage_vulnerabilities=_parse_damage_types(
-                data.get("damage_vulnerabilities"), "damage_vulnerabilities"),
+                data.get("damage_vulnerabilities"), "damage_vulnerabilities"
+            ),
             damage_resistances=_parse_damage_types(
-                data.get("damage_resistances"), "damage_resistances"),
+                data.get("damage_resistances"), "damage_resistances"
+            ),
             damage_immunities=_parse_damage_types(
-                data.get("damage_immunities"), "damage_immunities"),
+                data.get("damage_immunities"), "damage_immunities"
+            ),
         )
 
         # Add saving throws if provided
@@ -183,26 +199,36 @@ class StatBlockLoader:
         """Parse the damage list from an action dictionary."""
         damage = []
         for dmg_data in action_data.get("damage", []):
-            dmg_type = _enum_lookup(DamageType, dmg_data.get("type", "BLUDGEONING"), "damage type")
+            dmg_type = _enum_lookup(
+                DamageType, dmg_data.get("type", "BLUDGEONING"), "damage type"
+            )
             raw_formula = dmg_data.get("formula")
-            formula = _validate_formula(raw_formula) if raw_formula is not None else None
-            damage.append(Damage(
-                dmg_type,
-                dmg_data.get("amount", 0),
-                formula=formula,
-            ))
+            formula = (
+                _validate_formula(raw_formula) if raw_formula is not None else None
+            )
+            damage.append(
+                Damage(
+                    dmg_type,
+                    dmg_data.get("amount", 0),
+                    formula=formula,
+                )
+            )
         return damage
 
     @staticmethod
     def _parse_spell_range(data: Dict[str, Any]) -> SpellRange:
         """Parse a spell range dict into a SpellRange."""
-        range_type = _enum_lookup(RangeType, data.get("type", "touch"), "spell range type")
+        range_type = _enum_lookup(
+            RangeType, data.get("type", "touch"), "spell range type"
+        )
         return SpellRange(range_type, distance_ft=data.get("distance_ft"))
 
     @staticmethod
     def _parse_casting_time(data: Dict[str, Any]) -> CastingTime:
         """Parse a casting_time dict into a CastingTime."""
-        ct_type = _enum_lookup(CastingTimeType, data.get("type", "action"), "casting time type")
+        ct_type = _enum_lookup(
+            CastingTimeType, data.get("type", "action"), "casting time type"
+        )
         return CastingTime(
             ct_type,
             count=data.get("count", 1),
@@ -213,7 +239,9 @@ class StatBlockLoader:
     @staticmethod
     def _parse_duration(data: Dict[str, Any]) -> Duration:
         """Parse a duration dict into a Duration."""
-        unit = _enum_lookup(DurationUnit, data.get("unit", "instantaneous"), "duration unit")
+        unit = _enum_lookup(
+            DurationUnit, data.get("unit", "instantaneous"), "duration unit"
+        )
         return Duration(
             unit,
             count=data.get("count", 1),
@@ -274,6 +302,7 @@ class StatBlockLoader:
             weapon_program = action_data.get("program") or []
             if weapon_program:
                 from src.spells.validate import validate_program
+
                 validate_program(weapon_program, spell_name=name)
             return AttackAction(
                 name=name,
@@ -296,14 +325,17 @@ class StatBlockLoader:
             )
 
             targeting_type = _enum_lookup(
-                TargetingType, action_data.get("targeting_type", "single_target"),
+                TargetingType,
+                action_data.get("targeting_type", "single_target"),
                 "targeting_type",
             )
 
             aoe = None
             aoe_data = action_data.get("aoe")
             if aoe_data:
-                shape = _enum_lookup(AOEShape, aoe_data.get("shape", "sphere"), "AoE shape")
+                shape = _enum_lookup(
+                    AOEShape, aoe_data.get("shape", "sphere"), "AoE shape"
+                )
                 aoe = AOEProperties(shape, aoe_data.get("size_ft", 5))
 
             ct_data = action_data.get("casting_time", {})
@@ -335,12 +367,17 @@ class StatBlockLoader:
             # (loaders -> rules -> combat -> spell_registry -> loaders).
             program = action_data.get("program")
             if program is None:
-                legacy = " It uses the retired 'effects' form." if "effects" in action_data else ""
+                legacy = (
+                    " It uses the retired 'effects' form."
+                    if "effects" in action_data
+                    else ""
+                )
                 raise ValueError(
                     f"Spell {name!r} has no 'program'. A spell must be authored as a "
                     f"block program (a list of blocks keyed by 'block').{legacy}"
                 )
             from src.spells.validate import validate_program
+
             validate_program(program, spell_name=name)
 
             return SpellAction(
@@ -357,7 +394,9 @@ class StatBlockLoader:
                 components=components,
                 higher_level_scaling=action_data.get("higher_level_scaling"),
                 can_target_self=action_data.get("can_target_self", False),
-                cannot_cause_self_damage=action_data.get("cannot_cause_self_damage", False),
+                cannot_cause_self_damage=action_data.get(
+                    "cannot_cause_self_damage", False
+                ),
                 animation=action_data.get("animation", []),
                 legendary_action_cost=legendary_action_cost,
                 **cost_kwargs,
@@ -381,7 +420,7 @@ class StatBlockLoader:
             filepath: Path to save to
         """
         data = StatBlockLoader.to_dict(stat_block)
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(data, f, indent=2)
 
     @staticmethod
@@ -395,8 +434,10 @@ class StatBlockLoader:
         if action.recharge:
             base["recharge"] = action.recharge
 
-        # Serialize cost (omit if all zeros — the default is derived by the Action class)
+        # Serialize cost (omit if all zeros — the default is derived by the
+        # Action class)
         from src.models.action_resources import NO_COST
+
         if action.cost != NO_COST:
             cost_dict: Dict[str, Any] = {}
             if action.cost.actions:

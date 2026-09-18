@@ -11,13 +11,15 @@ from .initiative import InitiativeTracker
 
 # Conditions that prevent an entity from taking any meaningful action.
 # Entities with any of these conditions have their turn skipped automatically.
-_SKIP_CONDITIONS: frozenset[ConditionType] = frozenset({
-    ConditionType.UNCONSCIOUS,
-    ConditionType.INCAPACITATED,
-    ConditionType.PARALYZED,
-    ConditionType.STUNNED,
-    ConditionType.PETRIFIED,
-})
+_SKIP_CONDITIONS: frozenset[ConditionType] = frozenset(
+    {
+        ConditionType.UNCONSCIOUS,
+        ConditionType.INCAPACITATED,
+        ConditionType.PARALYZED,
+        ConditionType.STUNNED,
+        ConditionType.PETRIFIED,
+    }
+)
 
 
 def _should_skip(entity: Entity) -> bool:
@@ -44,11 +46,16 @@ class TurnManager:
         """Begin the first round."""
         self.round = 1
         self.turn = 1
-        self._event_bus.emit(EventType.ROUND_START, RoundEventData(round_num=self.round))
+        self._event_bus.emit(
+            EventType.ROUND_START, RoundEventData(round_num=self.round)
+        )
+        current = self._initiative_tracker.get_current_entity()
+        # Combat cannot start without combatants, so initiative is never empty.
+        assert current is not None, "Cannot start a turn with an empty initiative order"
         self._event_bus.emit(
             EventType.TURN_START,
             TurnEventData(
-                entity=self._initiative_tracker.get_current_entity(),
+                entity=current,
                 round_num=self.round,
                 turn_num=self.turn,
             ),
@@ -61,6 +68,8 @@ class TurnManager:
             True if combat should continue, False if <=1 combatant alive.
         """
         current = self._initiative_tracker.get_current_entity()
+        # Combat cannot start without combatants, so initiative is never empty.
+        assert current is not None, "Cannot end a turn with an empty initiative order"
         self._event_bus.emit(
             EventType.TURN_END,
             TurnEventData(entity=current, round_num=self.round, turn_num=self.turn),
@@ -70,17 +79,22 @@ class TurnManager:
         self.turn += 1
 
         if self._initiative_tracker.current_turn_index == 0:
-            self._event_bus.emit(EventType.ROUND_END, RoundEventData(round_num=self.round))
+            self._event_bus.emit(
+                EventType.ROUND_END, RoundEventData(round_num=self.round)
+            )
             self.round += 1
             self.turn = 1
-            self._event_bus.emit(EventType.ROUND_START, RoundEventData(round_num=self.round))
+            self._event_bus.emit(
+                EventType.ROUND_START, RoundEventData(round_num=self.round)
+            )
 
         alive = [c for c in self._combatants if c.is_alive()]
         if len(alive) <= 1:
             return False
 
         # Skip entities whose conditions prevent acting (unconscious, stunned, etc.).
-        # Guard against the degenerate case where every remaining entity is incapacitated.
+        # Guard against the degenerate case where every remaining entity is
+        # incapacitated.
         skips = 0
         max_skips = len(self._combatants)
         while next_entity is not None and _should_skip(next_entity):
@@ -90,11 +104,18 @@ class TurnManager:
             self.turn += 1
             skips += 1
             if self._initiative_tracker.current_turn_index == 0:
-                self._event_bus.emit(EventType.ROUND_END, RoundEventData(round_num=self.round))
+                self._event_bus.emit(
+                    EventType.ROUND_END, RoundEventData(round_num=self.round)
+                )
                 self.round += 1
                 self.turn = 1
-                self._event_bus.emit(EventType.ROUND_START, RoundEventData(round_num=self.round))
+                self._event_bus.emit(
+                    EventType.ROUND_START, RoundEventData(round_num=self.round)
+                )
 
+        # The loop above only exits on a non-skipping entity; next_turn() returns
+        # None only for an empty initiative order, which cannot occur here.
+        assert next_entity is not None, "Cannot start a turn with no next entity"
         self._event_bus.emit(
             EventType.TURN_START,
             TurnEventData(entity=next_entity, round_num=self.round, turn_num=self.turn),

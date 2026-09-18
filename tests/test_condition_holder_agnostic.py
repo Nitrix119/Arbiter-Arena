@@ -30,8 +30,10 @@ CONDITIONS_DIR = os.path.join(
 
 def _entity(name="E", hp=100):
     sb = StatBlock(
-        name=name, ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-        hit_points_max=hp, armor_class=10,
+        name=name,
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+        hit_points_max=hp,
+        armor_class=10,
     )
     return Entity(sb)
 
@@ -49,14 +51,19 @@ def _condition_rules(*names):
 def _cast(caster, target, program, condition_rules):
     bus = EventBus()
     resolve_blocks(
-        caster, target, SpellAction(name="Cast", description="", spell_level=1),
-        parse_program(program), event_bus=bus,
-        damage_processor=DamageProcessor(bus), condition_rules=condition_rules,
+        caster,
+        target,
+        SpellAction(name="Cast", description="", spell_level=1),
+        parse_program(program),
+        event_bus=bus,
+        damage_processor=DamageProcessor(bus),
+        condition_rules=condition_rules,
     )
     return bus
 
 
 # ── Regression guard: Charmed's charmer still resolves to the caster ───────────
+
 
 def test_charmed_binding_resolves_to_the_caster():
     """Casting charmed at a target binds ``charmer`` to the caster, not the target.
@@ -64,22 +71,35 @@ def test_charmed_binding_resolves_to_the_caster():
     The rider now installs with caster = the charmed creature, so this only works
     because the binding is pre-resolved against the cast invocation.
     """
-    caster, target, bystander = _entity("Caster"), _entity("Target"), _entity("Bystander")
-    program = [{
-        "block": "apply_condition", "condition_type": "charmed",
-        "target": "current", "bindings": {"charmer": "event.caster"},
-    }]
+    caster, target, bystander = (
+        _entity("Caster"),
+        _entity("Target"),
+        _entity("Bystander"),
+    )
+    program = [
+        {
+            "block": "apply_condition",
+            "condition_type": "charmed",
+            "target": "current",
+            "bindings": {"charmer": "event.caster"},
+        }
+    ]
     bus = _cast(caster, target, program, _condition_rules("charmed"))
 
     # The charmed target cannot attack its charmer (the caster)…
-    ev = bus.emit(EventType.ATTACK_DECLARED, attacker=target, defender=caster, action=None)
+    ev = bus.emit(
+        EventType.ATTACK_DECLARED, attacker=target, defender=caster, action=None
+    )
     assert ev.cancelled is True
     # …but can attack anyone else.
-    ev2 = bus.emit(EventType.ATTACK_DECLARED, attacker=target, defender=bystander, action=None)
+    ev2 = bus.emit(
+        EventType.ATTACK_DECLARED, attacker=target, defender=bystander, action=None
+    )
     assert ev2.cancelled is False
 
 
 # ── The previously-latent case: a condition applied to the caster itself ───────
+
 
 def test_condition_applied_to_self_binds_rider_to_caster():
     """``apply_condition`` with ``target: "self"`` installs the rider on the caster.
@@ -89,14 +109,22 @@ def test_condition_applied_to_self_binds_rider_to_caster():
     ``holder: "defender"`` would have resolved wrong.
     """
     caster, other = _entity("Caster"), _entity("Other")
-    program = [{
-        "block": "apply_condition", "condition_type": "blinded", "target": "self",
-    }]
+    program = [
+        {
+            "block": "apply_condition",
+            "condition_type": "blinded",
+            "target": "self",
+        }
+    ]
     bus = _cast(caster, other, program, _condition_rules("blinded"))
 
     # The blinded caster attacks → disadvantage flagged on its own attack.
-    ev = bus.emit(EventType.ATTACK_DECLARED, attacker=caster, defender=other, action=None)
+    ev = bus.emit(
+        EventType.ATTACK_DECLARED, attacker=caster, defender=other, action=None
+    )
     assert ev.data.get("disadvantage") is True
     # An unrelated attacker is unaffected.
-    ev2 = bus.emit(EventType.ATTACK_DECLARED, attacker=other, defender=caster, action=None)
+    ev2 = bus.emit(
+        EventType.ATTACK_DECLARED, attacker=other, defender=caster, action=None
+    )
     assert ev2.data.get("disadvantage") is not True

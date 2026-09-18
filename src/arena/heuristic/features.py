@@ -117,22 +117,23 @@ def offense(
     policy: InformationPolicy,
     committed: Optional[Dict[str, float]] = None,
 ) -> Tuple[float, float]:
-    """The offensive value of *action*, as ``(progress, kill)`` — both threat-normalised.
+    """The offensive value of *action*, as ``(progress, kill)`` — both
+    threat-normalised.
 
     * ``progress`` — threat-weighted fraction of the target's *remaining* effective HP
-      removed (``threat_ratio · min(damage, hp) / hp``). Capping at ``hp`` means overkill
-      adds nothing, and multiplying by the target's threat makes the same damage worth
-      more against a dangerous foe — so overkill-avoidance and target-priority are folded
-      in.
+      removed (``threat_ratio · min(damage, hp) / hp``). Capping at ``hp`` means
+      overkill adds nothing, and multiplying by the target's threat makes the same
+      damage worth more against a dangerous foe — so overkill-avoidance and
+      target-priority are folded in.
     * ``kill`` — the threat removed *this turn* when the blow is expected to be lethal
       (``damage >= hp``); a discontinuous bonus for deleting a whole action economy now
       rather than next round.
 
     ``committed`` is the team damage-ledger — expected damage already promised to each
-    target by earlier allies this round (§8). It is subtracted from the target's effective
-    HP, so a foe an ally is already about to kill shows ~0 remaining and this unit looks
-    elsewhere (focus fire without overkill). Returned as two numbers so the genome can
-    weight securing-a-kill against chip damage.
+    target by earlier allies this round (§8). It is subtracted from the target's
+    effective HP, so a foe an ally is already about to kill shows ~0 remaining and this
+    unit looks elsewhere (focus fire without overkill). Returned as two numbers so the
+    genome can weight securing-a-kill against chip damage.
     """
     target = _lookup(combat, action.target_id)
     if target is None or not target.is_alive():
@@ -161,10 +162,11 @@ def aoe_offense(
 ) -> Tuple[float, float, float]:
     """Offensive value of an area spell, as ``(progress, kill, friendly_fire)``.
 
-    Sums the single-target offensive value (§5.1) over every enemy the volume catches, and
-    separately accumulates ``friendly_fire`` — expected damage to allies caught in it, as a
-    fraction of their HP — so the scorer can price harming a friend against hitting more
-    foes. Reads the precomputed ``aoe_targets`` (who the engine says the volume hits).
+    Sums the single-target offensive value (§5.1) over every enemy the volume catches,
+    and separately accumulates ``friendly_fire`` — expected damage to allies caught in
+    it, as a fraction of their HP — so the scorer can price harming a friend against
+    hitting more foes. Reads the precomputed ``aoe_targets`` (who the engine says the
+    volume hits).
     """
     from . import estimate
 
@@ -222,7 +224,9 @@ def control(
     value = 0.0
     for block in program:
         if block.get("block") == "apply_condition":
-            severity = CONTROL_SEVERITY.get(block.get("condition_type", ""), _DEFAULT_SEVERITY)
+            severity = CONTROL_SEVERITY.get(
+                block.get("condition_type", ""), _DEFAULT_SEVERITY
+            )
             value += severity * ratio * p_fail
     return value
 
@@ -248,7 +252,8 @@ def exposure_fraction(
     *,
     policy: InformationPolicy,
 ) -> float:
-    """Expected incoming damage next turn if *entity* ends at *pos*, as a fraction of HP.
+    """Expected incoming damage next turn if *entity* ends at *pos*, as a fraction of
+    HP.
 
     A 1-ply lookahead: for each enemy that could close-and-reach *pos* on its next turn
     (``distance <= enemy.speed + enemy.reach``), add its best attack's expected damage
@@ -263,7 +268,11 @@ def exposure_fraction(
         if not enemy.is_alive():
             continue
         reach = _speed_ft(enemy) + _max_reach_ft(enemy)
-        gap = _center_distance(pos, enemy) - self_half - enemy.stat_block.size.size_ft / 2.0
+        gap = (
+            _center_distance(pos, enemy)
+            - self_half
+            - enemy.stat_block.size.size_ft / 2.0
+        )
         if max(0.0, gap) > reach:
             continue
         attack = best_attack(enemy) if known else None
@@ -284,11 +293,12 @@ def engagement(
     """How well *pos* sets up offence against the best target — a range-aware gradient.
 
     For the highest-threat enemy, the value is ``threat_ratio · approach``, where
-    ``approach`` is ``1`` once the enemy is within *entity*'s own attack reach and decays
-    (over a scale of *entity*'s speed) as it sits further out. A ranged unit is therefore
-    "engaged" from afar and feels no pull inward, while a melee unit is rewarded for
-    closing the gap turn by turn — the gradient a myopic scorer needs to make units
-    advance toward the enemy they most want to remove rather than dithering out of reach.
+    ``approach`` is ``1`` once the enemy is within *entity*'s own attack reach and
+    decays (over a scale of *entity*'s speed) as it sits further out. A ranged unit is
+    therefore "engaged" from afar and feels no pull inward, while a melee unit is
+    rewarded for closing the gap turn by turn — the gradient a myopic scorer needs to
+    make units advance toward the enemy they most want to remove rather than dithering
+    out of reach.
     """
     reach = _max_reach_ft(entity)
     speed = _speed_ft(entity)
@@ -300,7 +310,9 @@ def engagement(
             continue
         gap = max(
             0.0,
-            _center_distance(pos, enemy) - self_half - enemy.stat_block.size.size_ft / 2.0,
+            _center_distance(pos, enemy)
+            - self_half
+            - enemy.stat_block.size.size_ft / 2.0,
         )
         over = max(0.0, gap - reach)
         approach = 1.0 / (1.0 + over / max(1.0, speed))
@@ -331,7 +343,8 @@ def resource_cost(
 
 
 def fragility(entity: Entity) -> float:
-    """How much *entity* should fear incoming damage: 1 at full HP, rising as it drops."""
+    """How much *entity* should fear incoming damage: 1 at full HP, rising as it
+    drops."""
     return 1.0 + (1.0 - _current_hp(entity) / max(1, entity.max_hp))
 
 

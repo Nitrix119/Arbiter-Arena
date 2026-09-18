@@ -15,7 +15,9 @@ from .conftest import force_turn, melee_attack
 
 
 def fn_call(name, arguments, call_id="tc1"):
-    return SimpleNamespace(id=call_id, function=SimpleNamespace(name=name, arguments=arguments))
+    return SimpleNamespace(
+        id=call_id, function=SimpleNamespace(name=name, arguments=arguments)
+    )
 
 
 def response(*tool_calls):
@@ -55,13 +57,18 @@ def test_tool_envelope_conversion():
 
 
 def test_decide_parses_tool_call_and_json_arguments():
-    client = FakeClient([response(fn_call("attack", '{"action_name": "Bite", "defender_id": "g1"}'))])
+    client = FakeClient(
+        [response(fn_call("attack", '{"action_name": "Bite", "defender_id": "g1"}'))]
+    )
     agent = OpenRouterAgent("O", "a", client=client)
 
     call = agent.decide(_obs(), TOOLS)
 
     assert call.name == "attack"
-    assert call.arguments == {"action_name": "Bite", "defender_id": "g1"}  # JSON string parsed
+    assert call.arguments == {
+        "action_name": "Bite",
+        "defender_id": "g1",
+    }  # JSON string parsed
     assert call.call_id == "tc1"
 
 
@@ -91,7 +98,9 @@ def test_note_is_captured_and_stripped():
 
 
 def test_retries_once_when_no_tool_call():
-    client = FakeClient([response(), response(fn_call("end_turn", "{}"))])  # first: no tool call
+    client = FakeClient(
+        [response(), response(fn_call("end_turn", "{}"))]
+    )  # first: no tool call
     agent = OpenRouterAgent("O", "a", client=client)
 
     call = agent.decide(_obs(), TOOLS)
@@ -128,10 +137,17 @@ def test_openrouter_agent_drives_a_real_turn(make_entity, make_combat):
     combat.start_combat()
     force_turn(combat, fighter)
 
-    client = FakeClient([
-        response(fn_call("attack", f'{{"action_name": "Longsword", "defender_id": "{goblin.entity_id}"}}')),
-        response(fn_call("end_turn", "{}")),
-    ])
+    client = FakeClient(
+        [
+            response(
+                fn_call(
+                    "attack",
+                    f'{{"action_name": "Longsword", "defender_id": "{goblin.entity_id}"}}',
+                )
+            ),
+            response(fn_call("end_turn", "{}")),
+        ]
+    )
     agent = OpenRouterAgent("O", "a", client=client)
 
     outcome = run_turn(combat, fighter, agent)

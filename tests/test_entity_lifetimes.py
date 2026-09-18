@@ -122,9 +122,9 @@ class TestConcentrationLifetime:
         holder.lifetimes.append(scope)
         assert holder.ac == 14
 
-        holder.tick_lifetimes()          # 2 -> 1
+        holder.tick_lifetimes()  # 2 -> 1
         assert holder.ac == 14 and holder.lifetimes
-        holder.tick_lifetimes()          # 1 -> 0: expired, disposed, dropped
+        holder.tick_lifetimes()  # 1 -> 0: expired, disposed, dropped
         assert holder.ac == 12
         assert holder.lifetimes == []
 
@@ -133,7 +133,7 @@ class TestConcentrationLifetime:
         scope = LifetimeScope(kind=LifetimeKind.CONCENTRATION, rounds_remaining=1)
         caster.begin_concentration(scope)
         assert caster.has_concentration
-        caster.tick_lifetimes()          # 1 -> 0: concentration ends
+        caster.tick_lifetimes()  # 1 -> 0: concentration ends
         assert not caster.has_concentration
         assert caster.concentration_scope is None
 

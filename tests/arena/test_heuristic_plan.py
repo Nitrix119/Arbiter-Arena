@@ -9,7 +9,11 @@ from .conftest import melee_attack, ranged_attack
 
 def _has_attack_plan(plans, target_id, *, pre_move=None, post_move=None):
     for p in plans:
-        if p.action is None or p.action.kind != "attack" or p.action.target_id != target_id:
+        if (
+            p.action is None
+            or p.action.kind != "attack"
+            or p.action.target_id != target_id
+        ):
             continue
         if pre_move is not None and (p.pre_move is None) == pre_move:
             continue
@@ -107,7 +111,9 @@ def test_ranged_unit_is_offered_disengage_plans(make_entity, make_combat):
     assert _disengages(_move_ids(enumerate_plans(combat, a, policy=FULL_INFORMATION)))
 
 
-def test_cornered_melee_flees_only_when_it_can_outrun_the_threat(make_entity, make_combat):
+def test_cornered_melee_flees_only_when_it_can_outrun_the_threat(
+    make_entity, make_combat
+):
     a = make_entity("A", team="a", pos=(0, 0, 0), hp=30, attacks=[melee_attack()])
     a.current_hp = 3  # hurt: 3/30 below RETREAT_HP_FRACTION
     b = make_entity("B", team="b", pos=(10, 0, 0), attacks=[melee_attack()])  # speed 30
@@ -117,4 +123,6 @@ def test_cornered_melee_flees_only_when_it_can_outrun_the_threat(make_entity, ma
     assert _disengages(_move_ids(enumerate_plans(combat, a, policy=FULL_INFORMATION)))
 
     a.stat_block.resource_defaults["speed"] = 30  # equal speed -> fleeing is futile
-    assert not _disengages(_move_ids(enumerate_plans(combat, a, policy=FULL_INFORMATION)))
+    assert not _disengages(
+        _move_ids(enumerate_plans(combat, a, policy=FULL_INFORMATION))
+    )

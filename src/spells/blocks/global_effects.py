@@ -50,19 +50,25 @@ def refill_resources(block: Block, inv: Invocation) -> None:
 
 
 REGISTRY.register(
-    "force_concentration_check", force_concentration_check,
+    "force_concentration_check",
+    force_concentration_check,
     BlockContract(
         fields=(
             _TARGET,
             # Unlike saving_throw's `dc` (an int literal), this one is resolved as an
             # expression against the event — e.g. "max(10, event.total // 2)".
-            Field("dc", "expr", required=True,
-                  description="Expression for the save DC, evaluated at fire time."),
+            Field(
+                "dc",
+                "expr",
+                required=True,
+                description="Expression for the save DC, evaluated at fire time.",
+            ),
         ),
         target_arity=TargetArity.SINGLE,
     ),
 )
 REGISTRY.register(
-    "refill_resources", refill_resources,
+    "refill_resources",
+    refill_resources,
     BlockContract(fields=(_TARGET,), target_arity=TargetArity.SINGLE),
 )

@@ -20,13 +20,17 @@ from src.combat import CombatSystem
 from src.spells.context import CONTEXT_KEYS
 from src.spells.validate import validate_program
 
-
 # ── The pure formula helper ─────────────────────────────────────────────────────
+
 
 class TestEffectiveDamageFormula:
 
-    STEP = {"type": "damage", "damage_type": "FIRE", "formula": "8d6",
-            "scaling": {"per_slot_above": 3, "add_dice": "1d6"}}
+    STEP = {
+        "type": "damage",
+        "damage_type": "FIRE",
+        "formula": "8d6",
+        "scaling": {"per_slot_above": 3, "add_dice": "1d6"},
+    }
 
     def test_no_scaling_returns_base(self):
         step = {"formula": "8d6"}
@@ -51,16 +55,25 @@ class TestEffectiveDamageFormula:
 
 # ── slot_level is part of the context vocabulary ────────────────────────────────
 
+
 def test_slot_level_is_a_valid_context_key():
     assert "slot_level" in CONTEXT_KEYS
     # An expression referencing it must validate clean.
-    validate_program([
-        {"block": "damage", "damage_type": "FIRE", "formula": "1d6",
-         "condition": "context.slot_level >= 5"}
-    ], spell_name="Scaler")
+    validate_program(
+        [
+            {
+                "block": "damage",
+                "damage_type": "FIRE",
+                "formula": "1d6",
+                "condition": "context.slot_level >= 5",
+            }
+        ],
+        spell_name="Scaler",
+    )
 
 
 # ── Integration: a spell cast at a higher slot deals more damage ────────────────
+
 
 def _damage_spell() -> SpellAction:
     return SpellAction(
@@ -68,15 +81,23 @@ def _damage_spell() -> SpellAction:
         description="",
         spell_level=3,
         program=[
-            {"block": "damage", "damage_type": "FIRE", "formula": "8d6",
-             "scaling": {"per_slot_above": 3, "add_dice": "1d6"}},
+            {
+                "block": "damage",
+                "damage_type": "FIRE",
+                "formula": "8d6",
+                "scaling": {"per_slot_above": 3, "add_dice": "1d6"},
+            },
         ],
     )
 
 
 def _entity(name="E", hp=100):
-    sb = StatBlock(name=name, ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-                   hit_points_max=hp, armor_class=10)
+    sb = StatBlock(
+        name=name,
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+        hit_points_max=hp,
+        armor_class=10,
+    )
     e = Entity(sb)
     e.refill_resources()
     return e
@@ -111,11 +132,17 @@ class TestScalingInResolution:
         bus = EventBus()
         resolver = SpellResolver(bus, DamageProcessor(bus))
         spell = SpellAction(
-            name="Test Nova", description="", spell_level=3,
+            name="Test Nova",
+            description="",
+            spell_level=3,
             program=[
-                {"block": "damage", "damage_type": "FIRE", "formula": "8d6",
-                 "roll_once": True,
-                 "scaling": {"per_slot_above": 3, "add_dice": "1d6"}},
+                {
+                    "block": "damage",
+                    "damage_type": "FIRE",
+                    "formula": "8d6",
+                    "roll_once": True,
+                    "scaling": {"per_slot_above": 3, "add_dice": "1d6"},
+                },
             ],
         )
         with patch("src.utils.dice.roll_dice", lambda n, s: n):
@@ -126,11 +153,21 @@ class TestScalingInResolution:
 
 # ── CombatSystem: upcasting spends the higher slot; guards a too-low slot ────────
 
+
 def _caster_with_slots():
-    sb = StatBlock(name="Wizard", ability_scores=AbilityScores(10, 10, 10, 10, 10, 16),
-                   hit_points_max=30, armor_class=12,
-                   spell_slot_defaults={3: 3, 5: 1},
-                   resource_defaults={"actions": 1, "bonus_actions": 1, "reactions": 1, "speed": 30})
+    sb = StatBlock(
+        name="Wizard",
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 16),
+        hit_points_max=30,
+        armor_class=12,
+        spell_slot_defaults={3: 3, 5: 1},
+        resource_defaults={
+            "actions": 1,
+            "bonus_actions": 1,
+            "reactions": 1,
+            "speed": 30,
+        },
+    )
     caster = Entity(sb)
     caster.refill_resources()
     return caster
@@ -159,8 +196,8 @@ class TestUpcastSlotAccounting:
         combat, caster, target = self._setup()
         with patch("src.utils.dice.roll_dice", lambda n, s: n):
             combat.resolve_spell(caster, [target], _damage_spell(), slot_level=5)
-        assert caster.spell_slots.remaining[5] == 0   # the level-5 slot was spent
-        assert caster.spell_slots.remaining[3] == 3   # level-3 slots untouched
+        assert caster.spell_slots.remaining[5] == 0  # the level-5 slot was spent
+        assert caster.spell_slots.remaining[3] == 3  # level-3 slots untouched
 
     def test_casting_at_base_spends_base_slot(self):
         combat, caster, target = self._setup()
@@ -177,43 +214,55 @@ class TestUpcastSlotAccounting:
 
 # ── Schema: the scaling field is validated ──────────────────────────────────────
 
+
 class TestScalingSchema:
     """`scaling` is validated at load: it is the one block arg with an internal
     shape, and a malformed one silently scales nothing at cast time."""
 
     def _damage(self, scaling):
-        return [{"block": "damage", "damage_type": "FIRE", "formula": "8d6",
-                 "scaling": scaling}]
+        return [
+            {
+                "block": "damage",
+                "damage_type": "FIRE",
+                "formula": "8d6",
+                "scaling": scaling,
+            }
+        ]
 
     def test_valid_scaling_validates_clean(self):
-        validate_program(self._damage({"per_slot_above": 3, "add_dice": "1d6"}),
-                         spell_name="Upcaster")
+        validate_program(
+            self._damage({"per_slot_above": 3, "add_dice": "1d6"}),
+            spell_name="Upcaster",
+        )
 
     def test_missing_add_dice_is_reported(self):
         with pytest.raises(ValueError, match="add_dice"):
-            validate_program(self._damage({"per_slot_above": 3}),
-                             spell_name="Upcaster")
+            validate_program(self._damage({"per_slot_above": 3}), spell_name="Upcaster")
 
     def test_missing_per_slot_above_is_reported(self):
         with pytest.raises(ValueError, match="per_slot_above"):
-            validate_program(self._damage({"add_dice": "1d6"}),
-                             spell_name="Upcaster")
+            validate_program(self._damage({"add_dice": "1d6"}), spell_name="Upcaster")
 
     def test_bad_add_dice_formula_is_reported(self):
         with pytest.raises(ValueError, match="add_dice"):
-            validate_program(self._damage({"per_slot_above": 3, "add_dice": "1d"}),
-                             spell_name="Upcaster")
+            validate_program(
+                self._damage({"per_slot_above": 3, "add_dice": "1d"}),
+                spell_name="Upcaster",
+            )
 
     def test_non_int_per_slot_above_is_reported(self):
         with pytest.raises(ValueError, match="per_slot_above"):
-            validate_program(self._damage({"per_slot_above": "3", "add_dice": "1d6"}),
-                             spell_name="Upcaster")
+            validate_program(
+                self._damage({"per_slot_above": "3", "add_dice": "1d6"}),
+                spell_name="Upcaster",
+            )
 
     def test_unknown_scaling_subfield_is_reported(self):
         with pytest.raises(ValueError, match="per_levl"):
             validate_program(
                 self._damage({"per_slot_above": 3, "add_dice": "1d6", "per_levl": 1}),
-                spell_name="Upcaster")
+                spell_name="Upcaster",
+            )
 
     def test_scaling_must_be_an_object(self):
         with pytest.raises(ValueError, match="scaling"):

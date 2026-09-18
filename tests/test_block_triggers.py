@@ -20,8 +20,10 @@ def _caster(hp=30):
     sb = StatBlock(
         name="Warlock",
         ability_scores=AbilityScores(10, 10, 10, 10, 10, 16),
-        hit_points_max=hp, armor_class=12,
-        proficiency_bonus=2, spellcasting_ability="charisma",
+        hit_points_max=hp,
+        armor_class=12,
+        proficiency_bonus=2,
+        spellcasting_ability="charisma",
     )
     e = Entity(sb)
     e.refill_resources()
@@ -29,8 +31,12 @@ def _caster(hp=30):
 
 
 def _foe(hp=40):
-    sb = StatBlock(name="Foe", ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
-                   hit_points_max=hp, armor_class=10)
+    sb = StatBlock(
+        name="Foe",
+        ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+        hit_points_max=hp,
+        armor_class=10,
+    )
     return Entity(sb)
 
 
@@ -42,8 +48,14 @@ def _wound(e, amount):
 def _establish(caster, program_dicts, bus):
     """Run a program that installs triggers (and/or a lifetime) on *bus*."""
     action = SpellAction(name="Vampiric Touch", description="", spell_level=3)
-    resolve_blocks(caster, caster, action, parse_program(program_dicts),
-                   event_bus=bus, damage_processor=DamageProcessor(bus))
+    resolve_blocks(
+        caster,
+        caster,
+        action,
+        parse_program(program_dicts),
+        event_bus=bus,
+        damage_processor=DamageProcessor(bus),
+    )
 
 
 # A Vampiric-Touch-style heal rider: when the caster deals damage, heal the caster
@@ -65,8 +77,9 @@ def test_trigger_fires_and_runs_then():
     _establish(caster, [_HEAL_RIDER], bus)
 
     before = caster.hp
-    bus.emit(EventType.DAMAGE_DEALT, defender=_foe(), source=caster,
-             total=10, damage_list=[])
+    bus.emit(
+        EventType.DAMAGE_DEALT, defender=_foe(), source=caster, total=10, damage_list=[]
+    )
     assert caster.hp == before + 5  # healed event.total // 2
 
 
@@ -77,8 +90,13 @@ def test_healing_is_capped_at_max_hp():
     bus = EventBus()
     _establish(caster, [_HEAL_RIDER], bus)
 
-    bus.emit(EventType.DAMAGE_DEALT, defender=_foe(), source=caster,
-             total=1000, damage_list=[])  # would heal 500
+    bus.emit(
+        EventType.DAMAGE_DEALT,
+        defender=_foe(),
+        source=caster,
+        total=1000,
+        damage_list=[],
+    )  # would heal 500
     assert caster.hp == caster.stat_block.hit_points_max
 
 
@@ -90,8 +108,9 @@ def test_trigger_condition_gates_out_other_sources():
 
     before = caster.hp
     # Damage dealt by someone else — condition (source == caster) is false.
-    bus.emit(EventType.DAMAGE_DEALT, defender=_foe(), source=_foe(),
-             total=10, damage_list=[])
+    bus.emit(
+        EventType.DAMAGE_DEALT, defender=_foe(), source=_foe(), total=10, damage_list=[]
+    )
     assert caster.hp == before  # did not fire
 
 
@@ -100,22 +119,32 @@ def test_trigger_unsubscribes_when_its_lifetime_is_disposed():
     _wound(caster, 25)
     bus = EventBus()
     # The rider lives inside a concentration lifetime.
-    _establish(caster, [{
-        "block": "lifetime", "kind": "concentration", "source": "Vampiric Touch",
-        "then": [_HEAL_RIDER],
-    }], bus)
+    _establish(
+        caster,
+        [
+            {
+                "block": "lifetime",
+                "kind": "concentration",
+                "source": "Vampiric Touch",
+                "then": [_HEAL_RIDER],
+            }
+        ],
+        bus,
+    )
     assert caster.has_concentration
 
     before = caster.hp
-    bus.emit(EventType.DAMAGE_DEALT, defender=_foe(), source=caster,
-             total=8, damage_list=[])
+    bus.emit(
+        EventType.DAMAGE_DEALT, defender=_foe(), source=caster, total=8, damage_list=[]
+    )
     assert caster.hp == before + 4  # fired while concentrating
 
     # Concentration ends → the scope disposes → the rider unsubscribes.
     caster.end_concentration()
     mid = caster.hp
-    bus.emit(EventType.DAMAGE_DEALT, defender=_foe(), source=caster,
-             total=8, damage_list=[])
+    bus.emit(
+        EventType.DAMAGE_DEALT, defender=_foe(), source=caster, total=8, damage_list=[]
+    )
     assert caster.hp == mid  # no further healing — rider gone
 
 
@@ -126,8 +155,9 @@ def test_trigger_depth_is_balanced_after_firing():
     bus = EventBus()
     _establish(caster, [_HEAL_RIDER], bus)
     assert triggers_mod._depth_by_bus.get(bus, 0) == 0
-    bus.emit(EventType.DAMAGE_DEALT, defender=_foe(), source=caster,
-             total=6, damage_list=[])
+    bus.emit(
+        EventType.DAMAGE_DEALT, defender=_foe(), source=caster, total=6, damage_list=[]
+    )
     assert triggers_mod._depth_by_bus.get(bus, 0) == 0
 
 
@@ -142,8 +172,9 @@ def test_trigger_depth_guard_blocks_at_the_cap():
 
     triggers_mod._depth_by_bus[bus] = triggers_mod._MAX_TRIGGER_DEPTH
     before = caster.hp
-    bus.emit(EventType.DAMAGE_DEALT, defender=_foe(), source=caster,
-             total=10, damage_list=[])
+    bus.emit(
+        EventType.DAMAGE_DEALT, defender=_foe(), source=caster, total=10, damage_list=[]
+    )
     assert caster.hp == before  # guard blocked the rider at the cap
 
 
@@ -160,8 +191,10 @@ def test_trigger_bindings_captured_at_install_exposed_as_instance_fields():
         "event": "ATTACK_DECLARED",
         "bindings": {"protege": "event.caster"},
         "then": [
-            {"block": "cancel",
-             "condition": "event.defender == instance_fields.protege"},
+            {
+                "block": "cancel",
+                "condition": "event.defender == instance_fields.protege",
+            },
         ],
     }
     _establish(caster, [rider], bus)

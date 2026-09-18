@@ -7,6 +7,7 @@ from typing import Optional
 
 class DamageType(Enum):
     """D&D 5e damage types."""
+
     GENERIC = "generic"
     ACID = "acid"
     BLUDGEONING = "bludgeoning"
@@ -26,17 +27,17 @@ class DamageType(Enum):
 @dataclass
 class Damage:
     """Represents damage of a specific type and amount.
-    
+
     Attributes:
         damage_type: The type of damage
         amount: The amount of damage dealt
         formula: Optional dice formula for damage (e.g., "2d6+3")
     """
-    
+
     damage_type: DamageType
     amount: int = 0
     formula: Optional[str] = None
-    
+
     def __post_init__(self) -> None:
         """Validate damage amount."""
         if self.amount < 0:

@@ -2,7 +2,6 @@
 
 from enum import Enum
 
-
 _SIZE_TO_FEET = {
     "tiny": 2.5,
     "small": 5.0,

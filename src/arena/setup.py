@@ -1,11 +1,11 @@
 """Build a match-ready ``CombatSystem`` — the arena's single combat-setup path.
 
-Combat needs more than combatants: the **global rules** in ``rules/global/`` (the per-turn
-action-economy refill, critical hit/miss, and damage resistance/immunity/vulnerability)
-must be installed on the event bus or turns don't refill and fights stalemate. The web
-layer does this in its ``start_combat`` handler; :func:`build_combat` is the arena's mirror,
-so no arena caller has to remember the wiring (the kind of silent seam CLAUDE.md §4 warns
-about).
+Combat needs more than combatants: the **global rules** in ``rules/global/`` (the
+per-turn action-economy refill, critical hit/miss, and damage
+resistance/immunity/vulnerability) must be installed on the event bus or turns don't
+refill and fights stalemate. The web layer does this in its ``start_combat`` handler;
+:func:`build_combat` is the arena's mirror, so no arena caller has to remember the
+wiring (the kind of silent seam CLAUDE.md §4 warns about).
 """
 
 from pathlib import Path

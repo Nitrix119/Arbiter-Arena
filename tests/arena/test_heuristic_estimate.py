@@ -14,7 +14,6 @@ from src.utils import dice
 
 from .conftest import load_spell, melee_attack
 
-
 # ---------------------------------------------------------------------------
 # expected_formula — parity with roll_formula, and exact means
 # ---------------------------------------------------------------------------
@@ -22,7 +21,14 @@ from .conftest import load_spell, melee_attack
 
 @pytest.mark.parametrize(
     "formula,expected",
-    [("1d8", 4.5), ("2d6+3", 10.0), ("3d6", 10.5), ("1d10", 5.5), ("5", 5.0), ("2d6-2", 5.0)],
+    [
+        ("1d8", 4.5),
+        ("2d6+3", 10.0),
+        ("3d6", 10.5),
+        ("1d10", 5.5),
+        ("5", 5.0),
+        ("2d6-2", 5.0),
+    ],
 )
 def test_expected_formula_exact(formula, expected):
     assert estimate.expected_formula(formula) == pytest.approx(expected)
@@ -49,8 +55,12 @@ def test_hit_chance_midrange():
 
 
 def test_hit_chance_clamps_to_nat_bounds():
-    assert estimate.hit_chance(50, 15) == pytest.approx(estimate.MAX_HIT_CHANCE)  # nat-1 misses
-    assert estimate.hit_chance(0, 40) == pytest.approx(estimate.MIN_HIT_CHANCE)  # nat-20 hits
+    assert estimate.hit_chance(50, 15) == pytest.approx(
+        estimate.MAX_HIT_CHANCE
+    )  # nat-1 misses
+    assert estimate.hit_chance(0, 40) == pytest.approx(
+        estimate.MIN_HIT_CHANCE
+    )  # nat-20 hits
 
 
 def test_advantage_beats_straight_beats_disadvantage():
@@ -67,8 +77,8 @@ def test_advantage_and_disadvantage_cancel():
 
 def test_crit_chance_values():
     assert estimate.crit_chance() == pytest.approx(0.05)
-    assert estimate.crit_chance(advantage=True) == pytest.approx(1 - (0.95 ** 2))
-    assert estimate.crit_chance(disadvantage=True) == pytest.approx(0.05 ** 2)
+    assert estimate.crit_chance(advantage=True) == pytest.approx(1 - (0.95**2))
+    assert estimate.crit_chance(disadvantage=True) == pytest.approx(0.05**2)
 
 
 # ---------------------------------------------------------------------------
@@ -89,11 +99,15 @@ def test_attack_ev_resistance_and_immunity(make_entity):
     base = estimate.expected_attack_damage(melee_attack(), defender)
 
     defender.stat_block.damage_resistances.append(DamageType.SLASHING)
-    assert estimate.expected_attack_damage(melee_attack(), defender) == pytest.approx(base / 2)
+    assert estimate.expected_attack_damage(melee_attack(), defender) == pytest.approx(
+        base / 2
+    )
 
     defender.stat_block.damage_resistances.clear()
     defender.stat_block.damage_immunities.append(DamageType.SLASHING)
-    assert estimate.expected_attack_damage(melee_attack(), defender) == pytest.approx(0.0)
+    assert estimate.expected_attack_damage(melee_attack(), defender) == pytest.approx(
+        0.0
+    )
 
 
 def test_attack_ev_ignores_resistance_when_asked(make_entity):
@@ -101,7 +115,9 @@ def test_attack_ev_ignores_resistance_when_asked(make_entity):
     defender = make_entity("D", ac=15)
     base = estimate.expected_attack_damage(melee_attack(), defender)
     defender.stat_block.damage_resistances.append(DamageType.SLASHING)
-    unaware = estimate.expected_attack_damage(melee_attack(), defender, apply_resistance=False)
+    unaware = estimate.expected_attack_damage(
+        melee_attack(), defender, apply_resistance=False
+    )
     assert unaware == pytest.approx(base)
 
 
@@ -142,7 +158,9 @@ def test_spell_ev_attack_roll_shape(make_entity):
     caster = make_entity("C", spellcasting_ability="intelligence")
     defender = make_entity("D", ac=15)
     firebolt = load_spell("firebolt.json")
-    assert estimate.spell_expected_damage(firebolt, caster, defender) == pytest.approx(2.75)
+    assert estimate.spell_expected_damage(firebolt, caster, defender) == pytest.approx(
+        2.75
+    )
 
 
 def test_spell_ev_save_shape(make_entity):
@@ -152,4 +170,6 @@ def test_spell_ev_save_shape(make_entity):
     caster = make_entity("C", spellcasting_ability="intelligence")
     defender = make_entity("D")
     sacred_flame = load_spell("sacred_flame.json")
-    assert estimate.spell_expected_damage(sacred_flame, caster, defender) == pytest.approx(1.8)
+    assert estimate.spell_expected_damage(
+        sacred_flame, caster, defender
+    ) == pytest.approx(1.8)

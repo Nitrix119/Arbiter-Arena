@@ -31,9 +31,13 @@ from src.loaders.stat_block_loader import StatBlockLoader
 from src.models import Entity
 from src.models.action import SpellAction
 from src.models.spell_properties import (
-    CastingTime, CastingTimeType,
-    Duration, DurationUnit,
-    RangeType, SpellComponents, SpellRange,
+    CastingTime,
+    CastingTimeType,
+    Duration,
+    DurationUnit,
+    RangeType,
+    SpellComponents,
+    SpellRange,
     TargetingType,
 )
 from src.models.stat_block import StatBlock
@@ -48,6 +52,7 @@ _DC = 15  # wizard's spell_save_dc
 
 def _damage_entries(spell):
     """Damage blocks of a spell, including those nested under a ``then``."""
+
     def walk(blocks, key):
         out = []
         for b in blocks:
@@ -61,6 +66,7 @@ def _damage_entries(spell):
 
 def _save_entries(spell):
     """saving_throw blocks of a spell, including those nested under a ``then``."""
+
     def walk(blocks, key):
         out = []
         for b in blocks:
@@ -76,13 +82,18 @@ def _save_entries(spell):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_caster() -> Entity:
     """Caster with spell_save_dc = 15 (INT 18 +4, proficiency +3, ability=intelligence)."""
     sb = StatBlock(
         name="Caster",
         ability_scores=AbilityScores(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=18, wisdom=10, charisma=10,
+            strength=10,
+            dexterity=10,
+            constitution=10,
+            intelligence=18,
+            wisdom=10,
+            charisma=10,
         ),
         hit_points_max=30,
         armor_class=12,
@@ -97,8 +108,12 @@ def _make_target(hp: int = 100) -> Entity:
     sb = StatBlock(
         name="Target",
         ability_scores=AbilityScores(
-            strength=10, dexterity=10, constitution=10,
-            intelligence=10, wisdom=10, charisma=10,
+            strength=10,
+            dexterity=10,
+            constitution=10,
+            intelligence=10,
+            wisdom=10,
+            charisma=10,
         ),
         hit_points_max=hp,
         armor_class=10,
@@ -119,7 +134,6 @@ def _make_save_spell(
     """
     damage_step = {
         "block": "damage",
-        
         "damage_type": "FIRE",
         "formula": str(damage_amount),
     }
@@ -152,6 +166,7 @@ def _plain_resolver(caster, *targets) -> SpellResolver:
 # Loading
 # ---------------------------------------------------------------------------
 
+
 class TestSaveOutcomeLoading:
     """save_result is parsed correctly from spell JSON files."""
 
@@ -162,27 +177,37 @@ class TestSaveOutcomeLoading:
         assert damage_steps[0].get("save_result", {}).get("on_success") == "half_damage"
 
     def test_burning_hands_has_half_damage_on_success(self):
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "burning_hands.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "burning_hands.json")
+        )
         damage_steps = _damage_entries(spell)
         assert damage_steps[0].get("save_result", {}).get("on_success") == "half_damage"
 
     def test_thunderwave_has_half_damage_on_success(self):
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "thunderwave.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "thunderwave.json")
+        )
         damage_steps = _damage_entries(spell)
         assert damage_steps[0].get("save_result", {}).get("on_success") == "half_damage"
 
     def test_acid_splash_has_no_damage_on_success(self):
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "acid_splash.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "acid_splash.json")
+        )
         damage_steps = _damage_entries(spell)
         assert damage_steps[0].get("save_result", {}).get("on_success") == "no_damage"
 
     def test_sacred_flame_has_no_damage_on_success(self):
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "sacred_flame.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "sacred_flame.json")
+        )
         damage_steps = _damage_entries(spell)
         assert damage_steps[0].get("save_result", {}).get("on_success") == "no_damage"
 
     def test_poison_spray_has_no_damage_on_success(self):
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "poison_spray.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "poison_spray.json")
+        )
         damage_steps = _damage_entries(spell)
         assert damage_steps[0].get("save_result", {}).get("on_success") == "no_damage"
 
@@ -194,7 +219,9 @@ class TestSaveOutcomeLoading:
 
     def test_magic_missile_has_no_save_step(self):
         """Auto-hit spells with no save have no saving throw step in the pipeline."""
-        spell = StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "magic_missile.json"))
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "magic_missile.json")
+        )
         save_steps = _save_entries(spell)
         assert len(save_steps) == 0
 
@@ -202,6 +229,7 @@ class TestSaveOutcomeLoading:
 # ---------------------------------------------------------------------------
 # HalfDamage
 # ---------------------------------------------------------------------------
+
 
 class TestHalfDamage:
     """half_damage save_result floor-halves damage when the target saves."""
@@ -211,7 +239,9 @@ class TestHalfDamage:
         resolver = _plain_resolver(caster, target)
         spell = _make_save_spell(damage_amount=20, on_save_success="half_damage")
 
-        with patch("src.utils.saving_throw.roll_d20", return_value=15):  # 15 >= 15 → succeed
+        with patch(
+            "src.utils.saving_throw.roll_d20", return_value=15
+        ):  # 15 >= 15 → succeed
             resolver.resolve(caster, [target], spell)
 
         assert target.hp == target.max_hp - 10  # 20 // 2
@@ -221,7 +251,9 @@ class TestHalfDamage:
         resolver = _plain_resolver(caster, target)
         spell = _make_save_spell(damage_amount=20, on_save_success="half_damage")
 
-        with patch("src.utils.saving_throw.roll_d20", return_value=14):  # 14 < 15 → fail
+        with patch(
+            "src.utils.saving_throw.roll_d20", return_value=14
+        ):  # 14 < 15 → fail
             resolver.resolve(caster, [target], spell)
 
         assert target.hp == target.max_hp - 20  # no modification
@@ -253,6 +285,7 @@ class TestHalfDamage:
 # NoDamage
 # ---------------------------------------------------------------------------
 
+
 class TestNoDamage:
     """no_damage save_result zeroes all damage when the target saves."""
 
@@ -281,6 +314,7 @@ class TestNoDamage:
 # Per-target independence (AoE)
 # ---------------------------------------------------------------------------
 
+
 class TestPerTargetIndependence:
     """In AoE resolution, each target rolls its own save and gets its own outcome."""
 
@@ -298,7 +332,7 @@ class TestPerTargetIndependence:
         with patch("src.utils.saving_throw.roll_d20", side_effect=lambda: next(rolls)):
             resolver.resolve(caster, [saver, failer], spell)
 
-        assert saver.hp == saver.max_hp - 10   # 20 // 2
+        assert saver.hp == saver.max_hp - 10  # 20 // 2
         assert failer.hp == failer.max_hp - 20  # full damage
 
     def test_all_targets_save_no_damage_spell(self):
@@ -333,6 +367,7 @@ class TestPerTargetIndependence:
 # ---------------------------------------------------------------------------
 # Fireball integration (real JSON)
 # ---------------------------------------------------------------------------
+
 
 class TestFireballIntegration:
     """End-to-end tests using the real fireball.json spell file."""
@@ -376,8 +411,10 @@ class TestFireballIntegration:
         # Fireball uses roll_once, so the shared pre-roll now happens in the
         # for_each_target iterator (the new block engine); patch it there.
         # AND roll_d20 so the save succeeds (20 >= wizard DC 15)
-        with patch("src.spells.blocks.iterators.roll_formula", return_value=24), \
-             patch("src.utils.saving_throw.roll_d20", return_value=20):
+        with (
+            patch("src.spells.blocks.iterators.roll_formula", return_value=24),
+            patch("src.utils.saving_throw.roll_d20", return_value=20),
+        ):
             resolver.resolve(wizard, [target], fireball)
 
         damage_taken = target.max_hp - target.hp
@@ -390,8 +427,10 @@ class TestFireballIntegration:
         dp = DamageProcessor(bus)
         resolver = SpellResolver(bus, dp)
 
-        with patch("src.spells.blocks.iterators.roll_formula", return_value=24), \
-             patch("src.utils.saving_throw.roll_d20", return_value=1):
+        with (
+            patch("src.spells.blocks.iterators.roll_formula", return_value=24),
+            patch("src.utils.saving_throw.roll_d20", return_value=1),
+        ):
             resolver.resolve(wizard, [target], fireball)
 
         damage_taken = target.max_hp - target.hp
@@ -406,9 +445,11 @@ class TestFireballIntegration:
         resolver = SpellResolver(bus, dp)
 
         rolls = iter([20, 1])  # saver succeeds, failer fails
-        with patch("src.spells.blocks.iterators.roll_formula", return_value=24), \
-             patch("src.utils.saving_throw.roll_d20", side_effect=lambda: next(rolls)):
+        with (
+            patch("src.spells.blocks.iterators.roll_formula", return_value=24),
+            patch("src.utils.saving_throw.roll_d20", side_effect=lambda: next(rolls)),
+        ):
             resolver.resolve(wizard, [saver, failer], fireball)
 
-        assert saver.max_hp - saver.hp == 12   # 24 // 2
+        assert saver.max_hp - saver.hp == 12  # 24 // 2
         assert failer.max_hp - failer.hp == 24  # full
