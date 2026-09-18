@@ -2,22 +2,18 @@
 
 import functools
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, List, NamedTuple, Optional, Tuple, TypeVar
-from enum import Enum
 
 from src.utils import dice
 from src.models.entity import Entity
 from src.models.action import Action, AttackAction, SpellAction
-from .spell_registry import SpellRegistry
-from src.models.action_resources import ActionCost
+from src.models.action_resources import FEET_DP, ActionCost
 from src.models.spell_properties import (
     AOEProperties,
     AOEShape,
-    RangeType,
     TargetingType,
 )
-from src.utils.saving_throw import roll_saving_throw
 from src.spatial.geometry import BoundingBox, Point3D, Vector3D
 from src.spatial.aoe import (
     AOEVolume,
@@ -31,7 +27,6 @@ from src.spatial.range_check import (
     check_attack_range,
     check_single_target_range,
     derive_aoe_origin,
-    effective_range_ft,
 )
 from .enums import CombatState
 from .event_bus import EventBus
@@ -100,7 +95,7 @@ class CombatLog:
 
     round_num: int
     turn_num: int
-    actor: Entity
+    actor: Optional[Entity]  # None for system-level entries ("Combat ended")
     action: str
 
 
@@ -230,7 +225,6 @@ class CombatSystem:
         )
         # Refill legendary actions for a creature at the start of its own turn.
         from .events import EventType as _ET
-        from .event_data import TurnEventData as _TED
 
         def _on_turn_start(event) -> None:
             entity = (
@@ -256,7 +250,7 @@ class CombatSystem:
     @_with_rng
     def resolve_attack(
         self, attacker: Entity, defender: Entity, action: AttackAction
-    ) -> Tuple[bool, int]:
+    ) -> Tuple[bool, int, Optional[dict]]:
         """Resolve an attack roll and damage.
 
         Args:
@@ -367,6 +361,8 @@ class CombatSystem:
                     f"{action.name} is an AOE spell and requires a target point"
                 )
             origin, direction = derive_aoe_origin(caster, action, target)
+            # SpellAction.__post_init__ guarantees aoe is set for AOE targeting.
+            assert action.aoe is not None, f"{action.name}: AOE spell without aoe"
             defenders = self.get_targets_in_aoe(origin, action.aoe, direction)
             if action.cannot_cause_self_damage:
                 defenders = [d for d in defenders if d is not caster]
@@ -461,6 +457,8 @@ class CombatSystem:
                         f"{action.name} is an AOE spell and requires a target point"
                     )
                 origin, direction = derive_aoe_origin(entity, action, target)
+                # SpellAction.__post_init__ guarantees aoe is set for AOE targeting.
+                assert action.aoe is not None, f"{action.name}: AOE spell without aoe"
                 defenders = self.get_targets_in_aoe(origin, action.aoe, direction)
                 if action.cannot_cause_self_damage:
                     defenders = [d for d in defenders if d is not entity]
@@ -519,6 +517,8 @@ class CombatSystem:
             if entity is None:
                 raise ValueError(f"Unknown entity_id: {entity_id!r}")
             self._assert_active(entity)
+        # Set by start_combat(); end_turn is only reachable once combat is active.
+        assert self._turn_manager is not None, "Combat has not been started"
         should_continue = self._turn_manager.end_turn()
         if not should_continue:
             self.end_combat()
@@ -531,7 +531,7 @@ class CombatSystem:
         alive = [c for c in self.combatants if c.is_alive()]
 
         if len(alive) == 1:
-            self._log_action(alive[0], f"wins the battle!")
+            self._log_action(alive[0], "wins the battle!")
         elif len(alive) == 0:
             self._log_action(None, "Combat ended with no survivors")
         else:
@@ -621,8 +621,11 @@ class CombatSystem:
     ) -> None:
         """Move *entity* to a new position, consuming movement resources.
 
-        The movement cost is the ceiling of the straight-line Euclidean
-        distance to the destination (in feet).
+        The movement cost is the straight-line Euclidean distance to the
+        destination, in feet, held to one decimal place. It is **continuous**:
+        SRD 5.1 measures movement in feet and has no grid rules, so a 5-ft
+        diagonal step costs sqrt(50) = 7.1 ft rather than the 5 ft that the
+        PHB's "Variant: Playing on a Grid" sidebar would charge.
 
         Args:
             entity: The entity to move.
@@ -639,10 +642,13 @@ class CombatSystem:
         distance = math.sqrt(
             (new_x - entity.x) ** 2 + (new_y - entity.y) ** 2 + (new_z - entity.z) ** 2
         )
-        cost_ft = round(distance, 1)
+        cost_ft = round(distance, FEET_DP)
         movement_cost = ActionCost(movement=cost_ft)
 
         if not entity.can_afford(movement_cost):
+            # Entity.__post_init__ always populates resources; can_afford would
+            # already have failed above were it None.
+            assert entity.resources is not None
             raise ValueError(
                 f"{entity.name} cannot afford to move {cost_ft} ft "
                 f"(has {entity.resources.movement} ft remaining)"
