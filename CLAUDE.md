@@ -281,6 +281,44 @@ leave a brief note here.
 - **Rule going forward:** the concrete, testable rule.
 ```
 
+### 2026-09-21 — An identifier the model must retype is part of the interface under test
+- **Context:** Building the recording layer for the action-interface study. Entity ids were 16
+  random hex characters (`c735df5ef7697fb9`), drawn from the seeded RNG. The problem surfaced as a
+  replay nuisance — two same-seed runs hashed differently because ids differed — and the first fix
+  was to rebuild entities under the recorded seed.
+- **What went wrong:** that fix was correct and beside the point. The study compares interface
+  conditions, and under two of them the model must **emit** an entity id to name a target, while
+  under the enumerated-menu condition it picks a short option id and never types one. An opaque hex
+  id is therefore a transcription tax charged to some conditions and not others, and the failures it
+  causes land in `unknown_target` — one of the very categories the headline hypothesis is stated in
+  terms of. Part of the menu's "advantage" would have been that it spared the model a copying
+  chore. Nothing in the tests could have caught this: every test passed, the ids were unique and
+  reproducible, and the confound lives entirely in what the data would later *mean*.
+- **Rule going forward:** when something is measured across conditions, audit every artefact the
+  conditions **do not share** — not just the one you deliberately varied. An identifier, a
+  formatting quirk, a field ordering: if one arm has to reproduce it and another does not, it is an
+  independent variable whether you intended it or not. Fix it before the data exists, because
+  afterwards it is a limitation rather than a control. (Second instance in this repo: the
+  2026-09-15 raw-coordinate confound, where agents guessing feet produced 12–37 illegal moves a
+  match until legal candidates were offered. Same shape, different surface.) Corollary: a
+  *reproducibility* problem and a *validity* problem can have the same symptom; solving the first
+  does not touch the second, so ask which one you actually have.
+
+### 2026-09-21 — A guard that runs before the field it guards is a comment
+- **Context:** Capturing per-decision telemetry. `RequestRecord.__post_init__` scrubbed API-key
+  shapes out of the model's raw output before it reached the transcript.
+- **What went wrong:** adapters construct the record with the timing and token counts they have,
+  then assign `raw_output` as they parse the rest of the response. So the scrub ran at construction,
+  against a field that was still `None`, and the real value — assigned a moment later — was never
+  touched. An echoed key reached the saved JSONL. The code read as obviously correct; only a test
+  that wrote a real transcript and grepped it for the secret exposed it.
+- **Rule going forward:** put a sanitiser at the **serialisation boundary**, not in the
+  constructor — the boundary is the one place every value must pass through and cannot be bypassed
+  by a later mutation. More generally, when a guard and the data it guards are separated in time,
+  test the guard *through the path that actually produces the data*, never by constructing the
+  object the way the guard expects. (Same family as 2026-08-08's "shipped feature unreachable at
+  the wiring seam" — the mechanism existed and looked complete, but nothing real ever reached it.)
+
 ### 2026-09-17 — A richer policy lost to a trivial one because a penalty had no counter-force
 - **Context:** Benchmarking the utility-scoring `HeuristicAgent` against the weak `ScriptedAgent`
   yardstick. On the symmetric 2v2 melee scenario (`alpha_strike`) the heuristic won only ~35%,

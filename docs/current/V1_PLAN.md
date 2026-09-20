@@ -233,9 +233,17 @@ Recording and instrumentation, first:
 - [x] Typed error codes on `ToolExecutor` results (the §3.4 taxonomy), with a test per code.
       _(`src/errors.py`: `RuleViolation(ValueError)` carrying a code, raised at ~12 engine sites;
       `src/arena/error_codes.py` adds the agent-side codes. See the taxonomy note below.)_
-- [ ] Capture token usage and latency in both adapters. Log per decision in the transcript.
-- [ ] Log the **raw model output** per decision (text or tool call) and the parsed action.
-      Scrub secrets; never log keys.
+- [x] Capture token usage and latency in both adapters. Log per decision in the transcript.
+      _(`src/arena/telemetry.py`; `Agent.last_telemetry()`. Recorded **per request** and summed,
+      since a decision takes two requests when the model is re-prompted — per-decision
+      accounting would under-report exactly the decisions being compared. Also captures the
+      provider-returned `served_model` (§3.1) and `finish_reason`. `Manifest.temperature` now
+      has a source: `OpenRouterAgent(temperature=0.0)` per §3.2; the Claude adapter records
+      `effort`, its actual sampling knob.)_
+- [x] Log the **raw model output** per decision (text or tool call) and the parsed action.
+      Scrub secrets; never log keys. _(Response content only — a request is never logged, so no
+      key can reach a transcript by construction; `telemetry.scrub()` is defence in depth at the
+      serialisation boundary.)_
 - [x] Fix the OpenRouter empty-`choices` crash (CODEBASE_REVIEW A1) as a provider error, not a
       model failure. _(`ProviderError`, a `NoToolCallError` subclass → the `provider_error` code.)_
 - [x] Manifest record in `match_start`: commit, scenario, seed, condition, model string, temperature,
@@ -243,12 +251,28 @@ Recording and instrumentation, first:
       _(`src/arena/manifest.py`; `run_match(manifest=…)`. The seed stays the transcript's own
       field — one authority, not two copies that can disagree.)_
 - [x] **Canonical state hash** per `turn_end` (sorted keys, normalised numbers).
-- [ ] **`ReplayVerifier`**: re-execute recorded accepted actions with the same seed, no model, and
-      compare hashes. Tests cover a scripted match and a match with rejected actions (does a
-      rejection consume RNG?).
-      **Note before building it:** entity ids come from the seeded RNG and appear in the state
-      snapshot, so a replay must rebuild its entities *under the recorded seed*
-      (`with dice.using_rng(dice.new_rng(seed)): …`) or no hash will line up.
+- [x] **`ReplayVerifier`**: re-execute the recorded decisions with the same seed, no model, and
+      compare hashes. _(`src/arena/replay.py`; `verify()` per match, `verify_bundle()` for §5.)_
+      - **Built differently from this line's original wording, deliberately.** Re-executing only
+        the *accepted* actions desyncs: a turn ended by the failure budget is ended by the driver
+        calling `end_turn` directly, so it never appears as an action. A `ReplayAgent` instead
+        feeds every recorded call — rejections included — back through the ordinary `run_match`,
+        so the driver reproduces forced ends itself and there is still one execution path.
+      - **Answered:** a rejection consumes **no** RNG — every engine validation precedes the
+        first roll. Asserted by a test that replays a match full of rejections, not assumed.
+      - The earlier note about rebuilding entities under the recorded seed is **obsolete**:
+        entity ids are now derived from the roster, so a replay needs only the scenario.
+
+#### Entity ids are a fairness control (2026-09-21) — belongs in the frozen method
+
+Combatant ids are readable and roster-derived (`archer`, `fighter-a1`, `raider-2`) rather than
+random hex. This is **not** cosmetic and not for replay's benefit. Under C1 and C2 the model must
+*type* an entity id to name a target; under C3 it picks an `action_id` and never does. A
+16-hex-character id therefore taxes some conditions and not others, and the resulting failures
+land in `unknown_target` — one of the very §3.4 categories H2 is stated in terms of. Left alone,
+part of C3's measured advantage would have been "it didn't have to copy a hex string" rather than
+the affordance the study isolates. Same class as the 2026-09-15 raw-coordinate confound.
+Record it in `PREREGISTRATION.md` as a control, not a note.
 
 #### Taxonomy deviations from §3.4 (2026-09-21) — settle before the prereg freezes
 
@@ -390,3 +414,41 @@ untestable without a spell in play, since no existing scenario casts one.
 Next: Phase 1, beginning with recording and instrumentation (typed error codes, token
 and latency capture, raw model output, manifest, state hashes, `ReplayVerifier`) before
 the three interfaces are built.
+
+---
+
+## 8. Phase 1 recording-cluster closing note (2026-09-21)
+
+**The recording and instrumentation block is complete.** Everything a match does is now
+recorded in a form the study can measure, and a recorded match can be proved to
+reproduce. 1,050 tests green; flake8, mypy and Black clean throughout.
+
+What landed, in order: typed error codes (`src/errors.py`, `src/arena/error_codes.py`);
+the A1 provider-error fix; the `match_start` manifest and per-`turn_end` state hash
+(`src/arena/manifest.py`); readable roster-derived entity ids (`src/arena/setup.py`);
+per-decision telemetry (`src/arena/telemetry.py`); and `ReplayVerifier`
+(`src/arena/replay.py`).
+
+**Three decisions worth carrying forward.**
+
+1. **Entity ids became a study control**, for the reason recorded in §4 above. This was
+   not on the checklist — it surfaced from the replay work and turned out to matter more
+   for validity than for replay. It must be in the pre-registration.
+2. **The §3.4 taxonomy grew** (see the deviations note in §4). It freezes in Phase 2, so
+   the one open question — whether `invalid_target_relation` should split — should be
+   settled from pilot data.
+3. **`ReplayVerifier` drives the real turn driver** rather than re-executing accepted
+   actions, because forced turn ends are not recorded as actions. Anything later that
+   re-runs a match should reuse `replay.ReplayAgent` rather than invent a second path.
+
+**Two bugs the tests caught, both of the "looks done, does nothing" kind** that §9 of
+CLAUDE.md keeps collecting:
+- the secret scrub sat in `__post_init__` while adapters filled the guarded field in
+  afterwards, so it protected nothing and a key reached the saved JSONL;
+- the drift guard for error codes could not read a code chosen inside a helper, which
+  would have silently stopped covering the two most common refusals.
+
+Next: the three conditions — the `ActionInterface` strategy, then C1's grammar and
+parser, C2 (menu stripped), C3 (`enumerate_legal_actions` + `choose`), and C2+M as
+today's path labelled. The AoE scenario and its neutral candidate generator (§ Phase 0
+decisions) are also still outstanding, and H4 cannot be tested without them.

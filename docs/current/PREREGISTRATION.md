@@ -114,6 +114,7 @@ model capability.
 | Round cap | 20 (`DEFAULT_ROUND_CAP`) |
 | Seeds | 10 per cell, **paired** across conditions |
 | Engine | Pinned commit, recorded in every match manifest |
+| Combatant ids | Readable and roster-derived (`archer`, `fighter-a1`) — a control, §4.2 |
 
 ### 4.1 The AoE scenario (to be built in Phase 1)
 
@@ -125,6 +126,29 @@ This is the first arena scenario needing spell-registry wiring.
 It must be **skill-revealing but not a puzzle**: a good placement should hit two
 enemies while sparing an ally, so that both correct targeting and the expressivity
 cost of a discretised menu are observable.
+
+### 4.2 Readable combatant ids (a fairness control, implemented 2026-09-21)
+
+Every combatant's id is derived from its name (`archer`, `bruiser`, `fighter-a1`,
+`raider-2`) rather than being a random 16-character hex string, and is identical in
+every cell of the grid.
+
+**This is a control, not a presentation choice.** Under C1 and C2 the model must *emit*
+an entity id to name a target; under C3 it selects an `action_id` and never types one.
+An opaque hex id therefore imposes a transcription cost on some conditions and not
+others, and the failures it produces land in `unknown_target` — one of the invalid-action
+categories H2 is stated in terms of. Without this control, part of any measured C3
+advantage would be attributable to id format rather than to the affordance the study is
+isolating, and the primary comparison would be confounded.
+
+Precedent in this environment: on 2026-09-15 agents guessing raw feet coordinates
+produced 12–37 illegal moves per match, swamping the tactical signal until legal move
+candidates were offered; illegal moves then fell to 0. Identifier legibility is the same
+class of interface artefact.
+
+Because ids are a pure function of the roster, a creature also carries the same id in
+every condition, which is what lets the paired-seed analysis (§7) join per-decision
+records on entity across cells.
 
 ---
 
@@ -159,10 +183,34 @@ envelope, so the runner enforces a hard spend cap.
 
 **Primary:** first-attempt valid-action rate, per decision.
 
-**Invalid-action taxonomy** (typed codes emitted by `ToolExecutor`, one test per code):
-`malformed_output`, `unknown_action`, `unknown_target`, `invalid_target_relation`,
-`out_of_range`, `destination_blocked`, `insufficient_resource`,
-`action_economy_spent`, `no_tool_call`.
+**Invalid-action taxonomy** (typed codes emitted by `ToolExecutor`, one test per code,
+implemented 2026-09-21):
+
+| Code | Raised when |
+|---|---|
+| `malformed_output` | No parseable call — a missing required argument, or (C1) text the grammar parser rejects |
+| `no_tool_call` | The model produced no call at all |
+| `unknown_action` | No such tool, attack or spell for this actor |
+| `unknown_target` | The named entity or move option does not exist, or none was given where one is required |
+| `invalid_target_relation` | The target exists but is not legal for this action, including an illegal parameter combination |
+| `out_of_range` | Beyond the action's reach |
+| `destination_blocked` | Destination occupied by another creature |
+| `insufficient_resource` | A consumable is exhausted — movement feet, or a spell slot |
+| `action_economy_spent` | The action/bonus action/reaction is already used this turn |
+| `not_your_turn` | Acting out of initiative |
+| `provider_error` | Infrastructure, not a decision — see §8 exclusions |
+| `engine_error` | An untyped engine refusal; should remain at zero |
+
+Three entries differ from the V1_PLAN §3.4 draft, which was written before the codes
+met the engine's real refusal sites. `not_your_turn` is separated from
+`action_economy_spent` (they are different mistakes); "cannot afford" is split by the
+*actual* shortfall, so a spent action and spent movement are not blurred together; and
+`invalid_target_relation` covers an illegal parameter combination (currently only "cast
+at a slot below the spell's base level"), which fits no other category. `provider_error`
+and `engine_error` are non-model buckets and are excluded from validity rates.
+
+**Open before freeze:** whether `invalid_target_relation` should split, decided from
+pilot frequencies rather than in advance.
 
 **Secondary:**
 - Recovery rate: P(valid on next attempt | rejected)
@@ -231,6 +279,7 @@ date and reason. Entries are appended, never edited.)*
 ## 11. Open items before freeze
 
 - [ ] Opponent: Scripted vs Heuristic, decided in the pilot
+- [ ] Whether `invalid_target_relation` splits, from pilot frequencies (§6)
 - [ ] Whether Claude Sonnet is in the final run (budget, after two models' real cost)
 - [ ] Exact pinned model strings
 - [ ] Final AoE scenario definition
