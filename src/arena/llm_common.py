@@ -156,10 +156,14 @@ def decide_one_action(
     telemetry = DecisionTelemetry()
     agent.telemetry = telemetry
 
-    action = _attempt(request_fn, telemetry, messages, api_tools, interface, shown)
+    action = _attempt(
+        request_fn, telemetry, messages, api_tools, interface, observation
+    )
     if action is None:  # the model gave nothing usable — correct it once
         messages.append({"role": "user", "content": interface.correction()})
-        action = _attempt(request_fn, telemetry, messages, api_tools, interface, shown)
+        action = _attempt(
+            request_fn, telemetry, messages, api_tools, interface, observation
+        )
     if action is None:
         raise NoToolCallError(
             f"{agent.name}: the model returned no usable action after a retry "
@@ -180,6 +184,8 @@ def _attempt(
 
     The interface sees both the decoded call and the raw record, so a text condition
     can read ``record.raw_output`` without this loop knowing which kind it is driving.
+    *observation* is the **unshaped** one: decoding resolves against ground truth, not
+    against the trimmed copy the model was shown.
     """
     call, record = _record_request(request_fn, telemetry, messages, api_tools)
     return interface.interpret(call, record, observation)

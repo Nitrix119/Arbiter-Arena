@@ -15,6 +15,7 @@ bridge applies; it does not belong in the agent's view.
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from src.arena.action_space import legal_actions
+from src.arena.enumeration import enumerate_legal_actions
 from src.arena.information_policy import (
     FULL_INFORMATION,
     HP_EXACT,
@@ -127,8 +128,10 @@ def build_observation(
             :data:`~src.arena.information_policy.FULL_INFORMATION`.
 
     The returned dict has: ``round``/``turn``/``state``/``is_my_turn``, ``self`` (full),
-    ``allies`` (full), ``enemies`` (policy-filtered), and ``legal_actions`` (the menu of
-    what *entity* may do now).
+    ``allies`` (full), ``enemies`` (policy-filtered), ``legal_actions`` (the menu of
+    what *entity* may do now) and ``enumerated_actions`` (the same options flattened).
+    An :class:`~src.arena.interfaces.ActionInterface` decides which of the last two a
+    given study condition actually sees — this function shows everything.
     """
     current = combat.get_current_entity()
     return {
@@ -140,6 +143,12 @@ def build_observation(
         "allies": [_serialize_ally(a) for a in combat.get_allies(entity)],
         "enemies": [_serialize_enemy(e, policy) for e in combat.get_enemies(entity)],
         "legal_actions": legal_actions(combat, entity).to_dict(),
+        # The same options flattened into one choosable list, for the enumerated
+        # condition. Built here, unconditionally, so this module stays ignorant of
+        # which condition is running; each ActionInterface decides what to show.
+        # Carries live EnumeratedAction objects, not dicts — the interface needs the
+        # ToolCall each id resolves to, and shows only `action_id`/`label`.
+        "enumerated_actions": enumerate_legal_actions(combat, entity),
     }
 
 

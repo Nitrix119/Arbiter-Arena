@@ -22,7 +22,7 @@ from src.arena.interfaces import (
 from src.arena.telemetry import RequestRecord
 from src.arena.tools import TOOLS, ToolCall
 
-#: Conditions whose prompt and decoding are implemented. C1 is registered but not built.
+#: Conditions using raw parameters. C3 uses choose(); C1 is registered but not built.
 BUILT = [C2, C2_MENU]
 
 
@@ -150,13 +150,14 @@ def test_no_call_means_no_action(name):
 # -- what is not built yet ----------------------------------------------------
 
 
-@pytest.mark.parametrize("name", [C1, C3])
-def test_unbuilt_conditions_decline_loudly(name):
+def test_c1_declines_loudly_rather_than_degrading():
     """Declining beats pretending (CLAUDE.md §1): a silently degraded condition would
     produce data that looks fine and means nothing."""
-    interface = get_interface(name)
+    interface = get_interface(C1)
     with pytest.raises(NotImplementedError):
         interface.interpret(None, RequestRecord(), _obs())
+    with pytest.raises(NotImplementedError):
+        interface.action_prompt()
 
 
 def test_c1_offers_no_tools_at_all():
@@ -206,3 +207,89 @@ def test_the_raw_param_action_section_never_mentions_an_option_id():
         section = get_interface(name).action_prompt().lower()
         assert "option_id" not in section
         assert "action_id" not in section
+
+
+# -- C3: one tool, and ids that resolve --------------------------------------
+
+
+def _enumerated():
+    from src.arena.enumeration import EnumeratedAction
+
+    return [
+        EnumeratedAction(
+            "attack:dagger:raider-1",
+            "Attack Raider 1 with Dagger",
+            ToolCall("attack", {"action_name": "Dagger", "defender_id": "raider-1"}),
+        ),
+        EnumeratedAction("end_turn", "End your turn", ToolCall("end_turn", {})),
+    ]
+
+
+def _menu_obs():
+    return {**_obs(), "enumerated_actions": _enumerated()}
+
+
+def test_c3_offers_exactly_one_tool():
+    """The condition's whole point: one tool, one argument."""
+    tools = get_interface(C3).api_tools(_menu_obs())
+    assert [t["name"] for t in tools] == ["choose"]
+    assert list(tools[0]["input_schema"]["properties"]) == ["action_id"]
+
+
+def test_c3_shows_ids_and_labels_but_never_raw_parameters():
+    """Showing the underlying call would hand C3 C2's format as well."""
+    shown = get_interface(C3).shape_observation(_menu_obs())
+
+    assert "legal_actions" not in shown
+    assert "enumerated_actions" not in shown
+    assert shown["actions"] == [
+        {"action_id": "attack:dagger:raider-1", "label": "Attack Raider 1 with Dagger"},
+        {"action_id": "end_turn", "label": "End your turn"},
+    ]
+
+
+def test_c3_resolves_a_chosen_id_to_the_real_action():
+    call = ToolCall("choose", {"action_id": "attack:dagger:raider-1"})
+    resolved = get_interface(C3).interpret(call, RequestRecord(), _menu_obs())
+
+    assert resolved.name == "attack"
+    assert resolved.arguments == {"action_name": "Dagger", "defender_id": "raider-1"}
+
+
+def test_c3_resolution_does_not_alias_the_menu():
+    """A returned call is executed and mutated (notes are popped); it must be a copy."""
+    observation = _menu_obs()
+    first = get_interface(C3).interpret(
+        ToolCall("choose", {"action_id": "end_turn"}), RequestRecord(), observation
+    )
+    first.arguments["note"] = "scribbled"
+
+    second = get_interface(C3).interpret(
+        ToolCall("choose", {"action_id": "end_turn"}), RequestRecord(), observation
+    )
+    assert second.arguments == {}
+
+
+def test_c3_refuses_an_invented_id_rather_than_guessing():
+    """Resolving a near-miss would silently repair a hallucination the study counts."""
+    call = ToolCall("choose", {"action_id": "attack:dagger:raider-9"})
+    assert get_interface(C3).interpret(call, RequestRecord(), _menu_obs()) is None
+
+
+def test_c3_refuses_a_call_to_any_other_tool():
+    """A model reaching past `choose` is not acting in this condition."""
+    direct = ToolCall("attack", {"action_name": "Dagger", "defender_id": "raider-1"})
+    assert get_interface(C3).interpret(direct, RequestRecord(), _menu_obs()) is None
+
+
+def test_c3_with_nothing_enumerated_produces_no_action():
+    call = ToolCall("choose", {"action_id": "end_turn"})
+    assert get_interface(C3).interpret(call, RequestRecord(), _obs()) is None
+
+
+@pytest.mark.parametrize("name", BUILT)
+def test_no_other_condition_sees_the_enumerated_list(name):
+    """The flat list is C3's affordance; handing it over would leak the condition."""
+    shown = get_interface(name).shape_observation(_menu_obs())
+    assert "enumerated_actions" not in shown
+    assert "actions" not in shown

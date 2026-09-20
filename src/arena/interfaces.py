@@ -119,14 +119,16 @@ class ActionInterface(ABC):
     def shape_observation(self, observation: Dict[str, Any]) -> Dict[str, Any]:
         """Return the observation this condition shows.
 
-        The default strips the legal-action menu unless the condition grants it. The
-        rest of the observation is untouched — §3.1 requires the state body to be
-        identical across conditions.
+        The default strips the legal-action menu unless the condition grants it, and
+        always strips ``enumerated_actions`` — the flat choosable list is C3's
+        vocabulary, and handing it to another condition would give that condition C3's
+        affordance for free. The rest of the observation is untouched; §3.1 requires
+        the state body to be identical across conditions.
         """
-        if self.shows_menu:
-            return observation
         trimmed = dict(observation)
-        trimmed.pop("legal_actions", None)
+        trimmed.pop("enumerated_actions", None)
+        if not self.shows_menu:
+            trimmed.pop("legal_actions", None)
         return trimmed
 
     def api_tools(self, observation: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -218,8 +220,34 @@ class SchemaMenuInterface(RawParamsInterface):
         return f"{_RAW_PARAMS_ACTION}\n{_MENU_NOTE}"
 
 
+#: C3's entire tool vocabulary. One tool, one argument — the condition's whole point.
+CHOOSE_TOOL: Dict[str, Any] = {
+    "name": "choose",
+    "description": (
+        "Take one of the actions listed for the active creature. Pass the "
+        "`action_id` exactly as it appears in the list."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "action_id": {
+                "type": "string",
+                "description": "id of a listed action, copied exactly.",
+            }
+        },
+        "required": ["action_id"],
+    },
+}
+
+
 class MenuInterface(ActionInterface):
-    """C3 — one tool, ``choose(action_id)``, over an enumerated legal-action list."""
+    """C3 — one tool, ``choose(action_id)``, over an enumerated legal-action list.
+
+    The observation carries the flattened list (``enumerated_actions``) instead of the
+    structured menu: under this condition there is nothing to assemble, so showing the
+    raw parameters alongside would hand the model C2's format too and collapse the
+    distinction the condition exists to isolate.
+    """
 
     name = C3
     shows_menu = True
@@ -227,16 +255,52 @@ class MenuInterface(ActionInterface):
     def action_prompt(self) -> str:
         return _MENU_ACTION
 
+    def api_tools(self, observation: Dict[str, Any]) -> List[Dict[str, Any]]:
+        return [dict(CHOOSE_TOOL)]
+
+    def shape_observation(self, observation: Dict[str, Any]) -> Dict[str, Any]:
+        """Swap the structured menu for the flat, id-bearing list.
+
+        The structured menu goes: under this condition there is nothing for the model
+        to assemble, and showing raw targets and coordinates alongside would hand it
+        C2's format too. Each entry is reduced to ``action_id`` and ``label`` — the
+        ``ToolCall`` behind it is resolution machinery, not something to display.
+        """
+        shown = dict(observation)
+        shown.pop("legal_actions", None)
+        shown["actions"] = [
+            action.to_dict() for action in observation.get("enumerated_actions", [])
+        ]
+        shown.pop("enumerated_actions", None)
+        return shown
+
     def interpret(
         self,
         call: Optional[ToolCall],
         record: RequestRecord,
         observation: Dict[str, Any],
     ) -> Optional[ToolCall]:
-        raise NotImplementedError("C3's enumeration lands with the choose tool")
+        """Resolve a chosen id back to the real action.
+
+        An id that is not on the list returns ``None`` rather than a guess: the shared
+        loop then re-prompts once and, failing that, records a refusal. Resolving a
+        near-miss would silently repair a hallucination the study is trying to count.
+        """
+        if call is None or call.name != CHOOSE_TOOL["name"]:
+            return None
+        chosen = call.arguments.get("action_id")
+        for action in observation.get("enumerated_actions", []):
+            if action.action_id == chosen:
+                # A fresh ToolCall: the enumeration is rebuilt each decision and its
+                # arguments must not be mutable state shared with the menu.
+                return ToolCall(action.call.name, dict(action.call.arguments))
+        return None
 
     def correction(self) -> str:
-        return "Respond with exactly one choose(action_id=…) tool call."
+        return (
+            "Respond with exactly one choose(action_id=…) tool call, using an "
+            "action_id from the list."
+        )
 
 
 #: The condition catalogue. Registry, never an if/elif on the condition name.
