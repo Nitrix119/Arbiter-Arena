@@ -95,12 +95,28 @@ TOOLS: List[Dict[str, Any]] = [
                 "target_point": {
                     "type": "object",
                     "properties": {
-                        "x": {"type": "number"},
-                        "y": {"type": "number"},
-                        "z": {"type": "number"},
+                        "x": {
+                            "type": "number",
+                            "description": "Aim point x, in feet (east).",
+                        },
+                        "y": {
+                            "type": "number",
+                            "description": "Aim point y, in feet (up); usually 0.",
+                        },
+                        "z": {
+                            "type": "number",
+                            "description": "Aim point z, in feet (south).",
+                        },
                     },
-                    "required": ["x", "y"],
-                    "description": "Point in feet to aim an area spell at.",
+                    # x and z are the ground plane; y is the vertical axis and defaults
+                    # to 0. Requiring x/y here (as this did) asked for the one axis a
+                    # ground-level aim never needs and made the one it does need
+                    # optional.
+                    "required": ["x", "z"],
+                    "description": (
+                        "Ground point in feet to aim an area spell at: `x` east, "
+                        "`z` south, `y` up (omit unless aiming above ground)."
+                    ),
                 },
                 "slot_level": {
                     "type": "integer",
@@ -320,8 +336,13 @@ class ToolExecutor:
         target_point: Optional[Point3D] = None
         tp = args.get("target_point")
         if tp is not None:
+            # x/z are the ground plane and are required; y (vertical) defaults to 0.
+            # Routed through _require so a missing coordinate is a clean
+            # malformed_output rather than a bare KeyError caught by the backstop.
             target_point = Point3D(
-                float(tp["x"]), float(tp.get("y", 0.0)), float(tp["z"])
+                float(_require(tp, "x", "cast_spell target_point")),
+                float(tp.get("y", 0.0)),
+                float(_require(tp, "z", "cast_spell target_point")),
             )
 
         results = self._combat.resolve_spell(

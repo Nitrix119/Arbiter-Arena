@@ -332,3 +332,117 @@ def test_unknown_tool_is_structured_error(make_entity, make_combat):
 def test_cost_constant_sanity():
     # Guards the melee fixture's cost assumption used across tests.
     assert ActionCost(actions=1).actions == 1
+
+
+# -- aiming an area spell ----------------------------------------------------
+
+
+def _fireball_fight(make_entity, make_combat, registry_with):
+    fireball = load_spell("fireball.json")
+    wizard = make_entity(
+        "Wizard",
+        team="a",
+        pos=(0, 0, 0),
+        known_spells=[fireball.name],
+        spellcasting_ability="intelligence",
+        spell_slot_defaults={3: 2},
+    )
+    goblin = make_entity("Goblin", team="b", pos=(0, 0, 40), hp=30)
+    combat = _started(
+        make_combat, [wizard, goblin], wizard, registry=registry_with(fireball)
+    )
+    return combat, wizard, goblin, fireball
+
+
+def test_target_point_schema_only_requires_keys_the_executor_reads():
+    """The schema and the code must agree on which coordinates are mandatory.
+
+    They did not: the schema required ``x``/``y`` while the executor read ``x``/``z``,
+    so a model obeying the schema exactly — naming a ground point as x/y — hit a
+    KeyError. y is the *vertical* axis, which a ground-level aim never needs.
+    """
+    schema = next(t for t in TOOLS if t["name"] == "cast_spell")["input_schema"]
+    point = schema["properties"]["target_point"]
+
+    assert set(point["required"]) == {"x", "z"}
+    assert "y" not in point["required"]
+    # Every axis says which way it points, so the convention is not guesswork.
+    for axis, direction in (("x", "east"), ("y", "up"), ("z", "south")):
+        assert direction in point["properties"][axis]["description"]
+
+
+def test_aiming_with_ground_coordinates_succeeds(
+    make_entity, make_combat, registry_with
+):
+    combat, wizard, goblin, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(
+        wizard,
+        ToolCall(
+            "cast_spell",
+            {"spell_name": "Fireball", "target_point": {"x": 0, "z": 40}},
+        ),
+    )
+
+    assert result["ok"] is True, result
+    assert [r["target_id"] for r in result["results"]] == [goblin.entity_id]
+
+
+def test_an_explicit_vertical_coordinate_is_still_honoured(
+    make_entity, make_combat, registry_with
+):
+    combat, wizard, goblin, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(
+        wizard,
+        ToolCall(
+            "cast_spell",
+            {"spell_name": "Fireball", "target_point": {"x": 0, "y": 0, "z": 40}},
+        ),
+    )
+    assert result["ok"] is True, result
+
+
+def test_aiming_high_above_the_target_misses_it(
+    make_entity, make_combat, registry_with
+):
+    """Proves y is read as the vertical axis, not ignored."""
+    combat, wizard, goblin, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(
+        wizard,
+        ToolCall(
+            "cast_spell",
+            {"spell_name": "Fireball", "target_point": {"x": 0, "y": 100, "z": 40}},
+        ),
+    )
+    assert result["ok"] is True
+    assert result["results"] == []  # the blast went off far overhead
+
+
+def test_a_missing_ground_coordinate_is_malformed_output_not_a_crash(
+    make_entity, make_combat, registry_with
+):
+    """The old failure mode: a model names a 2-D point as x/y and omits z."""
+    combat, wizard, _, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(
+        wizard,
+        ToolCall(
+            "cast_spell",
+            {"spell_name": "Fireball", "target_point": {"x": 0, "y": 40}},
+        ),
+    )
+
+    assert result["ok"] is False
+    assert result["code"] == "malformed_output"
+    assert "z" in result["error"]  # names the coordinate it wanted
+
+
+def test_the_system_prompt_states_the_axis_convention():
+    """Per-tool descriptions are not enough — the convention is stated once, centrally."""
+    from src.arena.llm_common import SYSTEM_PROMPT
+
+    lowered = SYSTEM_PROMPT.lower()
+    assert "east" in lowered and "south" in lowered
+    assert "ground plane" in lowered
