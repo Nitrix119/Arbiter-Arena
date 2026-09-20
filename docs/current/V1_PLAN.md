@@ -219,17 +219,31 @@ new mechanics.
 > - **The rule turns out to be outcome-complete**, which changes what H4 can claim — see the
 >   prereg §4.1.1 and the note below.
 
-#### The candidate rule makes H4's area arm null by design (2026-09-21)
+#### H4 measured, then corrected (2026-09-21)
 
-Worth recording as a decision, not a detail. Since 5e area damage has no falloff, the *set of
-creatures caught fully determines the outcome*, so a menu offering every achievable target set
-costs no expressivity whatsoever. Measured on `aoe_placement`: **coverage 9/9 = 100%** at the 5 ft
-menu step (8/9 at 10 ft, so the metric can detect a loss).
+Since 5e area damage has no falloff, the *set of creatures caught fully determines the outcome*,
+so a menu offering every achievable target set would cost no expressivity at all. Whether it does
+is a property of the grid resolution, so it was measured rather than argued.
 
-H4's area arm therefore predicts **no** cost, and that null is registered in advance as the
-expected result rather than a failed search. The live H4 question is the **movement** axis, whose
-candidates are named tactical destinations rather than a complete enumeration. `aim_coverage`
-computes the number offline, so it is known before the pilot rather than argued after it.
+**First answer, from the opening position: 9/9 = 100%.** That was registered, and it was wrong —
+not arithmetically, but as a claim. A scenario's opening is the configuration its designer
+arranged and therefore the least representative board in the match. Sampled across the formations
+a match actually produces:
+
+| Axis | Minimum | Median |
+|---|---|---|
+| Area aim points | **75%** | 92% |
+| Move destinations | **33%** | 67–100% |
+
+So enumeration costs a little on the area axis and a great deal on the movement axis. H4 is split
+into **H4a** (the option-set ceiling, measured offline before any inference) and **H4b** (what
+agents realise), with H4b's area direction *reversed* — free aiming can miscompute a coordinate
+while a menu cannot, so C3 may beat C2 there. Both are registered in PREREGISTRATION §3, and the
+superseded wording plus the corrected figure are logged in its §10.
+
+The general lesson, which is also the contribution: **an action interface can be audited for
+expressivity loss before a dollar of inference is spent — but the audit has to sample the states
+the system will really be in, not the one you set up.**
 
 **C2+M → in the study as a full condition (not pilot-only).** Definition: tool calls with raw params (C2's format)
 *plus* the legal menu in the observation (C3's affordance), pinning one dial at a time so C3's
@@ -505,8 +519,40 @@ has to be set against.
 **Sizing is now as §7 anticipated:** 4 conditions × 4 scenarios × 10 seeds = 160 matches
 per model.
 
-Next: the `ActionInterface` strategy, then C2 (menu stripped), C3
-(`enumerate_legal_actions` + `choose` — now with the full action vocabulary in view) and
-C2+M as today's path labelled. **C1 is its own step**: its grammar and parser are the
-longest, least bounded item left, and the parser must be deterministic and frozen before
-the pilot.
+---
+
+## 10. ActionInterface cluster closing note (2026-09-21)
+
+**Three of the four conditions are built.** 1,158 tests green; flake8, mypy and Black
+clean. Six commits: the `ActionInterface` seam (`99557a5`), the move dual-path fix
+(`17766eb`), C3 (`1dc8c0a`), coverage (`f77e3a6`) and docs.
+
+`src/arena/interfaces.py` holds one strategy per condition — prompt section, observation
+shaping, tool set, response decoding — behind a registry. `SYSTEM_PROMPT` split into a
+shared world model plus a per-condition action section, and a test asserts the assembled
+prompts differ **only** in that section: the §3.1 guarantee, machine-checked.
+
+- **C2** — raw params, no menu. **C2+M** — raw params, menu shown. **C3** —
+  `choose(action_id)` over `enumerate_legal_actions`, with every listed id proven to
+  execute through the real `ToolExecutor`.
+- **C1 is not built** and declines loudly rather than degrading. Its grammar and parser
+  are the longest, least bounded item left and must be frozen and adversarially tested
+  before the pilot. The seam is ready for it: `interpret` already receives
+  `record.raw_output`, so C1 needs a parser, not a second agent loop.
+
+**Two defects closed on the way.** The `move` tool accepted either a menu `option_id` or
+raw coordinates, letting a model pick its own condition per decision — Phase 0 flagged
+it and nothing had fixed it. And `render_observation`'s instruction line said "study the
+battlefield and your legal options", condition-specific text sitting in the *shared*
+body, false under C2.
+
+**One gap declared rather than hidden:** multi-target spells (Magic Missile, Scorching
+Ray) are enumerated nowhere, so a C3 agent cannot cast one. No study scenario casts one,
+but `multi_target_spells_not_enumerated` makes it visible and a test keeps the scenarios
+clear of it.
+
+**What must survive to the freeze:** the prompt split changes every prompt hash (§3.1
+records them); the menus' neutrality is enforced by tests, and a future sort by "most
+enemies hit" would silently make C3 look smarter; and the corrected H4 figures in §9.
+
+Next: **C1**, on its own, followed by the batch runner and the analysis script.

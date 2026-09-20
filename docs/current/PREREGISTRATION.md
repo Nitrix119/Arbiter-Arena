@@ -90,16 +90,31 @@ Directional predictions, registered before data collection.
 - **H3 — Constraint buys legality more than skill.** The between-condition gap in
   *tactical* score is **smaller** than the gap in *validity*. A null tactical result
   supports H3; it is not a failed search.
-- **H4 — Expressivity cost (directional, weak).** C3's best available placement is
-  **no better, and possibly worse**, than what C2/C2+M can express freely, because C3
-  chooses from discretised candidates. Measured as realised AoE targets-hit per cast,
-  and as movement-destination quality.
-  - **Registered qualification (2026-09-21), before any data:** on the **area** axis
-    this cost is measured to be **zero** at the registered menu resolution — the
-    enumeration is outcome-complete (§4.1.1, coverage 9/9). A null there is therefore
-    the *predicted* result and must not be reported as a failed search. The live test
-    of H4 is the **movement** axis, whose candidates are named tactical destinations
-    rather than a complete enumeration.
+
+**H4 splits into two hypotheses (2026-09-21).** The original statement bundled a claim
+about the *option set* with a claim about what *agents achieve with it*. Those are
+separately measurable and now point in different directions, so they are registered
+separately. The original is kept in §10 for the record.
+
+- **H4a — Option-set expressivity (the ceiling).** Can C3's menu express the outcomes
+  free aiming and free movement can? **Measured offline, before any inference**, as
+  coverage of outcome-equivalence classes (§4.1.1). This is a **harness property**,
+  reported like replay verification rather than as a result about models.
+  - Registered values, sampled across match formations: **area 75% minimum / 92%
+    median; movement 33% minimum**. So C3 gives up a little on the area axis and a
+    great deal on the movement axis.
+  - That these are knowable in advance is itself the contribution: *an action
+    interface can be audited for expressivity loss before a dollar of inference is
+    spent, and the audit localises the loss to a specific axis.*
+- **H4b — Realised expressivity.** Given their interfaces, what do agents actually
+  achieve? Measured as AoE targets-hit per cast and scenario objective scores.
+  - **Direction revised, with the reason recorded.** The original predicted C3 ≤ C2.
+    On the **area** axis the option sets are near-identical while C2 must *compute*
+    coordinates and can miscompute, so **C3 may beat C2 there** — the opposite of the
+    original prediction, and a live claim about interfaces rather than about menus.
+  - On the **movement** axis the original direction stands and is now motivated by a
+    number rather than an intuition: C3 cannot reach two thirds of the distinct
+    tactical positions.
 
 **Exploratory, no direction predicted:** tokens and dollars per *accepted* action
 (C3 has a longer input menu but fewer retries); latency; whether effects depend on
@@ -164,23 +179,35 @@ choice this study measures. The generator never consults `HeuristicAgent`'s plac
 search (§2), which ranks by foes-minus-allies; a structural test enforces that.
 Placements catching an ally or the caster are offered and tagged, never hidden.
 
-**H4's area arm has a problem this measurement exposes.** 5e area damage has no
-falloff, so the *set of creatures caught fully determines the outcome*. A menu offering
-every achievable target set therefore costs **no** expressivity, and H4's predicted cost
-would be zero by construction rather than by evidence.
+**Why this needed measuring.** 5e area damage has no falloff, so the *set of creatures
+caught fully determines the outcome*. A menu offering every achievable target set would
+therefore cost **no** expressivity, and H4's predicted cost would have been zero by
+construction rather than by evidence. Whether it does is a property of the grid
+resolution — an implementation choice — so it is measured, not argued.
 
-Measured on `aoe_placement` at the registered 5 ft step: **coverage 9/9 = 100%**. Every
-target set achievable by free aiming is on the menu. At 10 ft it drops to 8/9 and at
-20 ft lower still, so this is a property of the chosen resolution, not of a metric that
-cannot fail.
+**Coverage is measured across match formations, not at the opening.** This matters more
+than it sounds. At `aoe_placement`'s opening position the aim menu is outcome-complete
+(9/9 = 100%). Sampled across the formations a match actually produces, it is **not**:
 
-**Consequence, registered in advance:** H4 is **not expected to show an expressivity
-cost on the area axis**, and a null there is the predicted result rather than a failed
-search. The live H4 question is the **movement** axis, where candidates are named
-tactical destinations rather than an outcome-complete enumeration. If the area arm
-shows no cost, the finding to report is *"enumeration need not cost expressivity when
-the candidate set is complete with respect to outcome-equivalence classes — and whether
-it is complete is a design property that can be measured before running anything."*
+| Axis | Minimum | Median | What it means |
+|---|---|---|---|
+| Area aim points | **75%** | 92% | C3 gives up ~a quarter of achievable target sets at worst |
+| Move destinations | **33%** | 67–100% | C3 cannot reach two thirds of distinct tactical positions at worst |
+
+The registered claim is the **minimum**, because "this interface loses nothing" must
+hold at the tightest moment, not on average. The opening-position figure was registered
+first and was wrong: a scenario's opening is the configuration its designer arranged,
+and therefore the *least* representative board in the match. Recording that error here
+rather than quietly correcting it, since it is the kind of single-frame claim that
+would otherwise have survived into the results.
+
+`aim_coverage` and `move_coverage` both report *which* equivalence classes were lost,
+and `sample_coverage` names the state that produced the worst case, so a figure can be
+inspected rather than debated. All of it is offline: no model, no inference, no cost.
+
+**Movement is the axis where discretisation genuinely bites.** Named destinations
+(close to melee, retreat, kite to range) are three per enemy and were never measured
+until now. That is where H4b's original direction survives.
 
 ### 4.2 Readable combatant ids (a fairness control, implemented 2026-09-21)
 
@@ -326,8 +353,29 @@ fact that the same author wrote both the engine and the interfaces under test.
 
 ## 10. Deviations from this pre-registration
 
-*(None yet. After the `study-freeze` tag, every departure is recorded here with its
-date and reason. Entries are appended, never edited.)*
+*After the `study-freeze` tag, every departure is recorded here with its date and
+reason. Entries are appended, never edited. Changes made **before** the freeze are
+ordinary drafting, but the two below are recorded anyway because both revise a claim
+this document had already made.*
+
+### 2026-09-21 — H4 split, and a coverage figure corrected
+
+**Superseded H4 (original wording, 2026-09-19):** *"On the AoE scenario, C3's best
+available AoE placement is no better, and possibly worse, than the best placement
+C2/C2+M can express freely, because C3 can only choose from discretised aim points.
+Measured as realised AoE targets-hit per cast."*
+
+Split into H4a (option-set ceiling, measured offline) and H4b (realised) because
+building the menu showed the two are separately measurable and no longer point the same
+way — on the area axis the option sets are near-identical while free aiming can
+miscompute, so C3 may *beat* C2 there.
+
+**Corrected figure.** §4.1.1 briefly registered area coverage as **100%**, measured at
+`aoe_placement`'s opening position. Sampling across the formations a match actually
+produces gives **75% minimum / 92% median**. The opening is the configuration the
+scenario's designer arranged and so the least representative board in the match; the
+registered value is now the minimum across sampled states. No data had been collected
+against the incorrect figure.
 
 ---
 
