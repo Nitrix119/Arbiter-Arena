@@ -95,7 +95,7 @@ def test_adapter_records_tokens_latency_and_raw_output():
     )
     agent = OpenRouterAgent("O", "a", client=client)
 
-    agent.decide(_obs(), TOOLS)
+    agent.decide(_obs())
     telemetry = agent.last_telemetry()
 
     assert telemetry.input_tokens == 120
@@ -111,7 +111,7 @@ def test_the_served_model_is_recorded_not_the_requested_one():
     client = FakeClient([_response(fn_call("end_turn", "{}"), model="vendor/actual")])
     agent = OpenRouterAgent("O", "a", model="vendor/requested", client=client)
 
-    agent.decide(_obs(), TOOLS)
+    agent.decide(_obs())
 
     assert agent.model == "vendor/requested"
     assert agent.last_telemetry().served_model == "vendor/actual"
@@ -127,7 +127,7 @@ def test_a_retried_decision_records_both_requests():
     )
     agent = OpenRouterAgent("O", "a", client=client)
 
-    agent.decide(_obs(), TOOLS)
+    agent.decide(_obs())
     telemetry = agent.last_telemetry()
 
     assert telemetry.request_count == 2
@@ -142,7 +142,7 @@ def test_a_provider_failure_still_records_its_request():
     agent = OpenRouterAgent("O", "a", client=FakeClient([broken]))
 
     with pytest.raises(ProviderError):
-        agent.decide(_obs(), TOOLS)
+        agent.decide(_obs())
 
     telemetry = agent.last_telemetry()
     assert telemetry.request_count == 1
@@ -164,7 +164,7 @@ def test_a_response_without_usage_degrades_rather_than_raising():
     )
     agent = OpenRouterAgent("O", "a", client=FakeClient([bare]))
 
-    agent.decide(_obs(), TOOLS)
+    agent.decide(_obs())
     telemetry = agent.last_telemetry()
 
     assert telemetry.input_tokens is None
@@ -174,7 +174,7 @@ def test_a_response_without_usage_degrades_rather_than_raising():
 
 def test_temperature_is_sent_and_defaults_to_zero():
     client = FakeClient([_response(fn_call("end_turn", "{}"))])
-    OpenRouterAgent("O", "a", client=client).decide(_obs(), TOOLS)
+    OpenRouterAgent("O", "a", client=client).decide(_obs())
     assert client.calls[0]["temperature"] == 0.0
 
 

@@ -100,10 +100,15 @@ class Agent(ABC):
         return self.telemetry
 
     @abstractmethod
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
-        """Return one action to attempt, given the current observation."""
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
+        """Return one action to attempt, given the current observation.
+
+        No ``tools`` argument: what an agent may emit is its own business. For an LLM
+        adapter that is its :class:`~src.arena.interfaces.ActionInterface` (the study
+        condition); for a deterministic agent it is hard-coded. The turn driver used to
+        pass the tool schemas through, but no agent ever read them — and once the
+        condition owns them, a driver-supplied list would be actively wrong.
+        """
 
 
 # ---------------------------------------------------------------------------
@@ -192,9 +197,7 @@ class RandomAgent(Agent):
         """Reseed this agent's private choice RNG for a reproducible match."""
         self._rng.seed(seed)
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
         la = observation["legal_actions"]
         enemy_ids = {e["entity_id"] for e in observation["enemies"]}
         candidates: List[ToolCall] = [ToolCall(TOOL_END_TURN, {})]
@@ -227,9 +230,7 @@ class ScriptedAgent(Agent):
     end the turn. A fixed skill benchmark for LLM agents to be measured against.
     """
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
         self_view = observation["self"]
         enemies = observation["enemies"]
         enemy_ids = {e["entity_id"] for e in enemies}

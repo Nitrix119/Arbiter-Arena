@@ -22,7 +22,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.arena.agent import Agent, ProviderError
 from src.arena.credentials import resolve_credential
-from src.arena.llm_common import SYSTEM_PROMPT, decide_one_action
+from src.arena.interfaces import C2_MENU, ActionInterface, get_interface
+from src.arena.llm_common import decide_one_action
 from src.arena.telemetry import RequestRecord
 from src.arena.tools import ToolCall
 
@@ -116,6 +117,7 @@ class OpenRouterAgent(Agent):
         model: str = DEFAULT_MODEL,
         temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        interface: Optional[ActionInterface] = None,
         client: Any = None,
     ) -> None:
         super().__init__(name, team)
@@ -132,17 +134,22 @@ class OpenRouterAgent(Agent):
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
+        #: The study condition. Held on the agent, not passed by the turn driver:
+        #: which interface a model is given is the thing under test, and the driver
+        #: must stay ignorant of it.
+        self.interface = interface or get_interface(C2_MENU)
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
-        return decide_one_action(self._request_action, self, observation, tools)
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
+        return decide_one_action(
+            self._request_action, self, observation, self.interface
+        )
 
     def _request_action(
         self, messages: List[Dict[str, Any]], api_tools: List[Dict[str, Any]]
     ) -> Tuple[Optional[ToolCall], RequestRecord]:
         """One OpenRouter (chat-completions) request; return its tool call and cost."""
-        oai_messages = [{"role": "system", "content": SYSTEM_PROMPT}, *messages]
+        system = self.interface.system_prompt()
+        oai_messages = [{"role": "system", "content": system}, *messages]
         started = time.perf_counter()
         response = self._client.chat.completions.create(
             model=self.model,

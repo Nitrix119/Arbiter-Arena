@@ -108,5 +108,5 @@ def test_caster_saves_the_slot_on_a_trivial_target(
     force_turn(combat, caster)
 
     agent = HeuristicAgent("Mage", "a", combat)
-    call = agent.decide(build_observation(combat, caster), TOOLS)
+    call = agent.decide(build_observation(combat, caster))
     assert call.name == "cast_spell" and call.arguments.get("spell_name") == "Fire Bolt"

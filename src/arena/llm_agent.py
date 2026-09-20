@@ -30,10 +30,8 @@ from types import ModuleType
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.arena.agent import Agent
-from src.arena.llm_common import (
-    SYSTEM_PROMPT,
-    decide_one_action,
-)  # noqa: F401 (re-export)
+from src.arena.interfaces import C2_MENU, ActionInterface, get_interface
+from src.arena.llm_common import decide_one_action
 from src.arena.telemetry import RequestRecord
 from src.arena.tools import ToolCall
 
@@ -62,6 +60,7 @@ class LLMAgent(Agent):
         model: str = DEFAULT_MODEL,
         effort: str = DEFAULT_EFFORT,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        interface: Optional[ActionInterface] = None,
         client: Any = None,
     ) -> None:
         super().__init__(name, team)
@@ -77,11 +76,15 @@ class LLMAgent(Agent):
         self.model = model
         self.effort = effort
         self.max_tokens = max_tokens
+        #: The study condition. Held on the agent, not passed by the turn driver:
+        #: which interface a model is given is the thing under test, and the driver
+        #: must stay ignorant of it.
+        self.interface = interface or get_interface(C2_MENU)
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
-        return decide_one_action(self._request_action, self, observation, tools)
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
+        return decide_one_action(
+            self._request_action, self, observation, self.interface
+        )
 
     def _request_action(
         self, messages: List[Dict[str, Any]], api_tools: List[Dict[str, Any]]
@@ -91,7 +94,7 @@ class LLMAgent(Agent):
         response = self._client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
-            system=SYSTEM_PROMPT,
+            system=self.interface.system_prompt(),
             messages=messages,
             tools=api_tools,
             tool_choice={"type": "auto", "disable_parallel_tool_use": True},

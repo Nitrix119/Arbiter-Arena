@@ -1,17 +1,21 @@
 """Provider-neutral pieces shared by every LLM adapter.
 
-The prompt, the notes scratchpad, the tool-note augmentation, and the
-one-action-per-call loop are the same whether the model is served by Anthropic,
-OpenRouter, or anything else — only the actual request differs. Keeping them here means
-one copy for all adapters (CLAUDE.md §2.7: no duplicated vocabulary); an adapter
-supplies just a ``request_fn`` that turns a list of messages + tools into one
-:class:`~src.arena.tools.ToolCall` (or ``None``).
+The notes scratchpad, the tool-note augmentation and the one-action-per-call loop are
+the same whether the model is served by Anthropic, OpenRouter or anything else — only
+the request differs. Keeping them here means one copy for all adapters (CLAUDE.md §2.7:
+no duplicated vocabulary); an adapter supplies just a ``request_fn`` that turns messages
+plus tools into one :class:`~src.arena.tools.ToolCall` (or ``None``) and a cost record.
+
+What the model is *shown, offered and read by* varies with the study condition. That is
+:mod:`src.arena.interfaces`' job — this module drives the loop and never learns which
+condition it is running, which is how four conditions share one agent path.
 """
 
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.arena.agent import NoToolCallError, ProviderError
+from src.arena.interfaces import SHARED_PROMPT, ActionInterface
 from src.arena.telemetry import DecisionTelemetry, RequestRecord
 from src.arena.tools import TOOL_END_TURN, ToolCall
 
@@ -24,38 +28,11 @@ RequestFn = Callable[
     Tuple[Optional[ToolCall], RequestRecord],
 ]
 
-SYSTEM_PROMPT = """\
-You are commanding a team in a Dungeons & Dragons 5th Edition combat encounter. \
-Your goal is to defeat the enemy team.
-
-How you play:
-- You act one creature at a time, one action at a time. Each message shows the current \
-battlefield and your legal options for the active creature.
-- Respond with EXACTLY ONE tool call (attack, cast_spell, move, or end_turn) and \
-nothing else. After it resolves you'll see the updated battlefield and act again, \
-until you end the turn.
-- A referee enforces the rules: an illegal action is rejected with an error you can \
-learn from and correct. Prefer choices from the listed legal options.
-- End your turn when you have nothing more worth doing.
-
-The world model:
-- Positions and distances are in FEET, on an open battlefield — there is no grid. You \
-may move to any point within your movement budget; melee reach is measured edge to \
-edge.
-- Coordinates are (x, y, z): x runs EAST, z runs SOUTH, and y is VERTICAL (up). The \
-ground plane is x and z — give both when naming a destination or an aim point. y is \
-0 unless something is off the ground.
-- Your legal options list named move destinations (close to melee, retreat, kite to \
-range). Take one with move(option_id=…), or move anywhere with move(x, z) — you \
-cannot move onto another creature.
-- You only know what you can observe. An enemy's HP, AC, or capabilities may be \
-hidden; you learn about them by seeing what they do and the damage they take.
-
-Not modelled (do not plan around these): opportunity attacks and other reactions on \
-another creature's turn, and legendary actions.
-
-No tactics are scripted for you — use your own judgment and knowledge of 5e to play \
-well."""
+#: Back-compat alias. The prompt is now assembled per condition — the shared world
+#: model lives in :data:`~src.arena.interfaces.SHARED_PROMPT` and each condition adds
+#: its own action section. An adapter that still wants "the prompt" without a condition
+#: gets the shared half, which is the part that is genuinely provider-neutral.
+SYSTEM_PROMPT = SHARED_PROMPT
 
 
 def augment_tools_with_notes(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -106,9 +83,13 @@ def render_observation(notes: str, observation: Dict[str, Any]) -> str:
                 f" -> {r.get('error')}"
             )
         parts.append("\n".join(lines))
+    # Deliberately says nothing about *how* to act or what is listed: that is the
+    # action section's job, and it is the only text allowed to differ between
+    # conditions (§3.1). "your legal options" used to live here, which silently made
+    # the shared body condition-specific.
     parts.append(
-        "It is your turn. Study the battlefield and your legal options, then take "
-        "exactly one action.\n\n" + json.dumps(obs, indent=2, default=str)
+        "It is your turn. Study the battlefield, then take exactly one action.\n\n"
+        + json.dumps(obs, indent=2, default=str)
     )
     return "\n\n".join(parts)
 
@@ -129,7 +110,7 @@ def _record_request(
     telemetry: DecisionTelemetry,
     messages: List[Dict[str, Any]],
     api_tools: List[Dict[str, Any]],
-) -> Optional[ToolCall]:
+) -> Tuple[Optional[ToolCall], RequestRecord]:
     """Make one request, recording what it cost whether or not it succeeded.
 
     A :class:`~src.arena.agent.ProviderError` carries its own record, so a broken
@@ -143,40 +124,62 @@ def _record_request(
             telemetry.requests.append(exc.record)
         raise
     telemetry.requests.append(record)
-    return call
+    return call, record
 
 
 def decide_one_action(
     request_fn: RequestFn,
     agent: Any,
     observation: Dict[str, Any],
-    tools: List[Dict[str, Any]],
+    interface: ActionInterface,
 ) -> ToolCall:
     """The shared decide skeleton: render → request → one retry → capture notes.
 
-    *request_fn* is the adapter's provider call. If the model returns no tool call, we
-    re-prompt once; if still none, we fail loudly (never silently end the turn).
+    *request_fn* is the adapter's provider call; *interface* is the study condition,
+    which owns the three things that vary — what the model is shown, what it is offered
+    and how its answer is read. The loop itself is the same for every condition, so
+    there is exactly one agent path no matter how many conditions exist (CLAUDE.md §3).
+
+    If the interface cannot make an action out of the response we re-prompt once; if it
+    still cannot, we fail loudly (never silently end the turn).
 
     Every request's cost is accumulated onto ``agent.telemetry`` as it happens — before
     any raise — so a decision that ended in failure still reports the tokens it spent.
     A failed decision is not a free one, and the study divides cost by *accepted*
     actions precisely to capture that.
     """
-    api_tools = augment_tools_with_notes(tools)
+    shown = interface.shape_observation(observation)
+    api_tools = augment_tools_with_notes(interface.api_tools(shown))
     messages: List[Dict[str, Any]] = [
-        {"role": "user", "content": render_observation(agent.notes, observation)}
+        {"role": "user", "content": render_observation(agent.notes, shown)}
     ]
     telemetry = DecisionTelemetry()
     agent.telemetry = telemetry
 
-    call = _record_request(request_fn, telemetry, messages, api_tools)
-    if call is None:  # model replied without a tool call — correct it once
-        messages.append(
-            {"role": "user", "content": "Respond with exactly one tool call."}
-        )
-        call = _record_request(request_fn, telemetry, messages, api_tools)
-    if call is None:
+    action = _attempt(request_fn, telemetry, messages, api_tools, interface, shown)
+    if action is None:  # the model gave nothing usable — correct it once
+        messages.append({"role": "user", "content": interface.correction()})
+        action = _attempt(request_fn, telemetry, messages, api_tools, interface, shown)
+    if action is None:
         raise NoToolCallError(
-            f"{agent.name}: the model returned no tool call after a retry; cannot act."
+            f"{agent.name}: the model returned no usable action after a retry "
+            f"(condition {interface.name}); cannot act."
         )
-    return capture_notes(agent, call)
+    return capture_notes(agent, action)
+
+
+def _attempt(
+    request_fn: RequestFn,
+    telemetry: DecisionTelemetry,
+    messages: List[Dict[str, Any]],
+    api_tools: List[Dict[str, Any]],
+    interface: ActionInterface,
+    observation: Dict[str, Any],
+) -> Optional[ToolCall]:
+    """One request, decoded by the condition into an executable action or ``None``.
+
+    The interface sees both the decoded call and the raw record, so a text condition
+    can read ``record.raw_output`` without this loop knowing which kind it is driving.
+    """
+    call, record = _record_request(request_fn, telemetry, messages, api_tools)
+    return interface.interpret(call, record, observation)

@@ -18,7 +18,7 @@ def test_scripted_attacks_reachable_enemy(make_entity, make_combat):
     goblin = make_entity("Goblin", team="b", pos=(5, 0, 0))
     obs = _obs(make_combat, [fighter, goblin], fighter)
 
-    call = ScriptedAgent("A", "a").decide(obs, TOOLS)
+    call = ScriptedAgent("A", "a").decide(obs)
 
     assert call.name == "attack"
     assert call.arguments["defender_id"] == goblin.entity_id
@@ -32,7 +32,7 @@ def test_scripted_targets_lowest_hp(make_entity, make_combat):
     wounded.current_hp = 4
     obs = _obs(make_combat, [fighter, healthy, wounded], fighter)
 
-    call = ScriptedAgent("A", "a").decide(obs, TOOLS)
+    call = ScriptedAgent("A", "a").decide(obs)
 
     assert call.arguments["defender_id"] == wounded.entity_id
 
@@ -42,7 +42,7 @@ def test_scripted_moves_toward_distant_enemy(make_entity, make_combat):
     goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
     obs = _obs(make_combat, [fighter, goblin], fighter)
 
-    call = ScriptedAgent("A", "a").decide(obs, TOOLS)
+    call = ScriptedAgent("A", "a").decide(obs)
 
     assert call.name == "move"
     # Picks the legal 'close to melee' option for the enemy (overlap-checked upstream).
@@ -62,7 +62,7 @@ def test_scripted_ends_turn_with_no_enemies(make_entity, make_combat):
     ally = make_entity("Cleric", team="a", pos=(5, 0, 0))
     obs = _obs(make_combat, [fighter, ally], fighter)
 
-    assert ScriptedAgent("A", "a").decide(obs, TOOLS).name == "end_turn"
+    assert ScriptedAgent("A", "a").decide(obs).name == "end_turn"
 
 
 def test_random_agent_is_deterministic_and_ends_turn_when_idle(
@@ -74,7 +74,7 @@ def test_random_agent_is_deterministic_and_ends_turn_when_idle(
 
     agent = RandomAgent("R", "a", rng=random.Random(0))
     # No enemies -> the only candidate is end_turn.
-    assert agent.decide(obs, TOOLS).name == "end_turn"
+    assert agent.decide(obs).name == "end_turn"
 
 
 def test_random_agent_only_picks_legal_candidates(make_entity, make_combat):
@@ -83,7 +83,7 @@ def test_random_agent_only_picks_legal_candidates(make_entity, make_combat):
     obs = _obs(make_combat, [fighter, goblin], fighter)
 
     agent = RandomAgent("R", "a", rng=random.Random(1))
-    call = agent.decide(obs, TOOLS)
+    call = agent.decide(obs)
     assert call.name in {"attack", "move", "end_turn"}
     if call.name == "attack":
         assert call.arguments["defender_id"] == goblin.entity_id

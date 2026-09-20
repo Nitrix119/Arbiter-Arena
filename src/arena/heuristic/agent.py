@@ -11,7 +11,7 @@ as the competent rung of the ladder; Scripted/Random stay as the weak/floor rung
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 from src.arena.agent import Agent
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
@@ -49,9 +49,7 @@ class HeuristicAgent(Agent):
         self._ledger: Dict[str, float] = {}
         self._ledger_round = -1
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
         self._roll_ledger(observation)
         entity = self._active_entity(observation)
         if entity is None:

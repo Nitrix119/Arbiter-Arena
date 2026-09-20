@@ -14,9 +14,7 @@ from .conftest import melee_attack
 class PacifistAgent(Agent):
     """Always ends its turn — used to force a round-cap outcome."""
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
         return ToolCall("end_turn", {})
 
 

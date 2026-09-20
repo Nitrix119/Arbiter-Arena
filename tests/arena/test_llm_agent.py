@@ -10,7 +10,8 @@ from types import SimpleNamespace
 import pytest
 
 from src.arena import llm_agent as llm_mod
-from src.arena.llm_agent import DEFAULT_MODEL, SYSTEM_PROMPT, LLMAgent
+from src.arena.interfaces import SHARED_PROMPT
+from src.arena.llm_agent import DEFAULT_MODEL, LLMAgent
 from src.arena.tools import TOOLS
 from src.arena.turn_driver import run_turn
 
@@ -67,7 +68,7 @@ def test_decide_returns_the_models_tool_call():
     )
     agent = LLMAgent("A", "a", client=client)
 
-    call = agent.decide(_obs(), TOOLS)
+    call = agent.decide(_obs())
 
     assert call.name == "attack"
     assert call.arguments == {"action_name": "Bite", "defender_id": "g1"}
@@ -78,11 +79,15 @@ def test_request_shape_is_well_formed():
     client = FakeClient([response(tool_use("end_turn", {}))])
     agent = LLMAgent("A", "a", client=client)
 
-    agent.decide(_obs(), TOOLS)
+    agent.decide(_obs())
     kwargs = client.calls[0]
 
     assert kwargs["model"] == DEFAULT_MODEL
-    assert kwargs["system"] == SYSTEM_PROMPT
+    # The system prompt is assembled from the agent's study condition now, not read
+    # from a module constant — but the shared world model must survive intact, since
+    # §3.1 requires it to be identical across conditions.
+    assert kwargs["system"] == agent.interface.system_prompt()
+    assert SHARED_PROMPT in kwargs["system"]
     assert kwargs["thinking"] == {"type": "adaptive"}
     assert kwargs["output_config"] == {"effort": "medium"}
     assert kwargs["tool_choice"] == {"type": "auto", "disable_parallel_tool_use": True}
@@ -97,7 +102,7 @@ def test_note_is_captured_and_stripped():
     )
     agent = LLMAgent("A", "a", client=client)
 
-    call = agent.decide(_obs(), TOOLS)
+    call = agent.decide(_obs())
 
     assert call.name == "end_turn"
     assert "note" not in call.arguments  # stripped before the executor sees it
@@ -110,7 +115,7 @@ def test_retries_once_when_no_tool_call_then_succeeds():
     )
     agent = LLMAgent("A", "a", client=client)
 
-    call = agent.decide(_obs(), TOOLS)
+    call = agent.decide(_obs())
 
     assert call.name == "end_turn"
     assert len(client.calls) == 2  # one retry
@@ -122,8 +127,8 @@ def test_raises_if_no_tool_call_after_retry():
     )
     agent = LLMAgent("A", "a", client=client)
 
-    with pytest.raises(RuntimeError, match="no tool call"):
-        agent.decide(_obs(), TOOLS)
+    with pytest.raises(RuntimeError, match="no usable action"):
+        agent.decide(_obs())
 
 
 def test_missing_dependency_gives_clear_error(monkeypatch):

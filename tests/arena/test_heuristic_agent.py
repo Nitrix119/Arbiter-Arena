@@ -14,7 +14,7 @@ from .conftest import force_turn, melee_attack, ranged_attack
 def _decide(combat, actor):
     agent = HeuristicAgent("H", actor.team, combat)
     obs = build_observation(combat, actor)
-    return agent.decide(obs, TOOLS)
+    return agent.decide(obs)
 
 
 def _started(make_combat, entities, focus):

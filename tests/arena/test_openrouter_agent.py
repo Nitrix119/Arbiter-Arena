@@ -8,7 +8,7 @@ from src.arena import credentials
 from src.arena import openrouter_agent as ora
 from src.arena.agent import NoToolCallError, ProviderError
 from src.arena.error_codes import PROVIDER_ERROR
-from src.arena.llm_common import SYSTEM_PROMPT
+from src.arena.interfaces import SHARED_PROMPT
 from src.arena.openrouter_agent import DEFAULT_MODEL, OpenRouterAgent, _to_openai_tools
 from src.arena.tools import TOOLS
 from src.arena.transcript import Transcript
@@ -65,7 +65,7 @@ def test_decide_parses_tool_call_and_json_arguments():
     )
     agent = OpenRouterAgent("O", "a", client=client)
 
-    call = agent.decide(_obs(), TOOLS)
+    call = agent.decide(_obs())
 
     assert call.name == "attack"
     assert call.arguments == {
@@ -77,11 +77,15 @@ def test_decide_parses_tool_call_and_json_arguments():
 
 def test_request_shape_is_well_formed():
     client = FakeClient([response(fn_call("end_turn", "{}"))])
-    OpenRouterAgent("O", "a", client=client).decide(_obs(), TOOLS)
+    agent = OpenRouterAgent("O", "a", client=client)
+    agent.decide(_obs())
     kwargs = client.calls[0]
 
     assert kwargs["model"] == DEFAULT_MODEL
-    assert kwargs["messages"][0] == {"role": "system", "content": SYSTEM_PROMPT}
+    system = kwargs["messages"][0]
+    assert system["role"] == "system"
+    assert system["content"] == agent.interface.system_prompt()
+    assert SHARED_PROMPT in system["content"]
     assert kwargs["tool_choice"] == "auto"
     assert "extra_headers" in kwargs
     # end_turn tool was augmented with the note field (shared helper) and OpenAI-shaped.
@@ -93,7 +97,7 @@ def test_note_is_captured_and_stripped():
     client = FakeClient([response(fn_call("end_turn", '{"note": "kite next turn"}'))])
     agent = OpenRouterAgent("O", "a", client=client)
 
-    call = agent.decide(_obs(), TOOLS)
+    call = agent.decide(_obs())
 
     assert call.name == "end_turn"
     assert "note" not in call.arguments
@@ -106,7 +110,7 @@ def test_retries_once_when_no_tool_call():
     )  # first: no tool call
     agent = OpenRouterAgent("O", "a", client=client)
 
-    call = agent.decide(_obs(), TOOLS)
+    call = agent.decide(_obs())
 
     assert call.name == "end_turn"
     assert len(client.calls) == 2
@@ -115,8 +119,8 @@ def test_retries_once_when_no_tool_call():
 def test_raises_after_retry_with_no_tool_call():
     client = FakeClient([response(), response()])
     agent = OpenRouterAgent("O", "a", client=client)
-    with pytest.raises(RuntimeError, match="no tool call"):
-        agent.decide(_obs(), TOOLS)
+    with pytest.raises(RuntimeError, match="no usable action"):
+        agent.decide(_obs())
 
 
 def test_missing_dependency_gives_clear_error(monkeypatch):
@@ -188,7 +192,7 @@ def test_broken_envelope_is_a_provider_error_not_a_crash(envelope):
     agent = OpenRouterAgent("O", "a", client=FakeClient([envelope, envelope]))
 
     with pytest.raises(ProviderError):
-        agent.decide(_obs(), TOOLS)
+        agent.decide(_obs())
 
 
 def test_provider_error_is_distinguishable_from_a_model_with_nothing_to_say():
@@ -201,12 +205,12 @@ def test_provider_error_is_distinguishable_from_a_model_with_nothing_to_say():
     """
     chatty = OpenRouterAgent("O", "a", client=FakeClient([response(), response()]))
     with pytest.raises(NoToolCallError) as chatty_exc:
-        chatty.decide(_obs(), TOOLS)
+        chatty.decide(_obs())
     assert not isinstance(chatty_exc.value, ProviderError)
 
     broken = OpenRouterAgent("O", "a", client=FakeClient([_broken(choices=None)] * 2))
     with pytest.raises(ProviderError):
-        broken.decide(_obs(), TOOLS)
+        broken.decide(_obs())
 
 
 def test_provider_error_reports_the_error_body_and_the_model():
@@ -217,7 +221,7 @@ def test_provider_error_reports_the_error_body_and_the_model():
         client=FakeClient([_broken(error={"message": "upstream 502"})] * 2),
     )
     with pytest.raises(ProviderError, match="vendor/flaky:free") as exc:
-        agent.decide(_obs(), TOOLS)
+        agent.decide(_obs())
     assert "upstream 502" in str(exc.value)
 
 

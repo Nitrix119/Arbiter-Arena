@@ -213,7 +213,7 @@ def test_report_is_falsy_when_it_failed():
 def test_replay_agent_refuses_to_improvise_when_it_runs_out():
     agent = ReplayAgent("r", "a", [])
     with pytest.raises(RuntimeError, match="more decisions than the transcript"):
-        agent.decide({}, [])
+        agent.decide({})
 
 
 # -- bundle-level verification (the §5 definition-of-done check) --------------
@@ -311,7 +311,7 @@ class _IllegalThenLegal(Agent):
         super().__init__(name, team)
         self._tried = False
 
-    def decide(self, observation, tools):
+    def decide(self, observation):
         if not self._tried:
             self._tried = True
             return ToolCall(
@@ -332,7 +332,7 @@ class _IllegalThenLegal(Agent):
 class _AlwaysIllegal(Agent):
     """Never does anything legal — the failure budget must force the turn to end."""
 
-    def decide(self, observation, tools):
+    def decide(self, observation):
         return ToolCall(
             TOOL_ATTACK, {"action_name": "Longsword", "defender_id": "ghost"}
         )
@@ -345,7 +345,7 @@ class _NoToolCallThenEnd(Agent):
         super().__init__(name, team)
         self._failed = False
 
-    def decide(self, observation, tools):
+    def decide(self, observation):
         from src.arena.agent import NoToolCallError
 
         if not self._failed:

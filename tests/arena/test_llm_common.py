@@ -2,6 +2,7 @@
 
 import pytest
 
+from src.arena.interfaces import C2_MENU, get_interface
 from src.arena.llm_common import (
     augment_tools_with_notes,
     capture_notes,
@@ -65,7 +66,7 @@ def test_capture_notes_strips_and_stores():
 def test_decide_one_action_returns_first_tool_call():
     agent = _StubAgent()
     seq = [(ToolCall("attack", {"defender_id": "g1"}), RequestRecord(latency_ms=1.0))]
-    call = decide_one_action(lambda m, t: seq.pop(0), agent, {}, TOOLS)
+    call = decide_one_action(lambda m, t: seq.pop(0), agent, {}, get_interface(C2_MENU))
     assert call.name == "attack"
 
 
@@ -77,8 +78,8 @@ def test_decide_one_action_retries_then_raises():
         calls["n"] += 1
         return None, RequestRecord(latency_ms=1.0, input_tokens=10, output_tokens=5)
 
-    with pytest.raises(RuntimeError, match="no tool call"):
-        decide_one_action(always_none, agent, {}, TOOLS)
+    with pytest.raises(RuntimeError, match="no usable action"):
+        decide_one_action(always_none, agent, {}, get_interface(C2_MENU))
     assert calls["n"] == 2  # initial + one retry
 
 
@@ -95,7 +96,7 @@ def test_a_failed_decision_still_reports_what_it_spent():
         return None, RequestRecord(latency_ms=2.0, input_tokens=10, output_tokens=5)
 
     with pytest.raises(RuntimeError):
-        decide_one_action(always_none, agent, {}, TOOLS)
+        decide_one_action(always_none, agent, {}, get_interface(C2_MENU))
 
     assert agent.telemetry.request_count == 2
     assert agent.telemetry.input_tokens == 20

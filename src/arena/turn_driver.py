@@ -20,7 +20,7 @@ from src.arena.agent import Agent, NoToolCallError, ProviderError
 from src.arena.error_codes import NO_TOOL_CALL, PROVIDER_ERROR
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
 from src.arena.observation import build_observation, snapshot_state
-from src.arena.tools import TOOLS, ToolCall, ToolExecutor
+from src.arena.tools import ToolCall, ToolExecutor
 from src.arena.transcript import Transcript
 from src.models.entity import Entity
 
@@ -78,7 +78,7 @@ def run_turn(
         if rejections:
             observation["rejected_actions"] = list(rejections)
         try:
-            call = agent.decide(observation, TOOLS)
+            call = agent.decide(observation)
         except NoToolCallError as exc:
             # A flaky/weak model produced no tool call — treat it like an illegal action
             # (counted against the budget, fed back), not a match-ending crash. A

@@ -20,9 +20,7 @@ class _SequenceAgent(Agent):
         self._calls = calls
         self._i = 0
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
         call = self._calls[min(self._i, len(self._calls) - 1)]
         self._i += 1
         return call
@@ -37,9 +35,7 @@ class _RecordingAgent(Agent):
         self._i = 0
         self.seen: List[Dict[str, Any]] = []
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
         self.seen.append(observation)
         call = self._calls[min(self._i, len(self._calls) - 1)]
         self._i += 1
@@ -105,7 +101,7 @@ class _NoToolAgent(Agent):
     def __init__(self):
         super().__init__("NoTool", "a")
 
-    def decide(self, observation, tools):
+    def decide(self, observation):
         raise NoToolCallError("no tool call")
 
 

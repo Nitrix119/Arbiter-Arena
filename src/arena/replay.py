@@ -81,9 +81,7 @@ class ReplayAgent(Agent):
     def exhausted(self) -> bool:
         return self._index >= len(self._calls)
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
         if self.exhausted:
             raise ReplayDivergence(
                 f"{self.name}: the replay asked for more decisions than the "
