@@ -521,6 +521,80 @@ def aim_candidates(
     return options[:max_candidates]
 
 
+@dataclass(frozen=True)
+class AimCoverage:
+    """How much of the possible aiming space the offered menu actually covers.
+
+    This is H4's expressivity number (V1_PLAN §3.3). It exists because the candidate
+    rule creates a subtlety worth stating plainly: since a target set fully determines
+    an area spell's outcome, a menu offering *every achievable target set* costs no
+    expressivity at all — the enumerated condition could then express everything free
+    aiming can, and H4's area arm would be null **by construction rather than by
+    evidence**.
+
+    Whether that is so depends entirely on the grid resolution, which is an
+    implementation choice, not a fact. So it is measured: a fine sweep establishes what
+    is achievable, the menu sweep establishes what is offered, and ``missing`` is the
+    difference. A coverage of 1.0 is a finding ("enumeration need not cost expressivity
+    when the candidates are outcome-complete"), not a free pass.
+    """
+
+    achievable: int
+    offered: int
+    missing: List[List[str]]
+
+    @property
+    def coverage(self) -> float:
+        """Fraction of achievable target sets the menu offers (1.0 = lossless)."""
+        return self.offered / self.achievable if self.achievable else 1.0
+
+    def to_dict(self) -> dict:
+        return {
+            "achievable": self.achievable,
+            "offered": self.offered,
+            "coverage": round(self.coverage, 4),
+            "missing": self.missing,
+        }
+
+
+def aim_coverage(
+    combat: "CombatSystem",
+    caster: Entity,
+    spell: SpellAction,
+    *,
+    menu_step_ft: float = DEFAULT_AIM_STEP_FT,
+    oracle_step_ft: float = 1.0,
+) -> AimCoverage:
+    """Measure what the menu's resolution costs, against a finer sweep of the same rule.
+
+    The oracle *is* :func:`aim_candidates` at a finer step, so there is no second
+    implementation to disagree with the first — only one parameter differs. Offline
+    and free; no model is involved.
+
+    ``max_candidates`` is disabled on both sides on purpose: this measures what the
+    *resolution* costs, and folding in what the cap costs would confuse two separate
+    questions.
+    """
+    unlimited = 10**9
+    offered = {
+        tuple(t.entity_id for t in o.hits)
+        for o in aim_candidates(
+            combat, caster, spell, step_ft=menu_step_ft, max_candidates=unlimited
+        )
+    }
+    achievable = {
+        tuple(t.entity_id for t in o.hits)
+        for o in aim_candidates(
+            combat, caster, spell, step_ft=oracle_step_ft, max_candidates=unlimited
+        )
+    }
+    return AimCoverage(
+        achievable=len(achievable),
+        offered=len(offered),
+        missing=sorted(list(t) for t in achievable - offered),
+    )
+
+
 def legal_actions(combat: "CombatSystem", entity: Entity) -> LegalActions:
     """Assemble the legal-action menu for *entity* in *combat*.
 

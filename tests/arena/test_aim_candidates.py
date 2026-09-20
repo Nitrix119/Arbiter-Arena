@@ -20,6 +20,7 @@ import pytest
 from src.arena.action_space import (
     DEFAULT_MAX_AIM_POINTS,
     aim_candidates,
+    aim_coverage,
     legal_actions,
 )
 from src.arena.tools import ToolCall, ToolExecutor
@@ -311,3 +312,77 @@ def test_the_generator_does_not_import_the_heuristic():
 
     offenders = [m for m in imported if "heuristic" in m]
     assert not offenders, f"action_space must not depend on the heuristic: {offenders}"
+
+
+# -- what the resolution costs (H4's expressivity number) --------------------
+
+
+def test_the_menu_resolution_loses_nothing_on_this_geometry(
+    make_entity, make_combat, registry_with, fireball
+):
+    """The measured answer to H4's area arm, at the chosen grid step.
+
+    Because a target set fully determines an area spell's outcome, a menu offering
+    every achievable set costs no expressivity — the enumerated condition can express
+    everything free aiming can. That is a *finding*, not an assumption, which is why
+    it is measured here rather than argued: 100% at 5 ft, on this geometry.
+    """
+    combat, mage = _fight(make_entity, make_combat, registry_with, fireball)
+
+    coverage = aim_coverage(combat, mage, fireball)
+
+    assert coverage.coverage == 1.0
+    assert coverage.missing == []
+    assert coverage.achievable > 1, "a trivial space would make this vacuous"
+
+
+def test_the_metric_can_detect_a_loss(
+    make_entity, make_combat, registry_with, fireball
+):
+    """A coverage metric that always reports 100% would measure nothing.
+
+    At a coarser step the sweep really does miss an achievable target set, so the
+    number above is a result rather than an artefact of the metric.
+    """
+    combat, mage = _fight(make_entity, make_combat, registry_with, fireball)
+
+    coarse = aim_coverage(combat, mage, fireball, menu_step_ft=20.0)
+
+    assert coarse.coverage < 1.0
+    assert coarse.missing
+    assert all(isinstance(entry, list) for entry in coarse.missing)
+
+
+def test_coverage_names_which_target_sets_were_lost(
+    make_entity, make_combat, registry_with, fireball
+):
+    """ "3 of 9" is not actionable; which three is."""
+    combat, mage = _fight(make_entity, make_combat, registry_with, fireball)
+
+    coarse = aim_coverage(combat, mage, fireball, menu_step_ft=20.0)
+    offered = {
+        tuple(t.entity_id for t in o.hits)
+        for o in aim_candidates(combat, mage, fireball, step_ft=20.0)
+    }
+
+    assert coarse.achievable - coarse.offered == len(coarse.missing)
+    for entry in coarse.missing:
+        assert tuple(entry) not in offered
+
+
+def test_coverage_of_an_empty_space_is_not_a_division_by_zero(
+    make_entity, make_combat, registry_with, fireball
+):
+    mage = _mage(make_entity)
+    far = make_entity("Raider", team="b", pos=(0, 0, 900), hp=30)
+    combat = make_combat([mage, far], registry=registry_with(fireball))
+
+    assert aim_coverage(combat, mage, fireball).coverage <= 1.0
+
+
+def test_coverage_serialises_for_the_record():
+    from src.arena.action_space import AimCoverage
+
+    data = AimCoverage(achievable=9, offered=8, missing=[["a", "b"]]).to_dict()
+    assert data["coverage"] == pytest.approx(0.8889, abs=1e-4)
+    assert data["missing"] == [["a", "b"]]
