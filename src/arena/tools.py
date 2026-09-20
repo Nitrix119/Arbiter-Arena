@@ -129,24 +129,18 @@ TOOLS: List[Dict[str, Any]] = [
     },
     {
         "name": TOOL_MOVE,
+        # Raw coordinates only. The schema used to accept *either* a menu `option_id`
+        # or raw x/z, which let the model pick its own experimental condition per
+        # decision — that one tool spanned C2's format and C3's affordance, the very
+        # distinction C2+M exists to isolate (V1_PLAN, Phase 0 decisions). The executor
+        # still honours `option_id` for the deterministic baselines; see `_move`.
         "description": (
-            "Move on the battlefield. Either pass an `option_id` from your legal move "
-            "options (a named, already-legal destination), OR give raw `x`/`z` in "
-            "feet for a "
-            "bespoke spot. Costs movement equal to the straight-line distance; "
-            "you cannot "
-            "move onto another creature."
+            "Move on the battlefield to a point given in feet. Costs movement equal "
+            "to the straight-line distance; you cannot move onto another creature."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "option_id": {
-                    "type": "string",
-                    "description": (
-                        "id of a move option from your legal options; resolves to "
-                        "its destination. Omit if giving raw x/z."
-                    ),
-                },
                 "x": {
                     "type": "number",
                     "description": "Destination x, in feet (east).",
@@ -160,6 +154,7 @@ TOOLS: List[Dict[str, Any]] = [
                     "description": "Destination z, in feet (south).",
                 },
             },
+            "required": ["x", "z"],
         },
     },
     {
@@ -370,6 +365,16 @@ class ToolExecutor:
     def _move(
         self, actor: Entity, args: Dict[str, Any], policy: InformationPolicy
     ) -> Dict[str, Any]:
+        """Move to a raw point, or — for the deterministic baselines only — an option.
+
+        ``option_id`` is deliberately **not** in the :data:`TOOLS` schema any more, so
+        no LLM condition can reach it: a tool accepting both a menu id and raw
+        coordinates would let the model choose its own condition per decision. The
+        executor still resolves one because ``ScriptedAgent``/``RandomAgent`` move by
+        option to stay overlap-clear without solving the geometry themselves
+        (:func:`~src.arena.agent._move_option_toward`), and a baseline inventing
+        illegal moves would corrupt the anchor the tactical metrics are read against.
+        """
         option_id = args.get("option_id")
         if option_id:
             option = next(

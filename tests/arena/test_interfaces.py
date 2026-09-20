@@ -178,3 +178,31 @@ def test_every_interface_implements_the_contract():
         assert isinstance(interface, ActionInterface)
         assert isinstance(interface.shows_menu, bool)
         assert interface.correction()
+
+
+# -- one path per condition (the Phase 0 dual-path defect) --------------------
+
+
+def test_no_llm_facing_tool_offers_a_menu_id():
+    """A tool taking *either* a menu id or raw coordinates is two conditions in one.
+
+    `move` used to accept both, so a model could pick C2's format or C3's affordance
+    per decision — collapsing the very distinction C2+M exists to isolate. Phase 0
+    flagged it; this is the guard that keeps it fixed.
+    """
+    for tool in TOOLS:
+        properties = tool["input_schema"].get("properties", {})
+        assert "option_id" not in properties, tool["name"]
+        assert "action_id" not in properties, tool["name"]
+
+
+def test_move_requires_the_ground_plane():
+    move = next(t for t in TOOLS if t["name"] == "move")
+    assert set(move["input_schema"]["required"]) == {"x", "z"}
+
+
+def test_the_raw_param_action_section_never_mentions_an_option_id():
+    for name in BUILT:
+        section = get_interface(name).action_prompt().lower()
+        assert "option_id" not in section
+        assert "action_id" not in section
