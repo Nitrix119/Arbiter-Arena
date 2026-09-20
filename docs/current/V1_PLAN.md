@@ -329,15 +329,20 @@ changes, all made to keep the categories from blurring:
   visible rather than silently joining a real category.
 
 The three conditions:
-- [ ] Refactor the action section of the prompt into a per-condition **`ActionInterface`** strategy
+- [x] Refactor the action section of the prompt into a per-condition **`ActionInterface`** strategy
       (prompt text, tools, response decoder). Keep one `decide_one_action` skeleton, so there is no
-      second agent loop (CLAUDE.md §2.7).
+      second agent loop (CLAUDE.md §2.7). _(`src/arena/interfaces.py`; a test asserts the assembled
+      prompts differ **only** in the action section.)_
 - [ ] **C1:** grammar, deterministic parser, prompt examples. Tests include adversarial and
-      near-miss text.
-- [ ] **C2:** the current tools with the menu stripped from the observation.
-- [ ] **C3:** `enumerate_legal_actions` with stable deterministic IDs and a neutral candidate rule,
+      near-miss text. **The one substantial build left — see the C1 note in §10.**
+- [x] **C2:** the current tools with the menu stripped from the observation.
+- [x] **C3:** `enumerate_legal_actions` with stable deterministic IDs and a neutral candidate rule,
       plus a `choose(action_id)` tool. Every listed ID must execute successfully (a property test).
-- [ ] **C2+M:** the current path, labelled as a condition.
+      _(`src/arena/enumeration.py`; the property test runs every id through the real executor.)_
+- [x] **C2+M:** the current path, labelled as a condition.
+- [x] Measure what each menu's discretisation costs (`aim_coverage`, `move_coverage`,
+      `sample_coverage`) — not on the original checklist; added because H4 is untestable without
+      it. See §9.
 
 Runner and analysis:
 - [ ] Batch runner CLI (`python -m src.arena.study run --grid grid.yaml`): resumable, preflight,
@@ -555,4 +560,32 @@ clear of it.
 records them); the menus' neutrality is enforced by tests, and a future sort by "most
 enemies hit" would silently make C3 look smarter; and the corrected H4 figures in §9.
 
-Next: **C1**, on its own, followed by the batch runner and the analysis script.
+#### The C1 question to settle *before* building it (2026-09-21)
+
+C1 is not just "the remaining condition" — it carries a tension the other three do not,
+and it should be discussed before a line of parser is written.
+
+**The constraint:** §3.1 forbids an LLM parser, because a second model inside the
+measurement means a C1 failure could be the parser's rather than the agent's, and the
+study could no longer attribute anything.
+
+**The risk:** a fully deterministic grammar parser may not reach acceptable *fairness*.
+If it rejects phrasings a reasonable reader would accept, C1's `malformed_output` rate
+measures parser brittleness rather than the free-text interface — and H1 predicts C1 is
+worst, so a brittle parser would *confirm the hypothesis for the wrong reason*. That is
+the most dangerous shape of error available to this study.
+
+**Options, none yet chosen:**
+1. A permissive deterministic parser (synonyms, loose ordering, fuzzy entity matching),
+   with an adversarial corpus written *before* the pilot and a documented accept/reject
+   boundary.
+2. A strict grammar with worked examples in the prompt, accepting that C1 partly
+   measures instruction-following — and saying so as a limitation rather than a finding.
+3. Drop C1, run three conditions, and report the free-text arm as out of scope.
+
+**Whichever is chosen, the parser must be frozen before the pilot and its accept/reject
+boundary published**, or C1's numbers are not interpretable. A useful pre-commitment:
+hand-label a sample of real model outputs and report parser agreement with the labels,
+so parser error and agent error are separable after the fact.
+
+Next: settle the above, then **C1**, then the batch runner and the analysis script.

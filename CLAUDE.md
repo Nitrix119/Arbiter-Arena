@@ -281,6 +281,26 @@ leave a brief note here.
 - **Rule going forward:** the concrete, testable rule.
 ```
 
+### 2026-09-21 — Measuring at the configuration you designed measures your design, not the system
+- **Context:** Quantifying how much the enumerated action menu's discretisation costs, by comparing
+  the options it offers against the options a fine sweep proves reachable. Measured on the AoE
+  scenario and registered the result in the pre-registration: **coverage 9/9 = 100%**, i.e. the menu
+  is outcome-complete and costs nothing.
+- **What went wrong:** that number was taken at the scenario's **opening position** — which is the
+  formation its author deliberately arranged so the intended decision would be available. It is the
+  single least representative board in the match. Sampling across the formations a match actually
+  produces gave **75% minimum, 92% median**: the menu *does* lose options, just not in the tableau
+  it was tested on. The figure was already written into the pre-registration, and had data been
+  collected first, correcting it afterwards would have been indistinguishable from moving the
+  goalposts. Nothing failed; every test passed; the measurement was simply of the wrong population.
+- **Rule going forward:** a measurement over states must **sample the states the system will really
+  be in**, and report the distribution — minimum, median, n — not a single frame. Prefer the
+  *worst* case as the registered claim, because "this loses nothing" has to hold at the tightest
+  moment, not on average. Be most suspicious when the sampled state is one you constructed: a
+  fixture, a scenario opening, a hand-built example. Corollary, and the reason this is worth the
+  entry: the metric was honest and the code correct — the error was entirely in *which* board it
+  ran on, which no test can catch for you.
+
 ### 2026-09-21 — An identifier the model must retype is part of the interface under test
 - **Context:** Building the recording layer for the action-interface study. Entity ids were 16
   random hex characters (`c735df5ef7697fb9`), drawn from the seeded RNG. The problem surfaced as a

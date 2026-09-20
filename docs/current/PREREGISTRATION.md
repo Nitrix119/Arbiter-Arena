@@ -381,11 +381,28 @@ against the incorrect figure.
 
 ## 11. Open items before freeze
 
+**Blocking — these change what the study can claim:**
+
+- [ ] **C1's parser fairness, and whether C1 runs at all.** A deterministic parser that
+      rejects reasonable phrasings makes C1's `malformed_output` rate a measure of
+      parser brittleness, not of the free-text interface — and since H1 predicts C1 is
+      worst, a brittle parser would *confirm the hypothesis for the wrong reason*. An
+      LLM parser is forbidden (§2: it would put a second model inside the measurement).
+      Options and a proposed pre-commitment are in `V1_PLAN.md` §10. **Settle before
+      building C1.**
 - [ ] Opponent: Scripted vs Heuristic, decided in the pilot
 - [ ] Whether `invalid_target_relation` splits, from pilot frequencies (§6)
+
+**Routine — values to fill in:**
+
 - [ ] Whether Claude Sonnet is in the final run (budget, after two models' real cost)
 - [ ] Exact pinned model strings
-- [ ] Final AoE scenario definition
-- [ ] Prompt texts and their hashes for all four conditions
+- [ ] Prompt texts and their hashes for all four conditions — note the prompt was split
+      into a shared body plus a per-condition action section on 2026-09-21, so **every
+      hash changed**; they must be recorded from the frozen commit, not from memory
 - [ ] Confirmed per-match call and token counts from the pilot
 - [ ] Citation verification for every work listed in §1
+
+**Settled since this list was written:** the AoE scenario is built (§4.1); combatant ids
+are a registered control (§4.2); the invalid-action taxonomy is implemented (§6); H4 is
+split with measured coverage figures (§3, §4.1.1).
