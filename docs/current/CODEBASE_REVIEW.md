@@ -211,7 +211,12 @@ after P1 adds a spell-JSON schema validator (E4) so the skill gets structured fe
 
 ### Arena adjacent problems (noted, not yet fixed)
 
-- **A1. `OpenRouterAgent` crashes on a malformed API response.**
+- **A1. ~~`OpenRouterAgent` crashes on a malformed API response.~~ Fixed 2026-09-21** (`6a83459`).
+  `_first_message` refuses a broken envelope as a `ProviderError` — a `NoToolCallError` subclass,
+  so the turn driver's existing counted-failure handling applies unchanged. It is a *subclass*
+  rather than a plain `None` return because the study must tell infrastructure (a §3.5 exclusion)
+  from a model with nothing to say (never an exclusion); the two are recorded as `provider_error`
+  and `no_tool_call`. The live-model preflight noted below is still outstanding. Original report:
   `openrouter_agent.py:_request_action` does `response.choices[0].message` unguarded; a free model
   that returns `choices=None` (error/empty payload — observed live with
   `nvidia/nemotron-3-super-120b-a12b:free`, 2026-09-15) raises `TypeError` and aborts the whole

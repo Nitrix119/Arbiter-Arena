@@ -230,18 +230,42 @@ running" does not apply; size the grid on cost and calls, not on the 1,000/day c
 
 ### Phase 1 — Build the study harness (≈5–7 sessions, TDD throughout)
 Recording and instrumentation, first:
-- [ ] Typed error codes on `ToolExecutor` results (the §3.4 taxonomy), with a test per code.
+- [x] Typed error codes on `ToolExecutor` results (the §3.4 taxonomy), with a test per code.
+      _(`src/errors.py`: `RuleViolation(ValueError)` carrying a code, raised at ~12 engine sites;
+      `src/arena/error_codes.py` adds the agent-side codes. See the taxonomy note below.)_
 - [ ] Capture token usage and latency in both adapters. Log per decision in the transcript.
 - [ ] Log the **raw model output** per decision (text or tool call) and the parsed action.
       Scrub secrets; never log keys.
-- [ ] Fix the OpenRouter empty-`choices` crash (CODEBASE_REVIEW A1) as a provider error, not a
-      model failure.
-- [ ] Manifest record in `match_start`: commit, scenario, seed, condition, model string, temperature,
+- [x] Fix the OpenRouter empty-`choices` crash (CODEBASE_REVIEW A1) as a provider error, not a
+      model failure. _(`ProviderError`, a `NoToolCallError` subclass → the `provider_error` code.)_
+- [x] Manifest record in `match_start`: commit, scenario, seed, condition, model string, temperature,
       prompt hash, schema versions (`observation.v1`, `legal_action.v1`, `match_record.v1`).
-- [ ] **Canonical state hash** per `turn_end` (sorted keys, normalised numbers).
+      _(`src/arena/manifest.py`; `run_match(manifest=…)`. The seed stays the transcript's own
+      field — one authority, not two copies that can disagree.)_
+- [x] **Canonical state hash** per `turn_end` (sorted keys, normalised numbers).
 - [ ] **`ReplayVerifier`**: re-execute recorded accepted actions with the same seed, no model, and
       compare hashes. Tests cover a scripted match and a match with rejected actions (does a
       rejection consume RNG?).
+      **Note before building it:** entity ids come from the seeded RNG and appear in the state
+      snapshot, so a replay must rebuild its entities *under the recorded seed*
+      (`with dice.using_rng(dice.new_rng(seed)): …`) or no hash will line up.
+
+#### Taxonomy deviations from §3.4 (2026-09-21) — settle before the prereg freezes
+
+The §3.4 draft list was written before the codes met the engine's real refusal sites. Three
+changes, all made to keep the categories from blurring:
+
+- **`not_your_turn` added.** `_assert_active` is "it is not your turn", which is not
+  `action_economy_spent` ("you already acted"). Different mistakes.
+- **"Cannot afford" splits by the actual shortfall**, not by the cost's shape: a spent action
+  is `action_economy_spent`, spent movement or an exhausted slot is `insufficient_resource`.
+  Lumping them would blur the two most common refusals.
+- **`invalid_target_relation` widened** to cover an illegal *parameter combination* — today
+  only "cast at a slot below the spell's base level", which fits no other category. If the
+  pilot shows this firing often, split it out before the freeze.
+- **`provider_error` and `engine_error` added** as non-model buckets: the first is the §3.5
+  infra exclusion, the second should stay at zero and exists so an untyped refusal path is
+  visible rather than silently joining a real category.
 
 The three conditions:
 - [ ] Refactor the action section of the prompt into a per-condition **`ActionInterface`** strategy
