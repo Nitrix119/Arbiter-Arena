@@ -208,6 +208,29 @@ and is assessed as **tractable**: the spell engine already resolves AoE thorough
 work is gathering and formatting information that exists and surfacing it to the agent, rather than
 new mechanics.
 
+> **Delivered 2026-09-21** (`9822c3b`, `09cefee`, `f83a41b`). `action_space.aim_candidates`
+> implements the rule; `aoe_placement` is the scenario. The tractability assessment held — the
+> work was surfacing information the engine already had. Two things the build changed:
+> - **A live interface bug was found on the way.** `cast_spell`'s `target_point` schema required
+>   `["x", "y"]` while the executor read `x`/`z`, so a model naming a ground point as x/y got a
+>   `KeyError` → `malformed_output`. It fires in C1/C2/C2+M but never in C3, a between-condition
+>   confound of the same class as the entity ids. Fixed in `6ad7dca`, along with stating the axis
+>   convention in `SYSTEM_PROMPT` (a pre-freeze prompt change, since §3.1 hashes prompts).
+> - **The rule turns out to be outcome-complete**, which changes what H4 can claim — see the
+>   prereg §4.1.1 and the note below.
+
+#### The candidate rule makes H4's area arm null by design (2026-09-21)
+
+Worth recording as a decision, not a detail. Since 5e area damage has no falloff, the *set of
+creatures caught fully determines the outcome*, so a menu offering every achievable target set
+costs no expressivity whatsoever. Measured on `aoe_placement`: **coverage 9/9 = 100%** at the 5 ft
+menu step (8/9 at 10 ft, so the metric can detect a loss).
+
+H4's area arm therefore predicts **no** cost, and that null is registered in advance as the
+expected result rather than a failed search. The live H4 question is the **movement** axis, whose
+candidates are named tactical destinations rather than a complete enumeration. `aim_coverage`
+computes the number offline, so it is known before the pilot rather than argued after it.
+
 **C2+M → in the study as a full condition (not pilot-only).** Definition: tool calls with raw params (C2's format)
 *plus* the legal menu in the observation (C3's affordance), pinning one dial at a time so C3's
 result can be attributed to format or to affordance rather than to both. It is **today's production
@@ -448,7 +471,42 @@ CLAUDE.md keeps collecting:
 - the drift guard for error codes could not read a code chosen inside a helper, which
   would have silently stopped covering the two most common refusals.
 
-Next: the three conditions — the `ActionInterface` strategy, then C1's grammar and
-parser, C2 (menu stripped), C3 (`enumerate_legal_actions` + `choose`), and C2+M as
-today's path labelled. The AoE scenario and its neutral candidate generator (§ Phase 0
-decisions) are also still outstanding, and H4 cannot be tested without them.
+---
+
+## 9. AoE cluster closing note (2026-09-21)
+
+**The AoE support and its scenario are done** — the last outstanding Phase 0 commitment.
+1,089 tests green; flake8, mypy and Black clean. Landed in five commits: the
+`target_point` contract fix (`6ad7dca`), `aim_candidates` (`9822c3b`), `aim_coverage`
+(`09cefee`), the `aoe_placement` scenario (`f83a41b`) and a spell-slot key-type fix
+(`2711f36`).
+
+**Chosen ahead of the `ActionInterface` deliberately.** The dependency runs one way —
+C3's enumerator must list aim points, while AoE needs nothing from the interface layer —
+so building AoE second would have forced C3's candidate schema, ordering and cap policy
+to be reopened, the cap especially, since it can only be calibrated against a real
+candidate distribution. That judgement was vindicated twice over: the `target_point` bug
+was found only because this work exercised a path no scenario had ever touched, and the
+menu-length figure (9 aim points versus ~4 attack entries) is exactly the number a cap
+has to be set against.
+
+**What must not be lost before the freeze:**
+
+1. **H4's area arm is null by design** (§ Phase 0 note above, prereg §4.1.1). Registered
+   in advance with the measured coverage, so the null is a prediction rather than a
+   post-hoc excuse. The live H4 test is the movement axis.
+2. **The menu is neutral by construction and by test** — lexicographic ordering, no
+   import of `heuristic/`, ally- and self-catching options offered and tagged rather
+   than hidden. A future change that sorts by "most enemies hit" would silently make C3
+   look smarter than it is.
+3. **The `SYSTEM_PROMPT` axis sentence is part of the measured interface.** It was added
+   pre-freeze on purpose; §3.1 hashes prompts, so editing it later is a deviation.
+
+**Sizing is now as §7 anticipated:** 4 conditions × 4 scenarios × 10 seeds = 160 matches
+per model.
+
+Next: the `ActionInterface` strategy, then C2 (menu stripped), C3
+(`enumerate_legal_actions` + `choose` — now with the full action vocabulary in view) and
+C2+M as today's path labelled. **C1 is its own step**: its grammar and parser are the
+longest, least bounded item left, and the parser must be deterministic and frozen before
+the pilot.
