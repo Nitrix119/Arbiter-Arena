@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.arena.manifest import state_hash
 from src.arena.tools import ToolCall
 
 DEFAULT_MATCH_DIR = "matches"
@@ -79,7 +80,16 @@ class Transcript:
         )
 
     def turn_end(self, entity_id: str, state: Dict[str, Any]) -> None:
-        self.log("turn_end", entity_id=entity_id, state=state)
+        """Log the end of a turn with its ground-truth state and a canonical hash.
+
+        The hash is what ``ReplayVerifier`` compares: re-running the recorded actions
+        under the same seed must reproduce this exact sequence. Recording it *here*,
+        as the state is captured, means a replay is checked against what the engine
+        actually did rather than against a later re-serialisation of it.
+        """
+        self.log(
+            "turn_end", entity_id=entity_id, state=state, state_hash=state_hash(state)
+        )
 
     def match_end(self, winner: Optional[str], reason: str, rounds: int) -> None:
         self.log("match_end", winner=winner, reason=reason, rounds=rounds)

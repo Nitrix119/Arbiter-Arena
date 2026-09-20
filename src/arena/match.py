@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 
 from src.arena.agent import Agent
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
+from src.arena.manifest import Manifest
 from src.arena.observation import serialize_stat_block, snapshot_state
 from src.arena.tools import ToolExecutor
 from src.arena.transcript import Transcript
@@ -112,6 +113,7 @@ def run_match(
     seed: Optional[int] = None,
     round_cap: int = DEFAULT_ROUND_CAP,
     transcript: Optional[Transcript] = None,
+    manifest: Optional[Manifest] = None,
 ) -> MatchResult:
     """Run *combat* (unstarted) to completion with one *agent* per team; return the
     result.
@@ -123,6 +125,9 @@ def run_match(
         seed: RNG seed for a reproducible battle (dice + initiative).
         round_cap: Hard round limit; a match still going is decided on HP fraction.
         transcript: Optional log to record the whole match into.
+        manifest: Optional study-cell identity (condition, scenario, model, schema
+            versions) stamped into ``match_start`` so the transcript says which
+            experiment it belongs to. Omit it for a bare functionality match.
     """
     policies = policies or {}
     if transcript is not None:
@@ -141,7 +146,7 @@ def run_match(
             _reroll_initiative(
                 combat
             )  # so the seed governs turn order, not just resolution
-        return _run_seeded(combat, agents, policies, round_cap, transcript)
+        return _run_seeded(combat, agents, policies, round_cap, transcript, manifest)
 
 
 def _run_seeded(
@@ -150,6 +155,7 @@ def _run_seeded(
     policies: Dict[Optional[str], InformationPolicy],
     round_cap: int,
     transcript: Optional[Transcript],
+    manifest: Optional[Manifest] = None,
 ) -> MatchResult:
     """Drive the match to completion under the caller-bound RNG context."""
     executor = ToolExecutor(combat)
@@ -159,6 +165,7 @@ def _run_seeded(
             combatants=[serialize_stat_block(e) for e in combat.combatants],
             initial_state=snapshot_state(combat),
             round_cap=round_cap,
+            **(manifest.to_dict() if manifest is not None else {}),
         )
 
     combat.start_combat()
