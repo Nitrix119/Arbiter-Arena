@@ -595,6 +595,130 @@ def aim_coverage(
     )
 
 
+def _threat_class(
+    combat: "CombatSystem", entity: Entity, x: float, y: float, z: float
+) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    """What standing at ``(x, y, z)`` *means*, as an outcome-equivalence class.
+
+    Two destinations are tactically the same when they offer the same attacks and
+    expose you to the same threats, so a position is summarised as **(enemies I could
+    attack from here, enemies that could reach me next turn)**. Everything else about a
+    point — its exact coordinates, the route taken — has no effect the engine models.
+
+    Reach is the engine's own (``check_attack_range`` against real bounding boxes), so
+    the measurement agrees with what an attack would actually do. Threat is the
+    standard approximation: an enemy that can close its speed and still reach.
+
+    Moves *entity* temporarily and puts it back; callers see no change.
+    """
+    origin = (entity.x, entity.y, entity.z)
+    entity.x, entity.y, entity.z = x, y, z
+    try:
+        attackable = []
+        threatened_by = []
+        my_attacks = [
+            a
+            for a in _owned_attacks(entity)
+            if isinstance(a, AttackAction) and entity.can_afford(a.cost)
+        ]
+        for enemy in combat.get_enemies(entity):
+            if not enemy.is_alive():
+                continue
+            if any(_in_reach(entity, enemy, a) for a in my_attacks):
+                attackable.append(enemy.entity_id)
+            reach = _max_attack_range_ft(enemy) + enemy.resources.movement
+            if _gap_ft(entity, enemy) <= reach:
+                threatened_by.append(enemy.entity_id)
+        return tuple(sorted(attackable)), tuple(sorted(threatened_by))
+    finally:
+        entity.x, entity.y, entity.z = origin
+
+
+def _in_reach(attacker: Entity, defender: Entity, action: AttackAction) -> bool:
+    try:
+        check_attack_range(attacker, defender, action)
+    except ValueError:
+        return False
+    return True
+
+
+def _gap_ft(a: Entity, b: Entity) -> float:
+    """Edge-to-edge distance between two creatures, as the engine measures reach."""
+    box_a, box_b = a.bounding_box, b.bounding_box
+    gx = max(
+        0.0,
+        box_a.min_corner.x - box_b.max_corner.x,
+        box_b.min_corner.x - box_a.max_corner.x,
+    )
+    gy = max(
+        0.0,
+        box_a.min_corner.y - box_b.max_corner.y,
+        box_b.min_corner.y - box_a.max_corner.y,
+    )
+    gz = max(
+        0.0,
+        box_a.min_corner.z - box_b.max_corner.z,
+        box_b.min_corner.z - box_a.max_corner.z,
+    )
+    return math.sqrt(gx * gx + gy * gy + gz * gz)
+
+
+def _reachable_classes(combat: "CombatSystem", entity: Entity, step_ft: float) -> set:
+    """Every threat class *entity* could reach this turn, by sweeping its budget."""
+    budget = entity.resources.movement
+    classes = {_threat_class(combat, entity, entity.x, entity.y, entity.z)}
+    if budget < 1:
+        return classes
+
+    steps = int(budget // step_ft)
+    for i in range(-steps, steps + 1):
+        for j in range(-steps, steps + 1):
+            dx, dz = i * step_ft, j * step_ft
+            if math.sqrt(dx * dx + dz * dz) > budget:
+                continue  # outside the movement budget
+            x, z = entity.x + dx, entity.z + dz
+            if not combat.is_destination_clear(entity, x, entity.y, z):
+                continue
+            classes.add(_threat_class(combat, entity, x, entity.y, z))
+    return classes
+
+
+def move_coverage(
+    combat: "CombatSystem",
+    entity: Entity,
+    *,
+    oracle_step_ft: float = 2.5,
+) -> AimCoverage:
+    """How much of the *movement* outcome space the named destinations cover.
+
+    The counterpart of :func:`aim_coverage`, and the one that matters. Area aiming
+    turned out to be outcome-complete, which makes H4's area arm null by construction
+    (see :class:`AimCoverage`); movement candidates are three named destinations per
+    enemy and have never been measured. If they are lossy — and they are expected to
+    be — this is where an enumerated condition genuinely gives something up, and H4's
+    live arm is here rather than in the area menu.
+
+    Offered classes come from :func:`move_candidates`, achievable ones from sweeping
+    the whole movement budget, both scored by :func:`_threat_class`. Offline and free.
+    """
+    offered = {
+        _threat_class(combat, entity, option.x, option.y, option.z)
+        for option in move_candidates(combat, entity)
+    }
+    offered.add(_threat_class(combat, entity, entity.x, entity.y, entity.z))
+    achievable = _reachable_classes(combat, entity, oracle_step_ft)
+
+    missing = sorted(
+        [f"attack:{'+'.join(a) or '-'}", f"threatened:{'+'.join(t) or '-'}"]
+        for a, t in achievable - offered
+    )
+    return AimCoverage(
+        achievable=len(achievable),
+        offered=len(offered & achievable),
+        missing=missing,
+    )
+
+
 def legal_actions(combat: "CombatSystem", entity: Entity) -> LegalActions:
     """Assemble the legal-action menu for *entity* in *combat*.
 
