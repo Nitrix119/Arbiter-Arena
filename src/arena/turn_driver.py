@@ -16,8 +16,8 @@ own ``end_turn`` (executed by the ``ToolExecutor``) or a single forced ``end_tur
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from src.arena.agent import Agent, NoToolCallError
-from src.arena.error_codes import NO_TOOL_CALL
+from src.arena.agent import Agent, NoToolCallError, ProviderError
+from src.arena.error_codes import NO_TOOL_CALL, PROVIDER_ERROR
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
 from src.arena.observation import build_observation, snapshot_state
 from src.arena.tools import TOOLS, ToolCall, ToolExecutor
@@ -81,9 +81,13 @@ def run_turn(
             call = agent.decide(observation, TOOLS)
         except NoToolCallError as exc:
             # A flaky/weak model produced no tool call — treat it like an illegal action
-            # (counted against the budget, fed back), not a match-ending crash.
+            # (counted against the budget, fed back), not a match-ending crash. A
+            # ProviderError is the same shape but a different *cause*: infrastructure,
+            # which the study may exclude a match for, rather than model behaviour,
+            # which it never may.
             call = ToolCall("(no_tool_call)", {})
-            result = {"ok": False, "code": NO_TOOL_CALL, "error": str(exc)}
+            code = PROVIDER_ERROR if isinstance(exc, ProviderError) else NO_TOOL_CALL
+            result = {"ok": False, "code": code, "error": str(exc)}
         else:
             result = executor.apply(actor, call, policy)
         if transcript is not None:

@@ -36,6 +36,21 @@ class NoToolCallError(RuntimeError):
     """
 
 
+class ProviderError(NoToolCallError):
+    """The *provider* failed, rather than the model choosing badly.
+
+    An empty or malformed response envelope — no ``choices``, an error body — is
+    infrastructure, and the study excludes matches only for infrastructure
+    (``docs/current/V1_PLAN.md`` §3.5), never for bad model behaviour. Separating it
+    here is what makes that exclusion rule applyable after the fact; lumping it in
+    with "the model returned prose" would quietly count a rate-limited request as a
+    reasoning failure.
+
+    Subclasses :class:`NoToolCallError` so the turn driver's existing handling — count
+    it, feed it back, never crash the match — applies unchanged.
+    """
+
+
 class Agent(ABC):
     """Base class: decides one action from an observation.
 

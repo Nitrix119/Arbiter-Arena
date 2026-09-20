@@ -19,7 +19,7 @@ import json
 from types import ModuleType
 from typing import Any, Dict, List, Optional
 
-from src.arena.agent import Agent
+from src.arena.agent import Agent, ProviderError
 from src.arena.credentials import resolve_credential
 from src.arena.llm_common import SYSTEM_PROMPT, decide_one_action
 from src.arena.tools import ToolCall
@@ -56,6 +56,29 @@ def _to_openai_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         }
         for t in tools
     ]
+
+
+def _first_message(response: Any, model: str) -> Any:
+    """Return the first choice's message, or refuse as a *provider* failure.
+
+    A free host under load answers with an error body or an empty payload rather than
+    a completion, and ``response.choices[0]`` on that raises ``TypeError`` mid-match
+    (observed live, 2026-09-15). A four-day background grid cannot die on one flaky
+    response, so this is a counted, recorded failure instead — and one tagged as
+    infrastructure, since the model never got to make a choice.
+    """
+    choices = getattr(response, "choices", None)
+    if not choices:
+        detail = getattr(response, "error", None)
+        raise ProviderError(
+            f"{model}: the provider returned no choices"
+            + (f" ({detail})" if detail else "")
+            + " — an empty or error payload, not a model decision."
+        )
+    message = getattr(choices[0], "message", None)
+    if message is None:
+        raise ProviderError(f"{model}: the provider returned a choice with no message.")
+    return message
 
 
 class OpenRouterAgent(Agent):
@@ -104,7 +127,7 @@ class OpenRouterAgent(Agent):
             max_tokens=self.max_tokens,
             extra_headers=_RANKING_HEADERS,
         )
-        message = response.choices[0].message
+        message = _first_message(response, self.model)
         for tc in getattr(message, "tool_calls", None) or []:
             fn = tc.function
             arguments = fn.arguments
