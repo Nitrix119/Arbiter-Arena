@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from src.arena.agent import Agent, NoToolCallError
+from src.arena.error_codes import NO_TOOL_CALL
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
 from src.arena.observation import build_observation, snapshot_state
 from src.arena.tools import TOOLS, ToolCall, ToolExecutor
@@ -82,7 +83,7 @@ def run_turn(
             # A flaky/weak model produced no tool call — treat it like an illegal action
             # (counted against the budget, fed back), not a match-ending crash.
             call = ToolCall("(no_tool_call)", {})
-            result = {"ok": False, "error": str(exc)}
+            result = {"ok": False, "code": NO_TOOL_CALL, "error": str(exc)}
         else:
             result = executor.apply(actor, call, policy)
         if transcript is not None:
@@ -92,6 +93,7 @@ def run_turn(
             rejections.append(
                 {
                     "action": {"name": call.name, "arguments": dict(call.arguments)},
+                    "code": result.get("code", ""),
                     "error": result.get("error", ""),
                 }
             )

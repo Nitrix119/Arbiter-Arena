@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+from src.errors import INSUFFICIENT_RESOURCE, RuleViolation
+
 
 @dataclass
 class SpellSlots:
@@ -33,10 +35,12 @@ class SpellSlots:
         """Consume one slot of *level*.
 
         Raises:
-            ValueError: If no slots of that level remain.
+            RuleViolation: If no slots of that level remain.
         """
         if not self.can_afford(level):
-            raise ValueError(f"No spell slots remaining at level {level}")
+            raise RuleViolation(
+                INSUFFICIENT_RESOURCE, f"No spell slots remaining at level {level}"
+            )
         self.remaining[level] -= 1
 
     def refill(self) -> None:

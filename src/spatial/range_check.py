@@ -11,6 +11,7 @@ import: geometry.py is imported by Entity, and Entity is imported here.
 import math
 from typing import Optional, Tuple, TYPE_CHECKING, cast
 
+from src.errors import OUT_OF_RANGE, RuleViolation
 from src.spatial.geometry import Point3D, Vector3D
 from src.models.spell_properties import AOEProperties, AOEShape, RangeType
 from src.models.action import AttackAction, SpellAction
@@ -63,7 +64,7 @@ def check_attack_range(
     defender: "Entity",
     action: AttackAction,
 ) -> None:
-    """Raise ValueError when *defender* is beyond the attack's range.
+    """Raise :class:`~src.errors.RuleViolation` when *defender* is beyond reach.
 
     Range is measured edge-to-edge between the two bounding boxes, so a
     creature's own footprint does not eat into its reach.  The gap on each
@@ -77,10 +78,11 @@ def check_attack_range(
     gap_z = max(0.0, a.min_corner.z - d.max_corner.z, d.min_corner.z - a.max_corner.z)
     dist = math.sqrt(gap_x**2 + gap_y**2 + gap_z**2)
     if dist > action.range_ft:
-        raise ValueError(
+        raise RuleViolation(
+            OUT_OF_RANGE,
             f"{attacker.name} cannot use {action.name}: "
             f"{defender.name} is out of range "
-            f"({dist:.1f} ft, max {action.range_ft:.0f} ft)"
+            f"({dist:.1f} ft, max {action.range_ft:.0f} ft)",
         )
 
 
@@ -89,7 +91,8 @@ def check_single_target_range(
     defender: "Entity",
     action: SpellAction,
 ) -> None:
-    """Raise ValueError when *defender* is out of the spell's range.
+    """Raise :class:`~src.errors.RuleViolation` when *defender* is out of the spell's
+    range.
 
     Uses the nearest point on the defender's bounding box for the distance
     measurement, which is the most generous (and D&D-compliant) approach.
@@ -103,9 +106,10 @@ def check_single_target_range(
     # Range is measured from the caster's edge: allow half_size extra from centre.
     half_size = caster.stat_block.size.size_ft / 2.0
     if dist > range_ft + half_size:
-        raise ValueError(
+        raise RuleViolation(
+            OUT_OF_RANGE,
             f"{action.name}: {defender.name} is out of range "
-            f"({dist:.1f} ft, max {range_ft:.0f} ft)"
+            f"({dist:.1f} ft, max {range_ft:.0f} ft)",
         )
 
 

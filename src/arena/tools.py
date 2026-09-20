@@ -25,7 +25,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from src.arena.action_space import move_candidates
+from src.arena.error_codes import ENGINE_ERROR, MALFORMED_OUTPUT
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
+from src.errors import UNKNOWN_ACTION, UNKNOWN_TARGET, RuleViolation
 from src.models.action import AttackAction
 from src.models.entity import Entity
 from src.spatial.geometry import Point3D
@@ -172,8 +174,23 @@ def _ok(**fields: Any) -> Dict[str, Any]:
     return {"ok": True, **fields}
 
 
-def _error(message: str) -> Dict[str, Any]:
-    return {"ok": False, "error": message}
+def _error(code: str, message: str) -> Dict[str, Any]:
+    """A refused action: a stable *code* for metrics, prose for the model to read."""
+    return {"ok": False, "code": code, "error": message}
+
+
+def _require(args: Dict[str, Any], key: str, tool: str) -> Any:
+    """Return ``args[key]``, or refuse as malformed output.
+
+    A missing required argument is the *model's* formatting failure, not a rule the
+    engine declined — it belongs in a different taxonomy bucket, and it must not
+    surface as a bare ``KeyError``.
+    """
+    if key not in args:
+        raise RuleViolation(
+            MALFORMED_OUTPUT, f"{tool} requires a {key!r} argument; none was given."
+        )
+    return args[key]
 
 
 def _gate_roll(
@@ -243,11 +260,19 @@ class ToolExecutor:
         }
         handler = handlers.get(call.name)
         if handler is None:
-            return _error(f"Unknown tool: {call.name!r}")
+            return _error(UNKNOWN_ACTION, f"Unknown tool: {call.name!r}")
         try:
             return handler(actor, call.arguments, policy)
-        except (ValueError, RuntimeError, KeyError) as exc:
-            return _error(str(exc))
+        except RuleViolation as exc:
+            return _error(exc.code, str(exc))
+        except KeyError as exc:
+            return _error(MALFORMED_OUTPUT, f"Missing or unknown key: {exc}")
+        except (ValueError, RuntimeError) as exc:
+            # An untyped refusal — the engine declining something it cannot model
+            # (an unsupported AoE shape) or a path that still needs a code. Counted
+            # under its own bucket so a non-zero rate is visible, not silently
+            # merged into a real category.
+            return _error(ENGINE_ERROR, str(exc))
 
     # -- individual tools ------------------------------------------------------
 
@@ -255,13 +280,13 @@ class ToolExecutor:
         for e in self._combat.combatants:
             if e.entity_id == entity_id:
                 return e
-        raise ValueError(f"Unknown entity_id: {entity_id!r}")
+        raise RuleViolation(UNKNOWN_TARGET, f"Unknown entity_id: {entity_id!r}")
 
     def _attack(
         self, actor: Entity, args: Dict[str, Any], policy: InformationPolicy
     ) -> Dict[str, Any]:
-        action_name = args["action_name"]
-        defender = self._lookup(args["defender_id"])
+        action_name = _require(args, "action_name", TOOL_ATTACK)
+        defender = self._lookup(_require(args, "defender_id", TOOL_ATTACK))
         action = next(
             (
                 a
@@ -271,7 +296,9 @@ class ToolExecutor:
             None,
         )
         if action is None:
-            raise ValueError(f"{actor.name} has no attack called {action_name!r}")
+            raise RuleViolation(
+                UNKNOWN_ACTION, f"{actor.name} has no attack called {action_name!r}"
+            )
 
         hit, damage, roll_detail = self._combat.resolve_attack(actor, defender, action)
         return _ok(
@@ -285,7 +312,7 @@ class ToolExecutor:
     def _cast_spell(
         self, actor: Entity, args: Dict[str, Any], policy: InformationPolicy
     ) -> Dict[str, Any]:
-        spell_name = args["spell_name"]
+        spell_name = _require(args, "spell_name", TOOL_CAST_SPELL)
         spell_action = self._combat.get_spell_for_entity(actor, spell_name)
 
         defenders = [self._lookup(tid) for tid in args.get("target_ids", [])]
@@ -333,9 +360,10 @@ class ToolExecutor:
                 None,
             )
             if option is None:
-                raise ValueError(
+                raise RuleViolation(
+                    UNKNOWN_TARGET,
                     f"No move option {option_id!r} is available now; "
-                    "choose a listed option_id or give raw x/z."
+                    "choose a listed option_id or give raw x/z.",
                 )
             x, y, z = option.x, option.y, option.z
         elif "x" in args and "z" in args:
@@ -343,7 +371,10 @@ class ToolExecutor:
             z = float(args["z"])
             y = float(args.get("y", 0.0))
         else:
-            raise ValueError("move requires either an option_id or both x and z.")
+            raise RuleViolation(
+                MALFORMED_OUTPUT,
+                "move requires either an option_id or both x and z.",
+            )
         self._combat.move_entity(actor, x, y, z)
         return _ok(
             action=TOOL_MOVE,

@@ -5,6 +5,16 @@ import math
 from dataclasses import dataclass
 from typing import Any, Callable, List, NamedTuple, Optional, Tuple, TypeVar
 
+from src.errors import (
+    ACTION_ECONOMY_SPENT,
+    DESTINATION_BLOCKED,
+    INSUFFICIENT_RESOURCE,
+    INVALID_TARGET_RELATION,
+    NOT_YOUR_TURN,
+    UNKNOWN_ACTION,
+    UNKNOWN_TARGET,
+    RuleViolation,
+)
 from src.utils import dice
 from src.models.entity import Entity
 from src.models.action import Action, AttackAction, SpellAction
@@ -37,6 +47,25 @@ from .spell_resolver import SpellResolver
 from .turn_manager import TurnManager
 
 _F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def _shortfall_code(entity: Entity, cost: ActionCost) -> str:
+    """Name *which* resource an unaffordable *cost* ran out of.
+
+    "You already acted this turn" and "you have no feet of movement left" are
+    different failures to an agent and are counted separately by the study's
+    invalid-action taxonomy, so the refusal distinguishes them rather than lumping
+    both under one code. Checks the actual shortfall, not the cost's shape, since an
+    action may demand several kinds at once.
+    """
+    r = entity.resources
+    if r is not None and (
+        r.actions < cost.actions
+        or r.bonus_actions < cost.bonus_actions
+        or r.reactions < cost.reactions
+    ):
+        return ACTION_ECONOMY_SPENT
+    return INSUFFICIENT_RESOURCE
 
 
 def _with_rng(method: _F) -> _F:
@@ -171,7 +200,10 @@ class CombatSystem:
                 "set combat.spell_registry before looking up spells"
             )
         if spell_name not in entity.stat_block.known_spells:
-            raise ValueError(f"{entity.name} does not know the spell {spell_name!r}")
+            raise RuleViolation(
+                UNKNOWN_ACTION,
+                f"{entity.name} does not know the spell {spell_name!r}",
+            )
         return self._spell_registry.get(spell_name)
 
     @property
@@ -271,9 +303,10 @@ class CombatSystem:
         check_attack_range(attacker, defender, action)
 
         if not attacker.can_afford(action.cost):
-            raise ValueError(
+            raise RuleViolation(
+                _shortfall_code(attacker, action.cost),
                 f"{attacker.name} cannot afford {action.name}: "
-                f"have {attacker.resources}, need {action.cost}"
+                f"have {attacker.resources}, need {action.cost}",
             )
         attacker.spend_resources(action.cost)
 
@@ -331,24 +364,27 @@ class CombatSystem:
         """
         self._assert_active(caster)
         if not caster.can_afford(action.cost):
-            raise ValueError(
+            raise RuleViolation(
+                _shortfall_code(caster, action.cost),
                 f"{caster.name} cannot afford {action.name}: "
-                f"have {caster.resources}, need {action.cost}"
+                f"have {caster.resources}, need {action.cost}",
             )
         # Determine the slot level to cast at (upcasting). Defaults to the
         # spell's base level; a slot below the base level is invalid.
         cast_level = action.spell_level if slot_level is None else slot_level
         if action.spell_level and cast_level < action.spell_level:
-            raise ValueError(
+            raise RuleViolation(
+                INVALID_TARGET_RELATION,
                 f"Cannot cast {action.name} (level {action.spell_level}) "
-                f"with a level-{cast_level} slot"
+                f"with a level-{cast_level} slot",
             )
         # Validate spell slots before targeting so an out-of-range error cannot
         # mask a "no slots remaining" condition, and vice versa.
         if cast_level and cast_level > 0 and caster.spell_slots is not None:
             if not caster.spell_slots.can_afford(cast_level):
-                raise ValueError(
-                    f"{caster.name} has no level-{cast_level} spell slots remaining"
+                raise RuleViolation(
+                    INSUFFICIENT_RESOURCE,
+                    f"{caster.name} has no level-{cast_level} spell slots remaining",
                 )
 
         # Validate targeting and range BEFORE spending resources so that an
@@ -357,8 +393,9 @@ class CombatSystem:
 
         if action.targeting_type == TargetingType.AOE:
             if target is None:
-                raise ValueError(
-                    f"{action.name} is an AOE spell and requires a target point"
+                raise RuleViolation(
+                    UNKNOWN_TARGET,
+                    f"{action.name} is an AOE spell and requires a target point",
                 )
             origin, direction = derive_aoe_origin(caster, action, target)
             # SpellAction.__post_init__ guarantees aoe is set for AOE targeting.
@@ -516,7 +553,7 @@ class CombatSystem:
                 None,
             )
             if entity is None:
-                raise ValueError(f"Unknown entity_id: {entity_id!r}")
+                raise RuleViolation(UNKNOWN_TARGET, f"Unknown entity_id: {entity_id!r}")
             self._assert_active(entity)
         # Set by start_combat(); end_turn is only reachable once combat is active.
         assert self._turn_manager is not None, "Combat has not been started"
@@ -571,7 +608,10 @@ class CombatSystem:
         if entity.entity_id not in self.active_entity_ids:
             current = self.initiative_tracker.get_current_entity()
             whose = current.name if current else "nobody"
-            raise ValueError(f"It is not {entity.name}'s turn (active: {whose})")
+            raise RuleViolation(
+                NOT_YOUR_TURN,
+                f"It is not {entity.name}'s turn (active: {whose})",
+            )
 
     def get_alive_entities(self) -> List[Entity]:
         """Get all entities still in the fight."""
@@ -650,9 +690,10 @@ class CombatSystem:
             # Entity.__post_init__ always populates resources; can_afford would
             # already have failed above were it None.
             assert entity.resources is not None
-            raise ValueError(
+            raise RuleViolation(
+                _shortfall_code(entity, movement_cost),
                 f"{entity.name} cannot afford to move {cost_ft} ft "
-                f"(has {entity.resources.movement} ft remaining)"
+                f"(has {entity.resources.movement} ft remaining)",
             )
 
         self._check_movement_overlap(entity, new_x, new_y, new_z)
@@ -737,9 +778,10 @@ class CombatSystem:
             if other is moving:
                 continue
             if new_bbox.overlaps(other.bounding_box):
-                raise ValueError(
+                raise RuleViolation(
+                    DESTINATION_BLOCKED,
                     f"{moving.name} cannot move to ({new_x}, {new_y}, {new_z}): "
-                    f"destination overlaps {other.name}"
+                    f"destination overlaps {other.name}",
                 )
 
     # ------------------------------------------------------------------
