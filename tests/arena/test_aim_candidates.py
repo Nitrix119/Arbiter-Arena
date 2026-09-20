@@ -45,7 +45,7 @@ def _mage(make_entity, pos=(0, 0, 0), team="a"):
         hp=20,
         known_spells=["Fireball"],
         spellcasting_ability="intelligence",
-        spell_slot_defaults={3: 2},
+        spell_slot_defaults={"3": 2},
     )
 
 
@@ -264,7 +264,7 @@ def test_directional_shapes_produce_candidates(
         pos=(0, 0, 0),
         known_spells=[spell.name],
         spellcasting_ability="intelligence",
-        spell_slot_defaults={1: 2, 3: 2, 5: 2},
+        spell_slot_defaults={"1": 2, "3": 2, "5": 2},
     )
     foe1 = make_entity("Raider 1", team="b", pos=(0, 0, 10), hp=30)
     foe2 = make_entity("Raider 2", team="b", pos=(5, 0, 10), hp=30)

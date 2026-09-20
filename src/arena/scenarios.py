@@ -66,7 +66,7 @@ def _entity(
     attacks,
     known_spells: Optional[List[str]] = None,
     spellcasting_ability: str = "",
-    spell_slot_defaults: Optional[Dict[int, int]] = None,
+    spell_slot_defaults: Optional[Dict[str, int]] = None,
     abilities: Tuple[int, ...] = _ABILITIES,
 ) -> Entity:
     block = StatBlock(
@@ -190,7 +190,7 @@ def _build_aoe_placement() -> CombatSystem:
             attacks=[_attack("Dagger", "1d4", DamageType.PIERCING, bonus_to_hit=3)],
             known_spells=["Fireball"],
             spellcasting_ability="intelligence",
-            spell_slot_defaults={3: 2},
+            spell_slot_defaults={"3": 2},
             abilities=_CASTER_ABILITIES,
         ),
         _entity("Bodyguard", "a", (0, 0, 25), hp=34, ac=16, attacks=[_greatsword()]),

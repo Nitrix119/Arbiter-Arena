@@ -345,7 +345,7 @@ def _fireball_fight(make_entity, make_combat, registry_with):
         pos=(0, 0, 0),
         known_spells=[fireball.name],
         spellcasting_ability="intelligence",
-        spell_slot_defaults={3: 2},
+        spell_slot_defaults={"3": 2},
     )
     goblin = make_entity("Goblin", team="b", pos=(0, 0, 40), hp=30)
     combat = _started(
