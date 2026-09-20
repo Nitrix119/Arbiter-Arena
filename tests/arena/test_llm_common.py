@@ -8,6 +8,7 @@ from src.arena.llm_common import (
     decide_one_action,
     render_observation,
 )
+from src.arena.telemetry import RequestRecord
 from src.arena.tools import TOOLS, ToolCall
 
 
@@ -15,6 +16,7 @@ class _StubAgent:
     def __init__(self):
         self.name = "Stub"
         self.notes = ""
+        self.telemetry = None
 
     def remember(self, text):
         self.notes = text
@@ -62,7 +64,7 @@ def test_capture_notes_strips_and_stores():
 
 def test_decide_one_action_returns_first_tool_call():
     agent = _StubAgent()
-    seq = [ToolCall("attack", {"defender_id": "g1"})]
+    seq = [(ToolCall("attack", {"defender_id": "g1"}), RequestRecord(latency_ms=1.0))]
     call = decide_one_action(lambda m, t: seq.pop(0), agent, {}, TOOLS)
     assert call.name == "attack"
 
@@ -73,8 +75,29 @@ def test_decide_one_action_retries_then_raises():
 
     def always_none(messages, tools):
         calls["n"] += 1
-        return None
+        return None, RequestRecord(latency_ms=1.0, input_tokens=10, output_tokens=5)
 
     with pytest.raises(RuntimeError, match="no tool call"):
         decide_one_action(always_none, agent, {}, TOOLS)
     assert calls["n"] == 2  # initial + one retry
+
+
+def test_a_failed_decision_still_reports_what_it_spent():
+    """Both requests of a failed decision are accounted for.
+
+    Cost per *accepted* action is the metric, so the tokens burned on decisions that
+    never produced one must not vanish — those are exactly the decisions that
+    distinguish the interface conditions.
+    """
+    agent = _StubAgent()
+
+    def always_none(messages, tools):
+        return None, RequestRecord(latency_ms=2.0, input_tokens=10, output_tokens=5)
+
+    with pytest.raises(RuntimeError):
+        decide_one_action(always_none, agent, {}, TOOLS)
+
+    assert agent.telemetry.request_count == 2
+    assert agent.telemetry.input_tokens == 20
+    assert agent.telemetry.output_tokens == 10
+    assert agent.telemetry.latency_ms == 4.0

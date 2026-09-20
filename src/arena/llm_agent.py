@@ -25,14 +25,16 @@ Anthropic-specific request.
 * **Neutral prompt (A2)** and **notes scratchpad (B3)** — both in :mod:`llm_common`.
 """
 
+import time
 from types import ModuleType
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.arena.agent import Agent
 from src.arena.llm_common import (
     SYSTEM_PROMPT,
     decide_one_action,
 )  # noqa: F401 (re-export)
+from src.arena.telemetry import RequestRecord
 from src.arena.tools import ToolCall
 
 # Declared Optional up front so the ImportError fallback below type-checks.
@@ -83,9 +85,9 @@ class LLMAgent(Agent):
 
     def _request_action(
         self, messages: List[Dict[str, Any]], api_tools: List[Dict[str, Any]]
-    ) -> Optional[ToolCall]:
-        """One Anthropic request; return the single tool call, or None if the model
-        made none."""
+    ) -> Tuple[Optional[ToolCall], RequestRecord]:
+        """One Anthropic request; return its tool call (or None) and what it cost."""
+        started = time.perf_counter()
         response = self._client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
@@ -96,9 +98,27 @@ class LLMAgent(Agent):
             thinking={"type": "adaptive"},
             output_config={"effort": self.effort},
         )
+        usage = getattr(response, "usage", None)
+        record = RequestRecord(
+            latency_ms=(time.perf_counter() - started) * 1000.0,
+            input_tokens=getattr(usage, "input_tokens", None),
+            output_tokens=getattr(usage, "output_tokens", None),
+            served_model=getattr(response, "model", None),
+            finish_reason=getattr(response, "stop_reason", None),
+        )
+
+        call: Optional[ToolCall] = None
+        texts: List[str] = []
         for block in response.content:
-            if getattr(block, "type", None) == "tool_use":
+            block_type = getattr(block, "type", None)
+            if block_type == "text":
+                texts.append(getattr(block, "text", "") or "")
+            elif block_type == "tool_use" and call is None:
+                record.tool_call = {"name": block.name, "arguments": dict(block.input)}
                 # SDK returns block.input as a dict; copy so `note` can be popped
                 # safely.
-                return ToolCall(block.name, dict(block.input), call_id=block.id)
-        return None
+                call = ToolCall(block.name, dict(block.input), call_id=block.id)
+        # Thinking blocks are deliberately not recorded: they are not the model's
+        # answer, they are large, and some providers forbid storing them.
+        record.raw_output = "\n".join(t for t in texts if t) or None
+        return call, record

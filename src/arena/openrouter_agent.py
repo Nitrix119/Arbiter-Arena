@@ -16,12 +16,14 @@ exactly how a flaw surfaces.
 """
 
 import json
+import time
 from types import ModuleType
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.arena.agent import Agent, ProviderError
 from src.arena.credentials import resolve_credential
 from src.arena.llm_common import SYSTEM_PROMPT, decide_one_action
+from src.arena.telemetry import RequestRecord
 from src.arena.tools import ToolCall
 
 # Declared Optional up front so the ImportError fallback below type-checks.
@@ -35,6 +37,9 @@ DEFAULT_MODEL = (
     "nvidia/nemotron-nano-9b-v2:free"  # free + tool-capable; override with --model
 )
 DEFAULT_MAX_TOKENS = 4096
+# V1_PLAN §3.2 holds sampling at the provider minimum and records it. Still not
+# deterministic — the study says so rather than claiming otherwise.
+DEFAULT_TEMPERATURE = 0.0
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # Optional OpenRouter attribution headers (harmless; used only for their leaderboards).
 _RANKING_HEADERS = {
@@ -58,27 +63,45 @@ def _to_openai_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     ]
 
 
-def _first_message(response: Any, model: str) -> Any:
+def _usage(response: Any) -> Tuple[Optional[int], Optional[int]]:
+    """``(input_tokens, output_tokens)`` from an OpenAI-style ``usage`` block.
+
+    Either may be ``None``: "not reported" is not "zero", and a provider that omits
+    ``usage`` must not read as a free call in the cost metric.
+    """
+    usage = getattr(response, "usage", None)
+    return (
+        getattr(usage, "prompt_tokens", None),
+        getattr(usage, "completion_tokens", None),
+    )
+
+
+def _first_message(response: Any, model: str, record: RequestRecord) -> Any:
     """Return the first choice's message, or refuse as a *provider* failure.
 
     A free host under load answers with an error body or an empty payload rather than
     a completion, and ``response.choices[0]`` on that raises ``TypeError`` mid-match
     (observed live, 2026-09-15). A four-day background grid cannot die on one flaky
     response, so this is a counted, recorded failure instead — and one tagged as
-    infrastructure, since the model never got to make a choice.
+    infrastructure, since the model never got to make a choice. *record* travels with
+    the error so the failed request's latency is not lost.
     """
     choices = getattr(response, "choices", None)
     if not choices:
         detail = getattr(response, "error", None)
-        raise ProviderError(
+        message = (
             f"{model}: the provider returned no choices"
             + (f" ({detail})" if detail else "")
             + " — an empty or error payload, not a model decision."
         )
-    message = getattr(choices[0], "message", None)
-    if message is None:
-        raise ProviderError(f"{model}: the provider returned a choice with no message.")
-    return message
+        record.error = message
+        raise ProviderError(message, record=record)
+    message_obj = getattr(choices[0], "message", None)
+    if message_obj is None:
+        message = f"{model}: the provider returned a choice with no message."
+        record.error = message
+        raise ProviderError(message, record=record)
+    return message_obj
 
 
 class OpenRouterAgent(Agent):
@@ -91,6 +114,7 @@ class OpenRouterAgent(Agent):
         team: Optional[str] = None,
         *,
         model: str = DEFAULT_MODEL,
+        temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         client: Any = None,
     ) -> None:
@@ -106,6 +130,7 @@ class OpenRouterAgent(Agent):
             client = openai.OpenAI(base_url=OPENROUTER_BASE_URL, api_key=api_key)
         self._client = client
         self.model = model
+        self.temperature = temperature
         self.max_tokens = max_tokens
 
     def decide(
@@ -115,26 +140,42 @@ class OpenRouterAgent(Agent):
 
     def _request_action(
         self, messages: List[Dict[str, Any]], api_tools: List[Dict[str, Any]]
-    ) -> Optional[ToolCall]:
-        """One OpenRouter (chat-completions) request; return the first tool call,
-        or None."""
+    ) -> Tuple[Optional[ToolCall], RequestRecord]:
+        """One OpenRouter (chat-completions) request; return its tool call and cost."""
         oai_messages = [{"role": "system", "content": SYSTEM_PROMPT}, *messages]
+        started = time.perf_counter()
         response = self._client.chat.completions.create(
             model=self.model,
             messages=oai_messages,
             tools=_to_openai_tools(api_tools),
             tool_choice="auto",
+            temperature=self.temperature,
             max_tokens=self.max_tokens,
             extra_headers=_RANKING_HEADERS,
         )
-        message = _first_message(response, self.model)
+        input_tokens, output_tokens = _usage(response)
+        record = RequestRecord(
+            latency_ms=(time.perf_counter() - started) * 1000.0,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            # The router may serve a different model than the one asked for, so record
+            # what actually answered (§3.1), not what we requested.
+            served_model=getattr(response, "model", None),
+        )
+
+        message = _first_message(response, self.model, record)
+        record.raw_output = getattr(message, "content", None) or None
+        choice = response.choices[0]
+        record.finish_reason = getattr(choice, "finish_reason", None)
+
         for tc in getattr(message, "tool_calls", None) or []:
             fn = tc.function
             arguments = fn.arguments
+            record.tool_call = {"name": fn.name, "arguments": arguments}
             args = (
                 json.loads(arguments)
                 if isinstance(arguments, str)
                 else dict(arguments or {})
             )
-            return ToolCall(fn.name, args, call_id=getattr(tc, "id", None))
-        return None
+            return ToolCall(fn.name, args, call_id=getattr(tc, "id", None)), record
+        return None, record

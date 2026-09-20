@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.arena.manifest import state_hash
+from src.arena.telemetry import DecisionTelemetry
 from src.arena.tools import ToolCall
 
 DEFAULT_MATCH_DIR = "matches"
@@ -71,12 +72,28 @@ class Transcript:
     def turn_start(self, entity_id: str, round_num: int, turn_num: int) -> None:
         self.log("turn_start", entity_id=entity_id, round=round_num, turn=turn_num)
 
-    def action(self, actor_id: str, call: ToolCall, result: Dict[str, Any]) -> None:
+    def action(
+        self,
+        actor_id: str,
+        call: ToolCall,
+        result: Dict[str, Any],
+        *,
+        telemetry: Optional["DecisionTelemetry"] = None,
+    ) -> None:
+        """Log one proposed action, its refereed result, and what deciding it cost.
+
+        ``telemetry`` is omitted entirely for a deterministic agent, which calls no
+        provider — an absent key rather than a null, as ``match_start`` does.
+        """
+        extra: Dict[str, Any] = {}
+        if telemetry is not None:
+            extra["telemetry"] = telemetry.to_dict()
         self.log(
             "action",
             actor_id=actor_id,
             call={"name": call.name, "arguments": call.arguments},
             result=result,
+            **extra,
         )
 
     def turn_end(self, entity_id: str, state: Dict[str, Any]) -> None:

@@ -17,6 +17,7 @@ import random
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
+from src.arena.telemetry import DecisionTelemetry
 from src.arena.tools import (
     TOOL_ATTACK,
     TOOL_CAST_SPELL,
@@ -48,7 +49,15 @@ class ProviderError(NoToolCallError):
 
     Subclasses :class:`NoToolCallError` so the turn driver's existing handling — count
     it, feed it back, never crash the match — applies unchanged.
+
+    Carries the failed request's :class:`~src.arena.telemetry.RequestRecord` when the
+    adapter has one: a request that failed still took time and may still have been
+    billed, and a timeout's latency is exactly the number worth seeing.
     """
+
+    def __init__(self, message: str, record: Optional[Any] = None) -> None:
+        super().__init__(message)
+        self.record = record
 
 
 class Agent(ABC):
@@ -64,6 +73,9 @@ class Agent(ABC):
         self.name = name
         self.team = team
         self.notes = ""
+        #: Populated by :func:`~src.arena.llm_common.decide_one_action` for agents that
+        #: call a provider; stays ``None`` for the deterministic ones.
+        self.telemetry: Optional[DecisionTelemetry] = None
 
     def remember(self, text: str) -> None:
         """Store a capped scratchpad note to carry to the agent's next turn."""
@@ -76,6 +88,16 @@ class Agent(ABC):
         choices too — kept on a stream *separate* from the dice RNG so changing dice
         draws does not reshuffle agent decisions. Deterministic agents ignore it.
         """
+
+    def last_telemetry(self) -> Optional[DecisionTelemetry]:
+        """Cost and latency for the most recent :meth:`decide`, if measured.
+
+        ``None`` for the deterministic agents: they cost nothing and call nobody, so
+        there is nothing to report and their transcripts carry no telemetry key. The
+        turn driver reads this after every decision — including one that raised, since
+        a failed request still spent tokens.
+        """
+        return self.telemetry
 
     @abstractmethod
     def decide(

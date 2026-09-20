@@ -91,7 +91,12 @@ def run_turn(
         else:
             result = executor.apply(actor, call, policy)
         if transcript is not None:
-            transcript.action(actor.entity_id, call, result)
+            # Read after both branches: a decision that raised still spent tokens, and
+            # a cost metric that ignored failed decisions would flatter the conditions
+            # that fail most.
+            transcript.action(
+                actor.entity_id, call, result, telemetry=agent.last_telemetry()
+            )
 
         if not result["ok"]:
             rejections.append(

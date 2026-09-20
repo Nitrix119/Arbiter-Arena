@@ -9,13 +9,20 @@ supplies just a ``request_fn`` that turns a list of messages + tools into one
 """
 
 import json
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.arena.agent import NoToolCallError
+from src.arena.agent import NoToolCallError, ProviderError
+from src.arena.telemetry import DecisionTelemetry, RequestRecord
 from src.arena.tools import TOOL_END_TURN, ToolCall
 
-#: One request → one ToolCall, or None when the model made no tool call.
-RequestFn = Callable[[List[Dict[str, Any]], List[Dict[str, Any]]], Optional[ToolCall]]
+#: One request → the ToolCall it produced (or None when the model made none), paired
+#: with what that request cost. The record is returned *alongside* the call rather than
+#: stashed by the adapter, so a decision that takes two requests cannot lose the first
+#: one's cost — the retry lives here, so the accounting does too.
+RequestFn = Callable[
+    [List[Dict[str, Any]], List[Dict[str, Any]]],
+    Tuple[Optional[ToolCall], RequestRecord],
+]
 
 SYSTEM_PROMPT = """\
 You are commanding a team in a Dungeons & Dragons 5th Edition combat encounter. \
@@ -114,6 +121,28 @@ def capture_notes(agent: Any, call: ToolCall) -> ToolCall:
     return call
 
 
+def _record_request(
+    request_fn: RequestFn,
+    telemetry: DecisionTelemetry,
+    messages: List[Dict[str, Any]],
+    api_tools: List[Dict[str, Any]],
+) -> Optional[ToolCall]:
+    """Make one request, recording what it cost whether or not it succeeded.
+
+    A :class:`~src.arena.agent.ProviderError` carries its own record, so a broken
+    envelope is accounted for and then re-raised unchanged — the turn driver still
+    needs the type to tag it as infrastructure rather than model behaviour.
+    """
+    try:
+        call, record = request_fn(messages, api_tools)
+    except ProviderError as exc:
+        if exc.record is not None:
+            telemetry.requests.append(exc.record)
+        raise
+    telemetry.requests.append(record)
+    return call
+
+
 def decide_one_action(
     request_fn: RequestFn,
     agent: Any,
@@ -124,18 +153,25 @@ def decide_one_action(
 
     *request_fn* is the adapter's provider call. If the model returns no tool call, we
     re-prompt once; if still none, we fail loudly (never silently end the turn).
+
+    Every request's cost is accumulated onto ``agent.telemetry`` as it happens — before
+    any raise — so a decision that ended in failure still reports the tokens it spent.
+    A failed decision is not a free one, and the study divides cost by *accepted*
+    actions precisely to capture that.
     """
     api_tools = augment_tools_with_notes(tools)
     messages: List[Dict[str, Any]] = [
         {"role": "user", "content": render_observation(agent.notes, observation)}
     ]
+    telemetry = DecisionTelemetry()
+    agent.telemetry = telemetry
 
-    call = request_fn(messages, api_tools)
+    call = _record_request(request_fn, telemetry, messages, api_tools)
     if call is None:  # model replied without a tool call — correct it once
         messages.append(
             {"role": "user", "content": "Respond with exactly one tool call."}
         )
-        call = request_fn(messages, api_tools)
+        call = _record_request(request_fn, telemetry, messages, api_tools)
     if call is None:
         raise NoToolCallError(
             f"{agent.name}: the model returned no tool call after a retry; cannot act."
