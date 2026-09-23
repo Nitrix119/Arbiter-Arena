@@ -1,0 +1,36 @@
+# A no-key, no-cost demonstration of the whole study pipeline.
+#
+#   python -m src.arena.study run examples/study/demo.toml --out results/demo
+#   python -m src.arena.study report results/demo
+#   python -m src.arena.study show results/demo/mock/C1/aoe_placement/seed1.jsonl --refused
+#
+# The "mock" model is the scripted policy writing its decisions in each condition's
+# format, stumbling on purpose at decisions 0 and 6 so the refusal paths have data.
+# Every condition, every scenario, plus the three registered baselines.
+
+[study]
+name = "demo"
+seeds = [1]
+scenarios = ["kiting", "alpha_strike", "protect_squishy", "aoe_placement"]
+conditions = ["C1", "C2", "C2+M", "C3"]
+opponent = "scripted"
+
+[[models]]
+id = "mock"
+provider = "mock"
+stumble_on = [0, 6]
+
+[[models]]
+id = "baseline-scripted"
+provider = "baseline"
+policy = "scripted"
+
+[[models]]
+id = "baseline-random"
+provider = "baseline"
+policy = "random"
+
+[[models]]
+id = "baseline-heuristic"
+provider = "baseline"
+policy = "heuristic"

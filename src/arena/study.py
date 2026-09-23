@@ -2,6 +2,7 @@
 
     python -m src.arena.study run GRID.toml --out results/<name> [--dry-run]
     python -m src.arena.study report results/<name>
+    python -m src.arena.study show results/<name>/<model>/<cond>/<scenario>/seedN.jsonl
 
 A **cell** is one match: model × condition × scenario × seed. The runner plays each
 through the ordinary :func:`~src.arena.match.run_match` — there is no second match path
@@ -147,8 +148,31 @@ def _number(table: Dict[str, Any], key: str, default: float, what: str) -> float
     return float(value)
 
 
+#: A value still containing this is an unfilled template, never a runnable grid.
+PLACEHOLDER = "TODO"
+
+
+def _placeholders(value: Any, where: str = "") -> List[str]:
+    """Every location in the grid whose value is still a template placeholder."""
+    if isinstance(value, str):
+        return [where] if PLACEHOLDER in value else []
+    if isinstance(value, dict):
+        return [p for k, v in value.items() for p in _placeholders(v, f"{where}.{k}")]
+    if isinstance(value, list):
+        return [
+            p for i, v in enumerate(value) for p in _placeholders(v, f"{where}[{i}]")
+        ]
+    return []
+
+
 def parse_grid(data: Dict[str, Any]) -> Grid:
     """Validate a grid's TOML tables into a :class:`Grid`, refusing anything unclear."""
+    unfilled = _placeholders(data)
+    if unfilled:
+        raise GridError(
+            f"The grid is an unfilled template: replace the {PLACEHOLDER} at "
+            + ", ".join(where.lstrip(".") for where in unfilled)
+        )
     study = data.get("study")
     if not isinstance(study, dict):
         raise GridError("The grid needs a [study] table")
@@ -214,6 +238,14 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
             raise GridError(
                 f"{what} ({model_id}): usd_per_m_input and usd_per_m_output are "
                 "required for a live model — the spend cap is computed from them"
+            )
+        if provider == PROVIDER_OPENROUTER and not (
+            _number(entry, "usd_per_m_input", 0.0, what) > 0
+            and _number(entry, "usd_per_m_output", 0.0, what) > 0
+        ):
+            raise GridError(
+                f"{what} ({model_id}): a live model's prices must be above zero, or "
+                "the spend cap can never bind"
             )
         stumble_on = entry.get("stumble_on", [])
         if stumble_on and provider != PROVIDER_MOCK:
@@ -728,7 +760,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     report = commands.add_parser("report", help="summarise a result bundle")
     report.add_argument("bundle", type=Path)
+    show = commands.add_parser("show", help="read one match, decision by decision")
+    show.add_argument("transcript", type=Path)
+    show.add_argument(
+        "--refused", action="store_true", help="only decisions that were refused"
+    )
     args = parser.parse_args(argv)
+
+    if args.command == "show":
+        from src.arena.study_report import describe
+
+        print(describe(_read(args.transcript), refused_only=args.refused), end="")
+        return 0
 
     if args.command == "report":
         from src.arena.study_report import write_report

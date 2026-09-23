@@ -476,3 +476,57 @@ def test_a_baseline_only_grid_needs_no_prices_cap_or_clean_tree(tmp_path, monkey
     assert grid.spend_cap_usd == 0.0
     assert run_grid(grid, tmp_path, echo=lambda _: None).done == 1
     assert preflight(grid) == []
+
+
+# -- committed grids and the decision viewer (Phase 1 review F10) ----------------------
+
+
+def test_the_committed_demo_grid_runs_offline(tmp_path, capsys):
+    from src.arena.study import load_grid
+
+    grid = load_grid(Path("examples/study/demo.toml"))
+    assert {m.provider for m in grid.models} == {"mock", "baseline"}
+    assert (
+        main(["run", "examples/study/demo.toml", "--out", str(tmp_path), "--dry-run"])
+        == 0
+    )
+    assert "cells" in capsys.readouterr().out
+
+
+def test_the_pilot_template_cannot_run_until_filled_in():
+    from src.arena.study import load_grid
+
+    with pytest.raises(GridError, match="unfilled template"):
+        load_grid(Path("examples/study/pilot.toml"))
+
+
+def test_a_live_model_priced_at_zero_is_refused():
+    free = {
+        "id": "org/m",
+        "provider": "openrouter",
+        "usd_per_m_input": 0.0,
+        "usd_per_m_output": 0.0,
+    }
+    with pytest.raises(GridError, match="above zero"):
+        _grid(models=[free], spend_cap_usd=1.0)
+
+
+def test_show_reads_a_match_decision_by_decision(tmp_path, capsys):
+    run_grid(
+        _grid(
+            conditions=[C1],
+            models=[{"id": "mock", "provider": "mock", "stumble_on": [0]}],
+        ),
+        tmp_path,
+        echo=lambda _: None,
+    )
+    (path,) = tmp_path.rglob("seed1.jsonl")
+
+    assert main(["show", str(path)]) == 0
+    everything = capsys.readouterr().out
+    assert "REFUSED malformed_output" in everything
+    assert "read  : refused" in everything and "read  : layer 3" in everything
+
+    assert main(["show", str(path), "--refused"]) == 0
+    refused = capsys.readouterr().out
+    assert refused.count("REFUSED") == 1 and ": ok" not in refused

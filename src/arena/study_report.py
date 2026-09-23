@@ -856,3 +856,68 @@ def write_report(bundle: Path) -> List[Path]:
         path.write_text(content, encoding="utf-8", newline="\n")
         written.append(path)
     return written
+
+
+# -- reading one match, decision by decision ---------------------------------------
+
+
+def _clip(text: str, limit: int = 400) -> str:
+    text = text.strip()
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def describe(records: List[Dict[str, Any]], *, refused_only: bool = False) -> str:
+    """Each model decision as the model wrote it, how it was read, and the verdict.
+
+    For reviewing real output — C1 phrasings the parser refused (ledger A8), the
+    reasons refusals gave, what a correction re-prompt rescued. Reads the transcript
+    only; nothing is re-run.
+    """
+    start = next(r for r in records if r["kind"] == "match_start")
+    team = model_team(start, records)
+    members = set(start.get("teams", {}).get(team, []))
+    lines = [
+        f"{start.get('model', '?')} | {start.get('condition', '?')} | "
+        f"{start.get('scenario', '?')} | seed {start.get('seed')} | "
+        f"opponent {start.get('opponent', '?')}",
+        "",
+    ]
+    round_number, shown = 0, 0
+    for record in records:
+        if record["kind"] == "turn_start":
+            round_number = record.get("round", round_number)
+            continue
+        if record["kind"] != "action" or record["actor_id"] not in members:
+            continue
+        result = record["result"]
+        if refused_only and result.get("ok"):
+            continue
+        shown += 1
+        telemetry = record.get("telemetry") or {}
+        requests = telemetry.get("requests") or []
+        verdict = "ok" if result.get("ok") else f"REFUSED {result.get('code', '')}"
+        count = telemetry.get("request_count", 1)
+        extra = f"  (after {count} requests)" if count > 1 else ""
+        lines.append(f"[round {round_number}] {record['actor_id']}: {verdict}{extra}")
+        if requests:
+            first = requests[0]
+            if first.get("raw_output"):
+                lines.append(f"  wrote : {_clip(first['raw_output'])!r}")
+            if first.get("tool_call"):
+                lines.append(f"  called: {json.dumps(first['tool_call'])}")
+            reading = first.get("interpretation")
+            if reading:
+                if "layer" in reading:
+                    lines.append(f"  read  : layer {reading['layer']}")
+                else:
+                    lines.append(f"  read  : refused — {reading.get('reason', '')}")
+        call = record["call"]
+        lines.append(
+            f"  action: {call['name']} {json.dumps(call.get('arguments', {}))}"
+        )
+        if not result.get("ok"):
+            lines.append(f"  reason: {result.get('error', '')}")
+        lines.append("")
+    if not shown:
+        lines.append("(no model decisions to show)")
+    return "\n".join(lines).rstrip() + "\n"
