@@ -589,3 +589,7 @@ hand-label a sample of real model outputs and report parser agreement with the l
 so parser error and agent error are separable after the fact.
 
 Next: settle the above, then **C1**, then the batch runner and the analysis script.
+
+> **2026-09-24:** the options, a recommendation and four prerequisite wiring fixes are
+> written up in [`C1_PARSER_OPTIONS.md`](C1_PARSER_OPTIONS.md). **Decided 2026-09-24:** every
+> recommendation in its §9 accepted. Build order: slice 1 (parity prerequisites), then the parser.

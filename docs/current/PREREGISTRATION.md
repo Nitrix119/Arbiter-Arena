@@ -390,6 +390,9 @@ against the incorrect figure.
       LLM parser is forbidden (§2: it would put a second model inside the measurement).
       Options and a proposed pre-commitment are in `V1_PLAN.md` §10. **Settle before
       building C1.**
+      Options analysed in `C1_PARSER_OPTIONS.md` (2026-09-24), including an offline
+      strict/lenient re-scoring design and a parser audit rule. **Decided 2026-09-24:**
+      C1 runs; all recommendations accepted. Close this item when the parser is frozen.
 - [ ] Opponent: Scripted vs Heuristic, decided in the pilot
 - [ ] Whether `invalid_target_relation` splits, from pilot frequencies (§6)
 
