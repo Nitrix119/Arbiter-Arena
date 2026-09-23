@@ -422,3 +422,57 @@ def test_the_heuristic_opponent_plays_and_replays(tmp_path):
     records = [json.loads(line) for line in path.read_text().splitlines()]
     assert records[0]["opponent"] == "heuristic"
     assert verify(records, SCENARIOS["alpha_strike"].build).ok
+
+
+# -- baselines (prereg §7; Phase 1 review F6) --------------------------------------------
+
+
+def _baselines(*policies, **study):
+    models = [
+        {"id": f"baseline-{p}", "provider": "baseline", "policy": p} for p in policies
+    ]
+    return _grid(models=models, **study)
+
+
+def test_a_baseline_needs_a_known_policy_and_nothing_else_takes_one():
+    with pytest.raises(GridError, match="policy is required"):
+        _grid(models=[{"id": "b", "provider": "baseline"}])
+    with pytest.raises(GridError, match="only for a baseline"):
+        _grid(models=[{"id": "m", "provider": "mock", "policy": "scripted"}])
+    with pytest.raises(GridError, match="grandmaster"):
+        _grid(models=[{"id": "b", "provider": "baseline", "policy": "grandmaster"}])
+
+
+def test_baselines_play_once_per_scenario_and_seed_in_their_own_condition():
+    grid = _baselines(
+        "scripted", "random", "heuristic", conditions=[C1, C2], seeds=[1, 2]
+    )
+    seen = [(c.model.policy, c.condition) for c in cells(grid)]
+    assert len(seen) == 3 * 2  # three baselines x two seeds x one scenario
+    assert set(seen) == {("scripted", "C3"), ("random", "C3"), ("heuristic", "native")}
+
+
+@pytest.mark.parametrize("policy", ["scripted", "random", "heuristic"])
+def test_each_baseline_plays_replays_and_costs_nothing(policy, tmp_path):
+    from src.arena.replay import verify
+    from src.arena.scenarios import SCENARIOS
+
+    summary = run_grid(_baselines(policy), tmp_path, echo=lambda _: None)
+    assert summary.done == 1
+    (path,) = tmp_path.rglob("seed1.jsonl")
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+
+    assert verify(records, SCENARIOS["kiting"].build).ok
+    actions = [r for r in records if r["kind"] == "action"]
+    assert actions and not any("telemetry" in r for r in actions)
+    if policy == "random":  # choosing only from the menu, every choice executes
+        mine = [r for r in actions if r["actor_id"] == "archer"]
+        assert mine and all(r["result"]["ok"] for r in mine)
+
+
+def test_a_baseline_only_grid_needs_no_prices_cap_or_clean_tree(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.arena.study.git_dirty", lambda: True)
+    grid = _baselines("scripted")
+    assert grid.spend_cap_usd == 0.0
+    assert run_grid(grid, tmp_path, echo=lambda _: None).done == 1
+    assert preflight(grid) == []

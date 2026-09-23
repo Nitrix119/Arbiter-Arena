@@ -322,3 +322,31 @@ def test_a_cell_served_by_two_hosts_is_flagged():
     mixed = _hosts_section([decision("A"), decision("B")])
     assert not any("Warning" in line for line in clean)
     assert any("more than one host" in line and "m / C2" in line for line in mixed)
+
+
+def test_baselines_are_reported_beside_the_models(tmp_path):
+    """Baselines anchor the tactical metrics, so they appear in the same tables."""
+    grid = parse_grid(
+        {
+            "study": {"seeds": [1], "scenarios": ["kiting"], "conditions": ["C2"]},
+            "models": [
+                {"id": "mock", "provider": "mock"},
+                {
+                    "id": "baseline-scripted",
+                    "provider": "baseline",
+                    "policy": "scripted",
+                },
+                {
+                    "id": "baseline-heuristic",
+                    "provider": "baseline",
+                    "policy": "heuristic",
+                },
+            ],
+        }
+    )
+    run_grid(grid, tmp_path, echo=lambda _: None)
+    summary = build_report(tmp_path)[3]
+
+    assert "| baseline-scripted | C3 |" in summary
+    assert "| baseline-heuristic | native |" in summary
+    assert "| mock | C2 |" in summary

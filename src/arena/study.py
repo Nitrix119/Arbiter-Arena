@@ -51,7 +51,16 @@ from src.combat.combat_system import CombatSystem
 
 PROVIDER_OPENROUTER = "openrouter"
 PROVIDER_MOCK = "mock"
-PROVIDERS = (PROVIDER_OPENROUTER, PROVIDER_MOCK)
+PROVIDER_BASELINE = "baseline"
+PROVIDERS = (PROVIDER_OPENROUTER, PROVIDER_MOCK, PROVIDER_BASELINE)
+
+#: The baselines prereg §7 registers, and the condition each is played in. Random and
+#: Scripted choose from C3's menu through the real ``choose`` path; the Heuristic plays
+#: **natively** with its own action space — forcing its free movement onto the menu
+#: would make it a different, weaker agent than the one tuned and validated
+#: (amendment 2026-09-24, before any data).
+NATIVE = "native"
+BASELINE_CONDITIONS = {"scripted": "C3", "random": "C3", "heuristic": NATIVE}
 
 OPPONENT_SCRIPTED = "scripted"
 OPPONENT_HEURISTIC = "heuristic"
@@ -92,6 +101,8 @@ class ModelSpec:
     #: fallbacks off. One model id can otherwise be served by different hosts (and
     #: quantisations) from cell to cell — an uncontrolled variable.
     hosts: Tuple[str, ...] = ()
+    #: Baseline only: which policy plays (see ``BASELINE_CONDITIONS``).
+    policy: Optional[str] = None
 
     def cost_usd(self, input_tokens: int, output_tokens: int) -> float:
         return (
@@ -186,7 +197,18 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
         model_id = entry.get("id")
         if not isinstance(model_id, str) or not model_id:
             raise GridError(f"{what}: id must be a non-empty string")
-        if provider != PROVIDER_MOCK and not (
+        policy = entry.get("policy")
+        if (provider == PROVIDER_BASELINE) != (policy is not None):
+            raise GridError(
+                f"{what} ({model_id}): policy is required for a baseline, and only "
+                "for a baseline"
+            )
+        if policy is not None and policy not in BASELINE_CONDITIONS:
+            raise GridError(
+                f"{what}: unknown baseline policy {policy!r}; expected one of "
+                f"{sorted(BASELINE_CONDITIONS)}"
+            )
+        if provider == PROVIDER_OPENROUTER and not (
             "usd_per_m_input" in entry and "usd_per_m_output" in entry
         ):
             raise GridError(
@@ -217,6 +239,7 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
                 usd_per_m_output=_number(entry, "usd_per_m_output", 0.0, what),
                 stumble_on=tuple(stumble_on),
                 hosts=tuple(hosts),
+                policy=policy,
             )
         )
     if len({m.id for m in models}) != len(models):
@@ -229,7 +252,7 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
             raise GridError(f"study.{key} must be a positive integer; got {value!r}")
 
     spend_cap = _number(study, "spend_cap_usd", 0.0, "study")
-    if spend_cap == 0.0 and any(m.provider != PROVIDER_MOCK for m in models):
+    if spend_cap == 0.0 and any(m.provider == PROVIDER_OPENROUTER for m in models):
         raise GridError("study.spend_cap_usd is required (> 0) when any model is live")
 
     return Grid(
@@ -289,11 +312,19 @@ class Cell:
 
 def cells(grid: Grid) -> Iterator[Cell]:
     """Every cell, **seed-major**: a run stopped part-way leaves whole paired seeds."""
+    models = [m for m in grid.models if m.provider != PROVIDER_BASELINE]
+    baselines = [m for m in grid.models if m.provider == PROVIDER_BASELINE]
     for seed in grid.seeds:
         for scenario in grid.scenarios:
             for condition in grid.conditions:
-                for model in grid.models:
+                for model in models:
                     yield Cell(model, condition, scenario, seed)
+            # A baseline plays once per scenario and seed, in its own condition,
+            # whatever conditions the grid lists for the models.
+            for baseline in baselines:
+                yield Cell(
+                    baseline, BASELINE_CONDITIONS[baseline.policy or ""], scenario, seed
+                )
 
 
 # -- agents -----------------------------------------------------------------------
@@ -306,7 +337,7 @@ class Seat:
     spec: ModelSpec
     name: str
     team: Optional[str]
-    interface: ActionInterface
+    interface: Optional[ActionInterface]
     combat: Optional[CombatSystem] = None
     seed: Optional[int] = None
 
@@ -332,14 +363,39 @@ def _openrouter_agent(seat: Seat) -> Agent:
 def _mock_agent(seat: Seat) -> Agent:
     from src.arena.mock_model import MockModelAgent
 
+    assert seat.interface is not None
     return MockModelAgent(
         seat.name, seat.team, seat.interface, stumble_on=seat.spec.stumble_on
+    )
+
+
+def _baseline_agent(seat: Seat) -> Agent:
+    """A registered baseline, seated in its own condition (``BASELINE_CONDITIONS``)."""
+    from src.arena.heuristic.agent import HeuristicAgent
+    from src.arena.mock_model import MockModelAgent, RandomMenuPolicy
+
+    if seat.spec.policy == "heuristic":
+        if seat.combat is None:
+            raise ValueError("the heuristic baseline must be bound to its combat")
+        return HeuristicAgent(seat.name, seat.team, seat.combat)
+    assert seat.interface is not None
+    policies: Dict[str, Callable[[], Agent]] = {
+        "scripted": lambda: ScriptedAgent(seat.name, seat.team),
+        "random": lambda: RandomMenuPolicy(seat.name, seat.team),
+    }
+    return MockModelAgent(
+        seat.name,
+        seat.team,
+        seat.interface,
+        policy=policies[seat.spec.policy or ""](),
+        record_telemetry=False,
     )
 
 
 MODEL_FACTORIES: Dict[str, ModelFactory] = {
     PROVIDER_OPENROUTER: _openrouter_agent,
     PROVIDER_MOCK: _mock_agent,
+    PROVIDER_BASELINE: _baseline_agent,
 }
 
 
@@ -397,7 +453,8 @@ def play_cell(
 ) -> CellResult:
     """Play one cell once. Infrastructure failure → excluded; anything else raises."""
     scenario = SCENARIOS[cell.scenario]
-    interface = get_interface(cell.condition)
+    native = cell.condition == NATIVE
+    interface = None if native else get_interface(cell.condition)
     combat = scenario.build()
     model_team = scenario.llm_team
     agents: Dict[Optional[str], Agent] = {
@@ -421,7 +478,7 @@ def play_cell(
         condition=cell.condition,
         model=cell.model.id,
         temperature=cell.model.temperature,
-        prompt_hash=interface_fingerprint(interface),
+        prompt_hash=None if interface is None else interface_fingerprint(interface),
         opponent=grid.opponent,
     )
     transcript = Transcript()
@@ -502,8 +559,8 @@ def preflight(
     """
     problems: List[str] = []
     for spec in grid.models:
-        if spec.provider == PROVIDER_MOCK:
-            continue
+        if spec.provider != PROVIDER_OPENROUTER:
+            continue  # the mock and the baselines call no provider
         for condition, needs_call in ((C2, True), (C1, False)):
             interface = get_interface(condition)
             agent = factories[spec.provider](Seat(spec, "preflight", "a", interface))
@@ -571,7 +628,7 @@ def run_grid(
     Stops at the first cell that exhausts its retries — a quota or an outage would
     otherwise fail, and bill, every remaining cell in turn.
     """
-    live = any(m.provider != PROVIDER_MOCK for m in grid.models)
+    live = any(m.provider == PROVIDER_OPENROUTER for m in grid.models)
     if live and not allow_dirty and git_dirty():
         reason = (
             "the working tree has uncommitted changes, so the recorded commit would "

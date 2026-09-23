@@ -25,6 +25,7 @@ from src.arena.interfaces import C1, C2, C2_MENU, C3, ActionInterface
 from src.arena.llm_common import decide_one_action
 from src.arena.telemetry import RequestRecord
 from src.arena.tools import TOOL_ATTACK, TOOL_MOVE, ToolCall
+from src.utils import dice
 
 #: What the mock reports as the model that served it.
 MOCK_MODEL = "mock"
@@ -105,12 +106,38 @@ def _synthetic_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+class RandomMenuPolicy(Agent):
+    """The C3 random baseline: a uniform choice among the enumerated legal actions.
+
+    Seeded through :meth:`reseed` (the match runner derives it from the match seed),
+    with its stream from :mod:`src.utils.dice` like every other RNG.
+    """
+
+    def __init__(self, name: str, team: Optional[str]) -> None:
+        super().__init__(name, team)
+        self._rng = dice.new_rng(0)
+
+    def reseed(self, seed: int) -> None:
+        self._rng = dice.new_rng(seed)
+
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
+        options = observation.get("enumerated_actions") or []
+        if not options:
+            return ToolCall("end_turn", {})
+        chosen = options[self._rng.randrange(len(options))].call
+        return ToolCall(chosen.name, dict(chosen.arguments))
+
+
 class MockModelAgent(Agent):
     """A deterministic "model" that plays by a script and writes like a model.
 
     Args:
         interface: The study condition to answer in.
         stumble_on: Zero-based decision indices at which to answer malformed instead.
+        policy: What decides; the scripted policy by default. A baseline swaps in its
+            own, and is then written through the same condition path.
+        record_telemetry: False for a baseline, which calls no provider and so, like
+            every deterministic agent, carries no telemetry.
     """
 
     def __init__(
@@ -120,6 +147,8 @@ class MockModelAgent(Agent):
         interface: ActionInterface,
         *,
         stumble_on: Iterable[int] = (),
+        policy: Optional[Agent] = None,
+        record_telemetry: bool = True,
     ) -> None:
         super().__init__(name, team)
         if interface.name not in _WRITERS:
@@ -129,9 +158,13 @@ class MockModelAgent(Agent):
             )
         self.interface = interface
         self.model = MOCK_MODEL
-        self._policy = ScriptedAgent(name, team)
+        self._policy = policy or ScriptedAgent(name, team)
         self._stumble_on = set(stumble_on)
         self._decisions = 0
+        self._record_telemetry = record_telemetry
+
+    def reseed(self, seed: int) -> None:
+        self._policy.reseed(seed)  # a stochastic policy follows the match seed
 
     def decide(self, observation: Dict[str, Any]) -> ToolCall:
         write, stumble = _WRITERS[self.interface.name]
@@ -165,4 +198,7 @@ class MockModelAgent(Agent):
                 return ToolCall(call.name, dict(call.arguments)), record
             return None, record
 
-        return decide_one_action(request, self, observation, self.interface)
+        action = decide_one_action(request, self, observation, self.interface)
+        if not self._record_telemetry:
+            self.telemetry = None
+        return action
