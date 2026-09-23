@@ -5,6 +5,8 @@ they prove the executor really dispatches to the engine and shapes/gates results
 that it echoes a hand-built dict.
 """
 
+import pytest
+
 from src.arena.information_policy import InformationPolicy
 from src.arena.tools import TOOLS, ToolCall, ToolExecutor
 from src.models.action_resources import ActionCost
@@ -446,3 +448,84 @@ def test_the_system_prompt_states_the_axis_convention():
     lowered = SYSTEM_PROMPT.lower()
     assert "east" in lowered and "south" in lowered
     assert "ground plane" in lowered
+
+
+# -- identifier resolution (shared by every raw-parameter condition) ----------
+
+
+def _duel(make_entity, make_combat, registry=None, **mage_kwargs):
+    mage = make_entity(
+        "Mage", team="a", pos=(0, 0, 0), attacks=[melee_attack("Dagger")], **mage_kwargs
+    )
+    raider = make_entity("Raider 1", team="b", pos=(5, 0, 0), hp=40)
+    return mage, raider, _started(make_combat, [mage, raider], mage, registry)
+
+
+@pytest.mark.parametrize("written", ["raider-1", "Raider 1", "RAIDER_1", "raider–1"])
+def test_a_target_resolves_however_it_is_written(make_entity, make_combat, written):
+    mage, raider, combat = _duel(make_entity, make_combat)
+    result = ToolExecutor(combat).apply(
+        mage, ToolCall("attack", {"action_name": "Dagger", "defender_id": written})
+    )
+    assert result["ok"], result
+    assert result["target_id"] == raider.entity_id
+
+
+def test_an_attack_name_resolves_however_it_is_cased(make_entity, make_combat):
+    mage, raider, combat = _duel(make_entity, make_combat)
+    result = ToolExecutor(combat).apply(
+        mage, ToolCall("attack", {"action_name": "dagger", "defender_id": "raider-1"})
+    )
+    assert result["ok"], result
+
+
+def test_a_spell_name_resolves_however_it_is_cased(
+    make_entity, make_combat, registry_with
+):
+    mage, raider, combat = _duel(
+        make_entity,
+        make_combat,
+        registry_with(load_spell("fireball.json")),
+        known_spells=["Fireball"],
+        spell_slot_defaults={"3": 1},
+        spellcasting_ability="intelligence",
+    )
+    result = ToolExecutor(combat).apply(
+        mage,
+        ToolCall(
+            "cast_spell", {"spell_name": "FIRE BALL", "target_point": {"x": 5, "z": 30}}
+        ),
+    )
+    assert result["ok"], result
+    assert result["spell"] == "Fireball"  # reported by its real name
+
+
+def test_an_invented_target_is_never_repaired(make_entity, make_combat):
+    mage, raider, combat = _duel(make_entity, make_combat)
+    result = ToolExecutor(combat).apply(
+        mage, ToolCall("attack", {"action_name": "Dagger", "defender_id": "raider-3"})
+    )
+    assert result["code"] == "unknown_target"
+
+
+def test_an_invented_attack_is_never_repaired(make_entity, make_combat):
+    mage, raider, combat = _duel(make_entity, make_combat)
+    result = ToolExecutor(combat).apply(
+        mage, ToolCall("attack", {"action_name": "Dagge", "defender_id": "raider-1"})
+    )
+    assert result["code"] == "unknown_action"
+
+
+def test_an_ambiguous_name_is_refused_not_guessed(make_entity, make_combat):
+    """Two creatures a reader could not tell apart by this spelling: refuse."""
+    mage = make_entity(
+        "Mage", team="a", pos=(0, 0, 0), attacks=[melee_attack("Dagger")]
+    )
+    one = make_entity("Wolf A", team="b", pos=(5, 0, 0))
+    two = make_entity("WolfA", team="b", pos=(0, 0, 5))  # ids wolf-a / wolfa: one key
+    combat = _started(make_combat, [mage, one, two], mage)
+    result = ToolExecutor(combat).apply(
+        mage, ToolCall("attack", {"action_name": "Dagger", "defender_id": "WOLF A"})
+    )
+    assert result["code"] == "unknown_target"
+    assert "ambiguous" in result["error"].lower()

@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from src.arena.action_space import move_candidates
 from src.arena.error_codes import ENGINE_ERROR, MALFORMED_OUTPUT
+from src.arena.identifiers import resolve
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
 from src.errors import UNKNOWN_ACTION, UNKNOWN_TARGET, RuleViolation
 from src.models.action import AttackAction
@@ -288,28 +289,52 @@ class ToolExecutor:
     # -- individual tools ------------------------------------------------------
 
     def _lookup(self, entity_id: str) -> Entity:
-        for e in self._combat.combatants:
-            if e.entity_id == entity_id:
-                return e
-        raise RuleViolation(UNKNOWN_TARGET, f"Unknown entity_id: {entity_id!r}")
+        """The combatant *entity_id* names — by id first, then by display name.
+
+        Forgiving of spelling only (:mod:`src.arena.identifiers`): ``Raider 1`` finds
+        ``raider-1``, ``raider-3`` finds nothing, and a spelling two creatures share is
+        refused as ambiguous rather than guessed.
+        """
+        combatants = self._combat.combatants
+        matches = resolve(
+            entity_id,
+            [
+                [(e.entity_id, e) for e in combatants],
+                [(e.name, e) for e in combatants],
+            ],
+        )
+        if not matches:
+            raise RuleViolation(UNKNOWN_TARGET, f"Unknown entity_id: {entity_id!r}")
+        if len(matches) > 1:
+            raise RuleViolation(
+                UNKNOWN_TARGET,
+                f"Ambiguous target {entity_id!r}: it could name any of "
+                f"{sorted(e.entity_id for e in matches)}; use the entity_id.",
+            )
+        return matches[0]
 
     def _attack(
         self, actor: Entity, args: Dict[str, Any], policy: InformationPolicy
     ) -> Dict[str, Any]:
         action_name = _require(args, "action_name", TOOL_ATTACK)
         defender = self._lookup(_require(args, "defender_id", TOOL_ATTACK))
-        action = next(
-            (
-                a
-                for a in actor.stat_block.actions + actor.granted_actions
-                if isinstance(a, AttackAction) and a.name == action_name
-            ),
-            None,
-        )
-        if action is None:
+        attacks = [
+            a
+            for a in actor.stat_block.actions + actor.granted_actions
+            if isinstance(a, AttackAction)
+        ]
+        matches = resolve(action_name, [[(a.name, a) for a in attacks]])
+        if not matches:
             raise RuleViolation(
                 UNKNOWN_ACTION, f"{actor.name} has no attack called {action_name!r}"
             )
+        if len(matches) > 1:
+            raise RuleViolation(
+                UNKNOWN_ACTION,
+                f"Ambiguous attack {action_name!r}: it could name any of "
+                f"{[a.name for a in matches]}.",
+            )
+        action = matches[0]
 
         hit, damage, roll_detail = self._combat.resolve_attack(actor, defender, action)
         return _ok(
@@ -323,7 +348,18 @@ class ToolExecutor:
     def _cast_spell(
         self, actor: Entity, args: Dict[str, Any], policy: InformationPolicy
     ) -> Dict[str, Any]:
-        spell_name = _require(args, "spell_name", TOOL_CAST_SPELL)
+        # Resolved to the known spell's real name here, so the engine's own
+        # exact-match check stays strict and the arena alone owns the tolerance. A
+        # name that spells no known spell passes through unchanged, so the refusal is
+        # the engine's own (unknown_action, "does not know the spell").
+        written = _require(args, "spell_name", TOOL_CAST_SPELL)
+        known = resolve(written, [[(n, n) for n in actor.stat_block.known_spells]])
+        if len(known) > 1:
+            raise RuleViolation(
+                UNKNOWN_ACTION,
+                f"Ambiguous spell {written!r}: it could name any of {known}.",
+            )
+        spell_name = known[0] if known else written
         spell_action = self._combat.get_spell_for_entity(actor, spell_name)
 
         defenders = [self._lookup(tid) for tid in args.get("target_ids", [])]

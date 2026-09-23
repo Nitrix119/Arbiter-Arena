@@ -232,6 +232,23 @@ Because ids are a pure function of the roster, a creature also carries the same 
 every condition, which is what lets the paired-seed analysis (§7) join per-decision
 records on entity across cells.
 
+**Spelling-tolerant, identity-strict matching (2026-09-24).** In every raw-parameter
+condition (C1, C2, C2+M) a written identifier — entity id, display name, attack or
+spell name — is matched on a normalised key: case, spacing, punctuation and Unicode
+lookalikes are ignored, so `Raider 1`, `raider-1` and `RAIDER_1` name the same creature.
+An exact spelling always wins; ids are tried before display names. There is **no**
+fuzzy matching: `raider-3` remains `unknown_target`. A spelling that two things share
+is refused as ambiguous, and a test guarantees no study scenario contains one. One
+resolver (`src/arena/identifiers.py`) serves every condition, so C1's parser gets no
+tolerance C2 lacks. Same rationale as readable ids: copying a string character for
+character is a transcription cost, not the decision under study.
+
+**Own capabilities are part of the shared body (2026-09-24).** Each friendly creature's
+own attacks and known spells (reach, level, targeting, area) appear in every condition.
+Until this date they appeared only inside the legal-action menu, so C1 and C2 had to
+guess their own ability names and C2 → C2+M bundled "being told what you are" with the
+affordance it isolates. Affordability, slots and targets remain menu-only.
+
 ---
 
 ## 5. Models
@@ -282,6 +299,14 @@ implemented 2026-09-21):
 | `not_your_turn` | Acting out of initiative |
 | `provider_error` | Infrastructure, not a decision — see §8 exclusions |
 | `engine_error` | An untyped engine refusal; should remain at zero |
+
+**Condition-level refusals are coded like executor refusals (2026-09-24).** A response
+a condition refuses — a C3 `action_id` not on the list (`unknown_target`), a C3 call to
+any tool but `choose` (`unknown_action`), a C1 line the grammar cannot read
+(`malformed_output`) — is logged as the attempted call under its code, counts against
+the failure budget, and is fed back, with no free correction. Only a response containing
+no action at all takes the one correction re-prompt and, failing that, `no_tool_call`.
+Before this date a C3 invented id was logged as `no_tool_call` after an uncounted retry.
 
 Three entries differ from the V1_PLAN §3.4 draft, which was written before the codes
 met the engine's real refusal sites. `not_your_turn` is separated from

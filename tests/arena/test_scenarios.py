@@ -209,3 +209,28 @@ def test_using_the_area_spell_well_is_what_wins_this_scenario():
         "placement at all"
     )
     assert 0.0 < cannot_cast < 1.0, "the baseline is at a floor or ceiling"
+
+
+@pytest.mark.parametrize("name", sorted(SCENARIOS))
+def test_every_identifier_in_a_scenario_has_its_own_key(name):
+    """No spelling in a study scenario can name two things.
+
+    Identifiers are matched by normalised key (``src/arena/identifiers.py``), so two
+    creatures — or two of one creature's attacks or spells — sharing a key would turn
+    a correctly written name into an ambiguity refusal, charged to the model. This
+    keeps every study roster clear of that, so the refusal path is never exercised in
+    the data.
+    """
+    from src.arena.identifiers import identifier_key
+
+    combat = SCENARIOS[name].build()
+    owner = {}
+    for entity in combat.combatants:
+        for label in (entity.entity_id, entity.name):
+            claimed = owner.setdefault(identifier_key(label), entity.entity_id)
+            assert claimed == entity.entity_id, (label, claimed)
+
+        abilities = [a.name for a in entity.stat_block.actions + entity.granted_actions]
+        abilities += list(entity.stat_block.known_spells)
+        keys = [identifier_key(n) for n in abilities]
+        assert len(keys) == len(set(keys)), (entity.name, abilities)
