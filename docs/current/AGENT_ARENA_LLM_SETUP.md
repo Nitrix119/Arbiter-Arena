@@ -170,6 +170,17 @@ python -m src.arena.study report results/pilot                           # repor
   retries it. Bad model behaviour is data and is never excluded.
 - **Live runs cost money.** Every non-mock run needs your explicit go-ahead. Use
   `provider = "mock"` for any offline check.
+- **Pin the host.** Give each OpenRouter model `hosts = ["<provider>"]`. OpenRouter otherwise
+  routes one model id across upstream hosts that may differ in quantisation. The served host is
+  recorded either way, and the report flags any cell that mixed hosts.
+- **A clean tree.** A live run refuses to start with uncommitted changes (`--allow-dirty`
+  overrides this, and it is recorded), so the manifest's commit names the code that ran.
+- **Baselines** are grid entries with `provider = "baseline"` and `policy = "scripted"`,
+  `"random"` or `"heuristic"`. They are free and play once per scenario and seed.
+- **Templates:** `examples/study/demo.toml` (no key needed) and `examples/study/pilot.toml`
+  (fill in its TODOs; it refuses to run until you do).
+- **Reading a match:** `python -m src.arena.study show <transcript> --refused` prints what the
+  model wrote, how it was read, and why it was refused.
 - **C1's bounds** come with the report: `report/c1_bounds.csv` and the "C1 under three
   parsers" section. Both are recomputed offline by replaying each C1 match.
 

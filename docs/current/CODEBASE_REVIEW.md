@@ -212,6 +212,7 @@ after P1 adds a spell-JSON schema validator (E4) so the skill gets structured fe
 ### Arena adjacent problems (noted, not yet fixed)
 
 - **A1. ~~`OpenRouterAgent` crashes on a malformed API response.~~ Fixed 2026-09-21** (`6a83459`).
+  *The live-model preflight it called for exists since 2026-09-24 (`study run` preflight).*
   `_first_message` refuses a broken envelope as a `ProviderError` — a `NoToolCallError` subclass,
   so the turn driver's existing counted-failure handling applies unchanged. It is a *subclass*
   rather than a plain `None` return because the study must tell infrastructure (a §3.5 exclusion)
@@ -253,16 +254,24 @@ names where it should be addressed. Append; strike through and date an item when
   resolves to `goblin`, though a reader might call it ambiguous. No study roster can hit this
   (`test_every_identifier_in_a_scenario_has_its_own_key`); revisit if duplicate names enter the
   study.
-- **A5. Multiple tool calls are handled differently per provider.** Anthropic disables parallel
+- **A5. ~~Multiple tool calls are handled differently per provider.~~ Fixed 2026-09-24**
+  (`4fd3358`): both adapters count `extra_tool_calls` per request. Original note: Anthropic disables parallel
   tool use; OpenRouter's adapter silently takes the first of several calls. That is a provider
   asymmetry inside C2/C2+M/C3 and discards evidence. Record the count of extra calls per
   request so the analysis can see it. → final cleanup (before the pilot).
-- **A6. Capability entries carry an empty `description`** for every scenario attack
+- **A6. ~~Capability entries carry an empty `description`~~ Fixed 2026-09-24** (`4fd3358`).
+  Original note: for every scenario attack
   (`_serialize_action` reuse) — token noise in every prompt. Drop empty descriptions. → final
   cleanup (changes prompt hashes; do before the freeze).
 - **A7. Repo hygiene.** CI lints `src/` and `web/` but not `tests/` (one pre-existing E501 in
   `tests/arena/test_interfaces.py:1`); working copies have mixed line endings (LF/CRLF warnings
   on files written by tooling) — add a `.gitattributes`. → final cleanup.
+  *Measured in the Phase 1 review (2026-09-24):* `flake8 tests/` reports 109 findings (67 E501,
+  31 F401, 5 F841, 2 E731). There are also 4 F821s from a `dir()`-based name hack in
+  `tests/test_block_entity_effects.py` that works at run time but should simply use the bound
+  name. `tests/arena/test_heuristic_score.py::test_hidden_capabilities_fall_back_to_generic_threat`
+  builds a hidden-capability policy and never uses it, so it checks `features.threat` directly
+  rather than the policy path its name claims. Line endings: 4 files are mixed.
 - **A8. C1 reads a trailing justification into the final name.** `ACTION: attack raider-1
   with Dagger since it's adjacent` parses with the weapon "Dagger since it's adjacent", which
   the executor refuses as `unknown_action`, though a reader would find the action. Pinned in
@@ -272,7 +281,10 @@ names where it should be addressed. Append; strike through and date an item when
   *2026-09-24:* the **lenient bound** now drops a trailing justification, so the study's
   upper bound already credits these lines. The primary parser is unchanged, pending pilot
   evidence.
-- **A9. A call's arguments reach the transcript unscrubbed, in every condition.** The secret
+- **A9. ~~A call's arguments reach the transcript unscrubbed, in every condition.~~ Fixed
+  2026-09-24** (`4fd3358`). The fix is wider than first logged: the raw `tool_call`, and the
+  referee's result (which echoes a bad id back), were also unscrubbed. Everything now passes
+  `scrub_value` at the transcript boundary. Original note: The secret
   scrub runs on `RequestRecord` fields at serialisation, but `Transcript.action` logs
   `call.arguments` as-is — so a model that echoes a key-shaped string into an end-turn `note`,
   a name, or (C1) an unreadable line's `text` would write it to disk. C1's `interpretation`
@@ -291,6 +303,10 @@ names where it should be addressed. Append; strike through and date an item when
   and `src/arena/heuristic/ga.py` (the GA). Both are seeded, so determinism holds, but the
   stated invariant does not. → final cleanup: route both through `dice.new_rng`, or amend the
   rule to say what it actually protects (game RNG versus agent or analysis streams).
+- **A13. `openrouter_agent.DEFAULT_MODEL` is the known-dead free model**
+  (`nvidia/nemotron-nano-9b-v2:free` 404s). The study never uses it, because grids name their
+  models, but the example scripts default to it. → final cleanup: drop the default, or point it
+  at a live model and say so.
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 

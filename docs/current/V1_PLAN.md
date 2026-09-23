@@ -355,7 +355,9 @@ Runner and analysis:
 - [x] Offline smoke: all conditions × all scenarios with a **mocked** model, green in CI.
 
 ### Phase 2 — Pilot → freeze → final runs (≈2 sessions, then waiting)
-- [ ] Pilot: 1 model × 4 conditions × 3 scenarios × 2 seeds (~24 matches).
+- [ ] Pilot: 1 model × 4 conditions × **4** scenarios × 2 seeds (32 matches, plus the free
+      baselines). The grid is `examples/study/pilot.toml`: fill in its TODOs, and it refuses to
+      run until you do.
 - [ ] Fix **only** correctness and method issues (parser bugs, menu bugs, crashes), not results
       you dislike.
 - [ ] Pick the opponent (Scripted vs Heuristic), decide on C2+M, confirm call counts and cost per match.
@@ -721,3 +723,39 @@ Then the Phase 2 pilot, with your go-ahead.
 
 **Phase 1 tooling is now complete.** Next: review what else Phase 1 needs rounded out before
 the Phase 2 pilot.
+
+#### Phase 1 review and round-out (2026-09-24)
+
+A review of the Phase 1 code, done with fresh eyes by checking specific suspicions against the
+source and running the untested paths, found five problems that would have confounded or
+corrupted pilot data, and five gaps in pilot readiness. All ten are fixed, in seven commits.
+1,446 tests pass; flake8, mypy and Black are clean.
+
+**Would have affected the data:**
+- **C3 had no scratchpad** while the other conditions did, because the note field was only
+  ever added to a tool named `end_turn` (`98af20a`). It is now a registered control
+  (prereg §4.3).
+- **The prompt hash ignored the tool schemas**, so a tool-description edit could never have
+  shown (`460c78b`).
+- **OpenRouter's upstream host was neither pinned nor recorded**, so one model id could be
+  served by different quantisations from cell to cell (`be21606`). Hosts are now pinnable
+  with fallbacks off, recorded per request, and mixed hosts are flagged; the match seed is
+  sent.
+- **Model text reached transcripts unscrubbed** by three routes: the call arguments, the raw
+  tool call, and the referee echoing a bad id back (`4fd3358`). Extra tool calls are now
+  counted (A5), and empty capability descriptions are gone (A6).
+
+**Pilot readiness:**
+- The manifest records the opponent and `git_dirty`. A live run refuses a dirty tree, the run
+  stops at a cell that exhausts its retries, and the heuristic opponent is tested
+  (`7d3330b`).
+- The registered baselines run through the runner, with the Heuristic native by decision
+  (`1614ae1`).
+- There's a no-key demo grid, a pilot grid that can't run while any TODO remains, and
+  `study show` for reading a match decision by decision (`5958c3b`).
+
+**Deferred hygiene** (ledger A7, A12, A13): the test-suite lint (109 findings), line
+endings, `random` imports, and the dead default model.
+
+Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml`, dry-run it, and run it
+live only with the go-ahead.

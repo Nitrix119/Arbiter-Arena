@@ -45,6 +45,10 @@ GameBench (arXiv 2406.06613); SmartPlay (arXiv 2310.01557); *Let Me Speak Freely
 Four conditions. **The state observation is byte-identical across all four** — same
 information policy, same JSON body. Only the *action section* of the prompt and the
 response channel differ. Every prompt variant is hashed and the hash recorded.
+*As implemented (2026-09-24):* the recorded `prompt_hash` fingerprints **everything the
+model is shown before the state**. That is the system prompt *and* the tool schemas as sent,
+including the note field. Hashing the prompt alone would have let a tool-description edit go
+unrecorded, and one was made on 2026-09-24.
 
 | | **C1 FREE** | **C2 SCHEMA** | **C2+M** | **C3 MENU** |
 |---|---|---|---|---|
@@ -261,6 +265,20 @@ Until this date they appeared only inside the legal-action menu, so C1 and C2 ha
 guess their own ability names and C2 → C2+M bundled "being told what you are" with the
 affordance it isolates. Affordability, slots and targets remain menu-only.
 
+### 4.3 Scratchpad parity (a control, implemented 2026-09-24)
+
+Every condition can leave itself a between-turn note:
+- C1 through the grammar (`end turn — note: …`);
+- C2 and C2+M through a `note` field on `end_turn`;
+- C3 through a `note` field on `choose`, honoured only when the choice ends the turn, which
+  is exactly where C2's lives.
+
+Until the Phase 1 review, C3 had **no** note channel. The field was added only to a tool
+*named* `end_turn`, and C3 does not offer one. Memory would then have differed by
+condition: an affordance the study does not vary, charged unevenly, of the same class as
+the entity ids in §4.2. A cross-condition test now requires a note channel in every
+condition.
+
 ---
 
 ## 5. Models
@@ -280,6 +298,15 @@ Exact model strings are pinned before the final run, and the **provider-returned
 model id** is recorded per call. Tool-calling support is confirmed in preflight for
 every model — C2, C2+M and C3 all require it; a model without it could only run C1
 and would leave a hole in the grid.
+
+**The upstream host is controlled (2026-09-24).** OpenRouter can route one model id to
+different upstream hosts, which may differ in quantisation, from one request to the next.
+Each model's grid entry therefore names the host(s) to use (`hosts`), with fallbacks
+disabled, so a host that cannot serve a request fails as an infrastructure exclusion
+(§8) instead of switching silently. The host that served every request is recorded. The
+report flags any model × condition served by more than one host; such cells are reported
+separately, never averaged. The match seed is sent as the sampling seed, for hosts that
+honour it.
 
 **Recorded, not assumed:** early Nemotron testing showed very large token churn
 (~700k tokens across three fights), substantially from repeated illegal calls before
@@ -417,6 +444,12 @@ pilot frequencies rather than in advance.
   a limitation rather than corrected for.
 - **Baselines** (Random, Scripted, Heuristic) run through the **C3 path** using the
   same executor, to anchor tactical metrics. They cost no API calls.
+  *Amended 2026-09-24, before any data:* Random (uniform over the enumerated actions) and
+  Scripted run through C3's `choose` path as registered. The **Heuristic runs natively**,
+  with its own action space (condition `native`): its movement goes to arbitrary points the
+  C3 menu does not list. Forcing it onto the menu would make it a different, weaker agent
+  than the one tuned and validated, so it serves as an unconstrained ceiling. Each baseline
+  plays once per scenario and seed.
 
 ### 7.1 Sizing
 
@@ -446,6 +479,11 @@ exception from a provider SDK or the network escapes the match, or when its tran
 records any `provider_error`. The attempt is kept under `_excluded/`, never analysed, and
 the cell is re-run with exponential backoff up to the grid's `max_attempts`. Any other
 exception is treated as a harness bug and stops the run; it is never retried.
+A cell that exhausts `max_attempts` also stops the run, since a quota or an outage would
+otherwise fail every remaining cell. A resume retries that cell first. A live run refuses
+to start from a working tree with uncommitted changes to tracked files, unless explicitly
+overridden, and the manifest records `git_dirty` either way. The manifest also records the
+opponent.
 
 ---
 
