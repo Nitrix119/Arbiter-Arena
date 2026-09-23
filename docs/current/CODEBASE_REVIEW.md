@@ -232,7 +232,9 @@ Problems noticed while building the conditions, logged here so they are fixed de
 a later slice or the final cleanup rather than folded silently into unrelated commits. Each
 names where it should be addressed. Append; strike through and date an item when fixed.
 
-- **A2. First-attempt validity must count the correction re-prompt as a failure.** A decision
+- **A2. ~~First-attempt validity must count the correction re-prompt as a failure.~~
+  Implemented 2026-09-24** in `study_report` (`first_attempt_valid` = accepted in one
+  request), and defined in PREREGISTRATION §6. Original note: A decision
   whose first response contained no action gets one free re-prompt (`decide_one_action`), so a
   decision can succeed "eventually" after a failed first attempt that no rejection records. The
   H1 metric must treat `request_count > 1` *or* any rejection as first-attempt invalid, in
@@ -278,6 +280,14 @@ names where it should be addressed. Append; strike through and date an item when
   per decision as a cost covariate, but nothing wrote it, and a report could only have
   recovered it by replaying. `DecisionTelemetry.menu_length` now holds the number of legal
   options shown (menu conditions only), set by `ActionInterface.menu_length`.
+- **A11. Plots deferred.** V1_PLAN asked the report for 2–3 plots. They would add matplotlib,
+  and the study's claims rest on the tables, so the report is text and CSV only for now.
+  → Phase 4 (write-up): plot from `report/*.csv`, ideally in a separate script.
+- **A12. Two older modules import `random` directly**, against CLAUDE.md §7 ("`dice.py` is
+  the only module that touches `random`"): `src/arena/agent.py` (RandomAgent's own stream)
+  and `src/arena/heuristic/ga.py` (the GA). Both are seeded, so determinism holds, but the
+  stated invariant does not. → final cleanup: route both through `dice.new_rng`, or amend the
+  rule to say what it actually protects (game RNG versus agent or analysis streams).
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 

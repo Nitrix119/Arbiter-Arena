@@ -346,11 +346,13 @@ The three conditions:
       it. See §9.
 
 Runner and analysis:
-- [ ] Batch runner CLI (`python -m src.arena.study run --grid grid.yaml`): resumable, preflight,
-      rate-limit backoff, spend cap, per-cell transcripts.
-- [ ] Analysis script (`… study report`): transcripts to one CSV per decision and per match, plus a
-      Markdown table and 2–3 plots. **Claude reads only this summary, never raw JSONL.**
-- [ ] Offline smoke: all conditions × all scenarios with a **mocked** model, green in CI.
+- [x] Batch runner CLI (`python -m src.arena.study run grid.toml --out …`): resumable, preflight,
+      rate-limit backoff, spend cap, per-cell transcripts. _(The grid is **TOML**, read by the
+      stdlib `tomllib`, not YAML, which would have added a dependency.)_
+- [x] Analysis script (`python -m src.arena.study report …`): transcripts to one CSV per decision
+      and per match, plus a Markdown summary. **Claude reads only this summary, never raw JSONL.**
+      _(Plots deferred to Phase 4: ledger A11.)_
+- [x] Offline smoke: all conditions × all scenarios with a **mocked** model, green in CI.
 
 ### Phase 2 — Pilot → freeze → final runs (≈2 sessions, then waiting)
 - [ ] Pilot: 1 model × 4 conditions × 3 scenarios × 2 seeds (~24 matches).
@@ -654,3 +656,34 @@ reporting and the audit decision rule (§7).
 
 Next, slice 3: the batch runner and the analysis script, with the offline strict/lenient
 re-scorer, the first-attempt metric (ledger A2) and the audit labelling tool.
+
+#### Slice 3 closing note (2026-09-24) — the pilot can run
+
+The runner, a mock model and the report are built. 1,355 tests pass; flake8, mypy and Black
+are clean. Split from the re-scorer and audit tool at the user's choice: those need real C1
+output, and this slice is everything the Phase 2 pilot needs.
+
+- **`src/arena/study.py`** runs every cell through the ordinary `run_match`:
+  - Each transcript is written atomically to a fixed path, so a resume skips finished cells.
+  - Cells run seed by seed, so an interrupted run leaves paired sets.
+  - Infrastructure failures are set aside and retried with backoff. Any other exception is a
+    bug and stops the run. A retry loop must never hide a defect.
+  - Spend is recomputed from disk at start, so the cap survives a resume.
+  - A preflight check fails a dead or tool-less model before the first cell.
+  - Only `openrouter` and `mock` providers exist, per prereg §5.
+- **`src/arena/mock_model.py`** lets the scripted policy decide, then writes each decision in
+  the condition's own format, including deliberate stumbles, through the real decision path.
+- **`src/arena/study_report.py`** produces the registered measurements with the standard
+  library only, deterministically. Its definitions are now in PREREGISTRATION §6–§8.
+- **A null control for the whole study.** The mock makes identical decisions in every
+  condition, and a test requires identical outcomes on every paired scenario and seed. The
+  harness can change what a decision costs, never what it does.
+
+Found and fixed on the way: menu length was never recorded (ledger A10); `aoe_placement` was
+missing from the metrics scope table; the report briefly imported `random` directly, against
+CLAUDE.md §7. Logged: A11 (plots) and A12 (two older modules import `random`). A mypy error
+reached one commit because a check was piped through `tail`, which hid its exit status. It
+was fixed in the next commit, and CLAUDE.md §9 records the lesson.
+
+Next, slice 4: the offline strict/lenient re-scorer and the terminal audit-labelling tool.
+Then the Phase 2 pilot, with your go-ahead.

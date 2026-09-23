@@ -337,6 +337,20 @@ and `engine_error` are non-model buckets and are excluded from validity rates.
 **Open before freeze:** whether `invalid_target_relation` should split, decided from
 pilot frequencies rather than in advance.
 
+**Exact definitions, as implemented (registered 2026-09-24; `src/arena/study_report.py`):**
+- **First-attempt valid:** the decision was accepted **and** took a single request. A
+  decision rescued by the one correction re-prompt failed its first attempt, even though it
+  was eventually accepted. The rule is the same in every condition. *Eventually accepted* is
+  reported alongside.
+- **Recovery:** after a rejected decision, the same actor's next decision **in the same
+  turn** was accepted. A rejection with no later decision that turn (the turn was forced to
+  end) is not counted either way.
+- **Spatial** (H2): a move, or a spell aimed at a point. For a refused attempt, spatial is
+  judged from what was attempted: a C1 line whose verb is a move verb, or a cast that gives
+  coordinates; a C3 id naming a move or an aim point. A response containing no action at all
+  is neither spatial nor non-spatial, and is excluded from the H2 split.
+- Only the **model's team** is counted; the fixed opponent's actions are not decisions.
+
 **Secondary:**
 - Recovery rate: P(valid on next attempt | rejected)
 - Forfeit turns (failure budget exhausted)
@@ -354,6 +368,10 @@ pilot frequencies rather than in advance.
 
 - Decisions within a match are **not independent**. Per-decision rates use a
   **cluster (match-level) bootstrap**; win rates use **Wilson** intervals. **No Elo.**
+  *As implemented:* rates are pooled (Σ successes / Σ decisions). The bootstrap resamples
+  whole matches with replacement, 2,000 times, from a fixed seed (20260924), and takes the
+  2.5th and 97.5th percentiles. Wilson uses z = 1.96. The report is deterministic: the same
+  bundle always produces byte-identical output.
 - **C1 is reported under three parsers (registered 2026-09-24).** The *primary* parser
   is the one used live. A *strict* bound accepts only layer 0; a *lenient* bound adds the
   defensible readings the primary parser refuses: an implied weapon when the creature has
@@ -396,6 +414,12 @@ A match is excluded **only** for provider or infrastructure failure — HTTP 5xx
 rate-limit abort, malformed provider response, model unavailability. **Never for bad
 model behaviour**: illegal actions, forfeited turns, losses and nonsense output are
 data, not errors. Excluded seeds are re-run and the exclusion count is reported.
+
+*As implemented (`src/arena/study.py`, 2026-09-24):* an attempt is excluded when an
+exception from a provider SDK or the network escapes the match, or when its transcript
+records any `provider_error`. The attempt is kept under `_excluded/`, never analysed, and
+the cell is re-run with exponential backoff up to the grid's `max_attempts`. Any other
+exception is treated as a harness bug and stops the run; it is never retried.
 
 ---
 

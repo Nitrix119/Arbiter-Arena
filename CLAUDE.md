@@ -229,6 +229,12 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
 | Format | `black src/ web/ tests/` |
 | Lint | `flake8 src/ web/` |
 | Type-check | `mypy src/` |
+| Run a study grid (resumable) | `python -m src.arena.study run GRID.toml --out results/<name>` (`--dry-run` to preview) |
+| Report on a study bundle | `python -m src.arena.study report results/<name>` |
+
+- **Check exit codes, not tails.** In a chained command, never pipe a check through `tail`/`head`
+  unless `set -o pipefail` is on: the pipe reports the *last* command's status, so a failing
+  `mypy` would read as success (§9 2026-09-24).
 
 - **RNG:** all randomness flows through a single **context-scoped** `random.Random` in
   `src/utils/dice.py` (a `contextvars.ContextVar`), so each battle can own its own seed
@@ -280,6 +286,16 @@ leave a brief note here.
 - **What went wrong:** the mistake or surprise.
 - **Rule going forward:** the concrete, testable rule.
 ```
+
+### 2026-09-24 — A check piped through `tail` cannot fail
+- **Context:** Committing slice 3 of the interface study, chaining
+  `black --check && flake8 && mypy src/ | tail -1 && pytest | tail -1 && git commit`.
+- **What went wrong:** mypy found an error, but a pipeline's exit status is its *last*
+  command's, and `tail` succeeded. The chain carried on, and the commit went in with a type
+  error. The output did show "Found 1 error", but nothing acted on it.
+- **Rule going forward:** in any chain that gates a commit, either run the check unpiped or
+  `set -o pipefail` first. More generally, a gate is only as good as the exit status it reads;
+  a check whose failure cannot stop anything is a comment.
 
 ### 2026-09-21 — Measuring at the configuration you designed measures your design, not the system
 - **Context:** Quantifying how much the enumerated action menu's discretisation costs, by comparing
