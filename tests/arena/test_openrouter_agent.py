@@ -264,3 +264,31 @@ def test_a_text_condition_sends_no_tool_fields():
     assert "tool_choice" not in kwargs
     assert call is None
     assert record.raw_output == "ACTION: end turn"
+
+
+def test_a_pinned_host_and_seed_are_sent_and_the_served_host_recorded():
+    """One model id can be served by several hosts; the study pins and records it."""
+    served = response(fn_call("end_turn", "{}"))
+    served.provider = "DeepInfra"
+    client = FakeClient([served])
+    agent = OpenRouterAgent("O", "a", client=client, hosts=["DeepInfra"], seed=7)
+
+    agent.decide(_obs())
+    kwargs = client.calls[0]
+
+    assert kwargs["extra_body"] == {
+        "provider": {"order": ["DeepInfra"], "allow_fallbacks": False}
+    }
+    assert kwargs["seed"] == 7
+    assert agent.telemetry.requests[0].served_provider == "DeepInfra"
+
+
+def test_without_hosts_routing_is_left_alone_but_still_recorded():
+    served = response(fn_call("end_turn", "{}"))
+    served.model_extra = {"provider": "Together"}
+    client = FakeClient([served])
+    agent = OpenRouterAgent("O", "a", client=client)
+
+    agent.decide(_obs())
+    assert "extra_body" not in client.calls[0] and "seed" not in client.calls[0]
+    assert agent.telemetry.requests[0].served_provider == "Together"

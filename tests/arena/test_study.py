@@ -174,11 +174,11 @@ def _flaky(first_agent):
     """A factory whose first agent misbehaves and whose later ones are the mock."""
     built = []
 
-    def factory(spec, name, team, interface):
-        built.append(name)
+    def factory(seat):
+        built.append(seat.name)
         if len(built) == 1:
             return first_agent
-        return MockModelAgent(name, team, interface)
+        return MockModelAgent(seat.name, seat.team, seat.interface)
 
     return {**MODEL_FACTORIES, PROVIDER_MOCK: factory}
 
@@ -335,3 +335,19 @@ def test_a_bad_grid_file_exits_with_its_reason(tmp_path, capsys):
     )
     assert main(["run", str(grid_file), "--out", str(tmp_path / "o")]) == 2
     assert "nowhere" in capsys.readouterr().err
+
+
+# -- the upstream host (Phase 1 review, F3) --------------------------------------------
+
+
+def test_hosts_are_for_openrouter_models_only():
+    with pytest.raises(GridError, match="OpenRouter models only"):
+        _grid(models=[{"id": "mock", "provider": "mock", "hosts": ["X"]}])
+    live = {
+        "id": "org/m",
+        "provider": "openrouter",
+        "usd_per_m_input": 0.1,
+        "usd_per_m_output": 0.1,
+        "hosts": ["DeepInfra"],
+    }
+    assert _grid(models=[live], spend_cap_usd=1.0).models[0].hosts == ("DeepInfra",)

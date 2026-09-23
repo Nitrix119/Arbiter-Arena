@@ -65,6 +65,9 @@ class RequestRecord:
     #: The model the provider says it served — not the string we asked for. §3.1
     #: requires recording it, because a router may substitute a model silently.
     served_model: Optional[str] = None
+    #: The upstream host that served it (OpenRouter routes one model id across hosts,
+    #: which may differ in quantisation). A study cell must not mix hosts silently.
+    served_provider: Optional[str] = None
     finish_reason: Optional[str] = None
     #: The model's own prose, verbatim (scrubbed). Empty when it only made a call.
     raw_output: Optional[str] = None

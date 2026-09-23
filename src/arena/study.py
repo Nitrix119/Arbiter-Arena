@@ -88,6 +88,10 @@ class ModelSpec:
     #: Mock only: decision indices at which the mock answers malformed, so an offline
     #: grid exercises the refusal paths and the report's taxonomy.
     stumble_on: Tuple[int, ...] = ()
+    #: OpenRouter only: the upstream hosts allowed to serve this model, in order, with
+    #: fallbacks off. One model id can otherwise be served by different hosts (and
+    #: quantisations) from cell to cell — an uncontrolled variable.
+    hosts: Tuple[str, ...] = ()
 
     def cost_usd(self, input_tokens: int, output_tokens: int) -> float:
         return (
@@ -197,6 +201,13 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
             for i in stumble_on
         ):
             raise GridError(f"{what}: stumble_on must be a list of decision indices")
+        hosts = entry.get("hosts", [])
+        if hosts and provider != PROVIDER_OPENROUTER:
+            raise GridError(f"{what} ({model_id}): hosts is for OpenRouter models only")
+        if not isinstance(hosts, list) or not all(
+            isinstance(h, str) and h for h in hosts
+        ):
+            raise GridError(f"{what}: hosts must be a list of provider names")
         models.append(
             ModelSpec(
                 id=model_id,
@@ -205,6 +216,7 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
                 usd_per_m_input=_number(entry, "usd_per_m_input", 0.0, what),
                 usd_per_m_output=_number(entry, "usd_per_m_output", 0.0, what),
                 stumble_on=tuple(stumble_on),
+                hosts=tuple(hosts),
             )
         )
     if len({m.id for m in models}) != len(models):
@@ -286,26 +298,43 @@ def cells(grid: Grid) -> Iterator[Cell]:
 
 # -- agents -----------------------------------------------------------------------
 
+
+@dataclass(frozen=True)
+class Seat:
+    """Everything a factory needs to seat a model at a match."""
+
+    spec: ModelSpec
+    name: str
+    team: Optional[str]
+    interface: ActionInterface
+    combat: Optional[CombatSystem] = None
+    seed: Optional[int] = None
+
+
 #: provider → builds the model's agent. Registry, not a branch on the name.
-ModelFactory = Callable[[ModelSpec, str, Optional[str], ActionInterface], Agent]
+ModelFactory = Callable[[Seat], Agent]
 
 
-def _openrouter_agent(
-    spec: ModelSpec, name: str, team: Optional[str], interface: ActionInterface
-) -> Agent:
+def _openrouter_agent(seat: Seat) -> Agent:
     from src.arena.openrouter_agent import OpenRouterAgent
 
     return OpenRouterAgent(
-        name, team, model=spec.id, temperature=spec.temperature, interface=interface
+        seat.name,
+        seat.team,
+        model=seat.spec.id,
+        temperature=seat.spec.temperature,
+        interface=seat.interface,
+        hosts=seat.spec.hosts,
+        seed=seat.seed,
     )
 
 
-def _mock_agent(
-    spec: ModelSpec, name: str, team: Optional[str], interface: ActionInterface
-) -> Agent:
+def _mock_agent(seat: Seat) -> Agent:
     from src.arena.mock_model import MockModelAgent
 
-    return MockModelAgent(name, team, interface, stumble_on=spec.stumble_on)
+    return MockModelAgent(
+        seat.name, seat.team, seat.interface, stumble_on=seat.spec.stumble_on
+    )
 
 
 MODEL_FACTORIES: Dict[str, ModelFactory] = {
@@ -373,7 +402,14 @@ def play_cell(
     model_team = scenario.llm_team
     agents: Dict[Optional[str], Agent] = {
         model_team: factories[cell.model.provider](
-            cell.model, f"{cell.model.id} [{cell.condition}]", model_team, interface
+            Seat(
+                cell.model,
+                f"{cell.model.id} [{cell.condition}]",
+                model_team,
+                interface,
+                combat=combat,
+                seed=cell.seed,
+            )
         ),
         scenario.heuristic_team: _opponent(
             grid.opponent, combat, scenario.heuristic_team
@@ -453,7 +489,9 @@ _PREFLIGHT_PROMPT = [{"role": "user", "content": "Preflight check. End your turn
 
 
 def preflight(
-    grid: Grid, factories: Dict[str, ModelFactory] = MODEL_FACTORIES
+    grid: Grid,
+    factories: Dict[str, ModelFactory] = MODEL_FACTORIES,
+    echo: Callable[[str], None] = print,
 ) -> List[str]:
     """One tool-call and one text-only request per live model. Returns the problems.
 
@@ -467,7 +505,7 @@ def preflight(
             continue
         for condition, needs_call in ((C2, True), (C1, False)):
             interface = get_interface(condition)
-            agent = factories[spec.provider](spec, "preflight", "a", interface)
+            agent = factories[spec.provider](Seat(spec, "preflight", "a", interface))
             tools = interface.api_tools({})
             try:
                 call, record = agent._request_action(  # type: ignore[attr-defined]
@@ -483,6 +521,10 @@ def preflight(
                 )
             if not needs_call and not (record.raw_output or "").strip():
                 problems.append(f"{spec.id}: returned no text for the C1 check")
+            echo(
+                f"preflight {spec.id} [{condition}]: served by "
+                f"{record.served_provider or 'an unreported host'}"
+            )
     return problems
 
 

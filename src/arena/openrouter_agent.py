@@ -18,7 +18,7 @@ exactly how a flaw surfaces.
 import json
 import time
 from types import ModuleType
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from src.arena.agent import Agent, ProviderError
 from src.arena.credentials import resolve_credential
@@ -47,6 +47,17 @@ _RANKING_HEADERS = {
     "HTTP-Referer": "https://github.com/Nitrix119/arbiter-arena",
     "X-Title": "Arbiter Arena",
 }
+
+
+def _served_provider(response: Any) -> Optional[str]:
+    """The upstream host OpenRouter routed this request to, if the response says.
+
+    OpenRouter adds a ``provider`` field the OpenAI SDK keeps as an extra attribute.
+    """
+    provider = getattr(response, "provider", None)
+    if provider is None:
+        provider = (getattr(response, "model_extra", None) or {}).get("provider")
+    return str(provider) if provider else None
 
 
 def _to_openai_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -119,6 +130,8 @@ class OpenRouterAgent(Agent):
         max_tokens: int = DEFAULT_MAX_TOKENS,
         interface: Optional[ActionInterface] = None,
         client: Any = None,
+        hosts: Sequence[str] = (),
+        seed: Optional[int] = None,
     ) -> None:
         super().__init__(name, team)
         if client is None:
@@ -131,6 +144,11 @@ class OpenRouterAgent(Agent):
             api_key = resolve_credential("OPENROUTER_API_KEY", "openrouter.key")
             client = openai.OpenAI(base_url=OPENROUTER_BASE_URL, api_key=api_key)
         self._client = client
+        #: Upstream hosts allowed to serve the model, in order, fallbacks off. Empty
+        #: leaves routing to OpenRouter — recorded per request either way.
+        self.hosts = tuple(hosts)
+        #: Sampling seed, forwarded to hosts that honour it (the match's seed).
+        self.seed = seed
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -155,6 +173,12 @@ class OpenRouterAgent(Agent):
         tool_fields: Dict[str, Any] = {}
         if api_tools:
             tool_fields = {"tools": _to_openai_tools(api_tools), "tool_choice": "auto"}
+        if self.hosts:
+            tool_fields["extra_body"] = {
+                "provider": {"order": list(self.hosts), "allow_fallbacks": False}
+            }
+        if self.seed is not None:
+            tool_fields["seed"] = self.seed
         started = time.perf_counter()
         response = self._client.chat.completions.create(
             model=self.model,
@@ -172,6 +196,7 @@ class OpenRouterAgent(Agent):
             # The router may serve a different model than the one asked for, so record
             # what actually answered (§3.1), not what we requested.
             served_model=getattr(response, "model", None),
+            served_provider=_served_provider(response),
         )
 
         message = _first_message(response, self.model, record)

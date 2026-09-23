@@ -178,6 +178,7 @@ class Decision:
     latency_ms: float
     menu_length: Optional[int]
     c1_layer: Optional[int]
+    served_provider: Optional[str] = None
 
 
 def _attempted_verb(text: str) -> str:
@@ -228,9 +229,11 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
         telemetry = record.get("telemetry") or {}
         requests = telemetry.get("requests") or []
         layer = None
+        host = None
         if requests:
             reading = requests[-1].get("interpretation") or {}
             layer = reading.get("layer")
+            host = requests[-1].get("served_provider")
         kind, spatial = classify(record["call"])
         ok = bool(record["result"].get("ok"))
         count = telemetry.get("request_count", 1)
@@ -256,6 +259,7 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
                 latency_ms=float(telemetry.get("latency_ms") or 0.0),
                 menu_length=telemetry.get("menu_length"),
                 c1_layer=layer,
+                served_provider=host,
             )
         )
     return out
@@ -581,6 +585,7 @@ def summarise(
 
     parts += _tactics_sections(matches)
     parts += _layer_section(decisions)
+    parts += _hosts_section(decisions)
     return "\n".join(parts) + "\n"
 
 
@@ -642,6 +647,46 @@ def _tactics_sections(matches: List[Match]) -> List[str]:
             ),
         ]
     return parts
+
+
+def _hosts_section(decisions: List[Decision]) -> List[str]:
+    """Which upstream hosts served each model x condition — and a flag if several did.
+
+    OpenRouter can route one model id to different hosts, which may differ in
+    quantisation; a cell served by more than one is a validity problem to report,
+    not to average over (prereg §5).
+    """
+    hosts: Dict[Tuple[str, str], set] = defaultdict(set)
+    for d in decisions:
+        if d.served_provider:
+            hosts[(d.model, d.condition)].add(d.served_provider)
+    if not hosts:
+        return []
+    mixed = {key for key, names in hosts.items() if len(names) > 1}
+    parts = ["", "## Serving hosts", ""]
+    if mixed:
+        parts += [
+            "**Warning: served by more than one host** — "
+            + ", ".join(f"{m} / {c}" for m, c in sorted(mixed))
+            + ". Pin `hosts` in the grid, or report these cells separately.",
+            "",
+        ]
+    parts.append(
+        _table(
+            ["model", "condition", "hosts"],
+            [
+                [model, condition, ", ".join(sorted(names))]
+                for (model, condition), names in sorted(
+                    hosts.items(), key=lambda kv: (kv[0][0], _cell_key_of(kv[0][1]))
+                )
+            ],
+        )
+    )
+    return parts
+
+
+def _cell_key_of(condition: str) -> int:
+    return _CONDITION_ORDER.get(condition, 99)
 
 
 def _layer_section(decisions: List[Decision]) -> List[str]:

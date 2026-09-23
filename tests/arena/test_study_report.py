@@ -307,3 +307,18 @@ def test_c1_is_reported_under_three_ordered_parsers(bundle):
         assert strict <= primary <= lenient, row
     assert "## C1 under three parsers (prereg §7)" in summary
     assert "Not re-scored" not in summary  # every C1 match replayed
+
+
+def test_a_cell_served_by_two_hosts_is_flagged():
+    from src.arena.study_report import _hosts_section
+
+    def decision(host, condition="C2"):
+        return Decision(
+            "m", condition, "kiting", 1, "x", 1, 1, "a", 0, "attack", False, True, "",
+            True, 1, 0, 0, 0.0, None, None, served_provider=host,
+        )  # fmt: skip
+
+    clean = _hosts_section([decision("A"), decision("A", "C3")])
+    mixed = _hosts_section([decision("A"), decision("B")])
+    assert not any("Warning" in line for line in clean)
+    assert any("more than one host" in line and "m / C2" in line for line in mixed)
