@@ -22,7 +22,9 @@ from src.arena.information_policy import (
     InformationPolicy,
     bucket_hp,
 )
+from src.models.action import AttackAction
 from src.models.entity import Entity
+from src.spatial.range_check import effective_range_ft
 
 if TYPE_CHECKING:
     from src.combat.combat_system import CombatSystem
@@ -114,6 +116,60 @@ def _serialize_enemy(entity: Entity, policy: InformationPolicy) -> Dict[str, Any
     return view
 
 
+def _spell_capability(combat: "CombatSystem", name: str) -> Dict[str, Any]:
+    """What a known spell *is*: level, targeting, reach and area — never whether it
+    can be cast right now.
+
+    A spell the combat cannot resolve (no registry, or absent from it) is still named:
+    the creature knows it, and hiding it would be the observation deciding legality.
+    """
+    registry = combat.spell_registry
+    if registry is None or name not in registry:
+        return {"name": name}
+    spell = registry.get(name)
+    return {
+        "name": spell.name,
+        "spell_level": spell.spell_level,
+        "targeting": spell.targeting_type.value,
+        "range_ft": effective_range_ft(spell),
+        "area": (
+            {"shape": spell.aoe.shape.value, "size_ft": spell.aoe.size_ft}
+            if spell.aoe is not None
+            else None
+        ),
+    }
+
+
+def _capabilities(combat: "CombatSystem", entity: Entity) -> Dict[str, Any]:
+    """A friendly creature's own attacks and spells, as static facts.
+
+    **Shown in every condition**, because it is what the creature *is*, not what is
+    legal. Before this existed, a creature's own attack and spell names appeared only
+    in the legal-action menu, so the no-menu conditions (C1, C2) had to guess the
+    exact names the executor matches — and C2 → C2+M measured "being told what you
+    are" on top of the affordance it exists to isolate. Affordability, slots and
+    targets stay in the menu, where they belong.
+
+    Kept out of :func:`_serialize_ally` on purpose: :func:`snapshot_state` reuses that
+    helper and feeds the per-turn state hash, which static fields would change.
+    """
+    return {
+        "attacks": [
+            _serialize_action(a)
+            for a in entity.stat_block.actions + entity.granted_actions
+            if isinstance(a, AttackAction)
+        ],
+        "spells": [
+            _spell_capability(combat, name) for name in entity.stat_block.known_spells
+        ],
+    }
+
+
+def _friendly(combat: "CombatSystem", entity: Entity) -> Dict[str, Any]:
+    """The full view of a friendly creature, plus what it can do."""
+    return {**_serialize_ally(entity), "capabilities": _capabilities(combat, entity)}
+
+
 def build_observation(
     combat: "CombatSystem",
     entity: Entity,
@@ -127,9 +183,10 @@ def build_observation(
         policy: What this agent may learn about its enemies. Defaults to
             :data:`~src.arena.information_policy.FULL_INFORMATION`.
 
-    The returned dict has: ``round``/``turn``/``state``/``is_my_turn``, ``self`` (full),
-    ``allies`` (full), ``enemies`` (policy-filtered), ``legal_actions`` (the menu of
-    what *entity* may do now) and ``enumerated_actions`` (the same options flattened).
+    The returned dict has: ``round``/``turn``/``state``/``is_my_turn``, ``self`` and
+    ``allies`` (full, each with its ``capabilities``), ``enemies`` (policy-filtered),
+    ``legal_actions`` (the menu of what *entity* may do now) and ``enumerated_actions``
+    (the same options flattened).
     An :class:`~src.arena.interfaces.ActionInterface` decides which of the last two a
     given study condition actually sees — this function shows everything.
     """
@@ -139,8 +196,8 @@ def build_observation(
         "round": combat.round,
         "turn": combat.turn,
         "is_my_turn": current is not None and current.entity_id == entity.entity_id,
-        "self": _serialize_ally(entity),
-        "allies": [_serialize_ally(a) for a in combat.get_allies(entity)],
+        "self": _friendly(combat, entity),
+        "allies": [_friendly(combat, a) for a in combat.get_allies(entity)],
         "enemies": [_serialize_enemy(e, policy) for e in combat.get_enemies(entity)],
         "legal_actions": legal_actions(combat, entity).to_dict(),
         # The same options flattened into one choosable list, for the enumerated

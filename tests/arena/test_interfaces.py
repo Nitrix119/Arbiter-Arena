@@ -293,3 +293,59 @@ def test_no_other_condition_sees_the_enumerated_list(name):
     shown = get_interface(name).shape_observation(_menu_obs())
     assert "enumerated_actions" not in shown
     assert "actions" not in shown
+
+
+# -- own capabilities survive every condition's shaping ------------------------
+
+
+def _aoe_mage_observation():
+    from src.arena.observation import build_observation
+    from src.arena.scenarios import SCENARIOS
+
+    from .conftest import force_turn
+
+    combat = SCENARIOS["aoe_placement"].build()
+    mage = next(e for e in combat.combatants if e.name == "Mage")
+    force_turn(combat, mage)
+    return combat, mage, build_observation(combat, mage)
+
+
+@pytest.mark.parametrize("name", [C2, C2_MENU, C3])
+def test_every_condition_shows_the_creature_its_own_capabilities(name):
+    """What a creature *is* is state, not affordance, so no condition strips it."""
+    _, _, observation = _aoe_mage_observation()
+    mine = get_interface(name).shape_observation(observation)["self"]["capabilities"]
+
+    assert [a["name"] for a in mine["attacks"]] == ["Dagger"]
+    assert [s["name"] for s in mine["spells"]] == ["Fireball"]
+
+
+def test_c2_can_act_by_the_names_it_is_shown():
+    """End to end: a C2 model copying the names C2 shows it gets a legal call.
+
+    Before own capabilities were in the shared body, the Mage under C2 saw neither
+    `Dagger` nor `Fireball` anywhere, and any spelling it guessed differently was an
+    `unknown_action` charged to the interface rather than the model.
+    """
+    from src.arena.tools import ToolExecutor
+
+    combat, mage, observation = _aoe_mage_observation()
+    mine = get_interface(C2).shape_observation(observation)["self"]["capabilities"]
+    spell = mine["spells"][0]["name"]
+
+    result = ToolExecutor(combat).apply(
+        mage,
+        ToolCall(
+            "cast_spell",
+            {"spell_name": spell, "target_point": {"x": 7.5, "z": 60}},
+        ),
+    )
+    assert result["ok"], result
+
+
+def test_no_raw_param_tool_points_at_a_menu_c2_does_not_have():
+    """C2 is shown these descriptions with the menu stripped; naming it misleads."""
+    for tool in TOOLS:
+        assert "menu" not in tool["description"].lower(), tool["name"]
+        for field in tool["input_schema"].get("properties", {}).values():
+            assert "menu" not in field.get("description", "").lower(), tool["name"]

@@ -49,7 +49,7 @@ TOOLS: List[Dict[str, Any]] = [
         "name": TOOL_ATTACK,
         "description": (
             "Make a weapon/attack action against one target. Use an attack `name` "
-            "and a target `entity_id` from your legal-action menu."
+            "and a target `entity_id` from the battlefield."
         ),
         "input_schema": {
             "type": "object",
@@ -57,7 +57,7 @@ TOOLS: List[Dict[str, Any]] = [
                 "action_name": {
                     "type": "string",
                     "description": (
-                        "The attack's name, exactly as listed in your options."
+                        "The attack's name, as listed under your capabilities."
                     ),
                 },
                 "defender_id": {
@@ -82,7 +82,7 @@ TOOLS: List[Dict[str, Any]] = [
                 "spell_name": {
                     "type": "string",
                     "description": (
-                        "The spell's name, exactly as listed in your options."
+                        "The spell's name, as listed under your capabilities."
                     ),
                 },
                 "target_ids": {
