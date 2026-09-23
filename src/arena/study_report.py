@@ -32,7 +32,6 @@ import csv
 import io
 import json
 import math
-import random
 import re
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
@@ -43,6 +42,7 @@ from src.arena.free_text import UNREAD_TEXT
 from src.arena.interfaces import REGISTRY
 from src.arena.metrics import area_hits, compute_report
 from src.arena.scenarios import SCENARIOS
+from src.utils import dice
 
 REPORT_DIR = "report"
 BOOTSTRAP_SEED = 20260924
@@ -95,7 +95,7 @@ def cluster_ratio(
     if not clusters:
         return None
     point = sum(n for n, _ in clusters) / sum(d for _, d in clusters)
-    rng = random.Random(BOOTSTRAP_SEED)
+    rng = dice.new_rng(BOOTSTRAP_SEED)  # dice.py owns every RNG (CLAUDE.md §7)
     stats: List[float] = []
     for _ in range(BOOTSTRAP_RESAMPLES):
         sample = [clusters[rng.randrange(len(clusters))] for _ in clusters]
