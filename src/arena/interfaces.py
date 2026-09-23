@@ -28,6 +28,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
 from src.arena.agent import RejectedResponse
+from src.arena.free_text import UNREAD_TEXT, read_response, render_command
 from src.arena.telemetry import RequestRecord
 from src.arena.tools import TOOLS, ToolCall
 from src.errors import UNKNOWN_ACTION, UNKNOWN_TARGET
@@ -88,6 +89,29 @@ _MENU_NOTE = """\
 targets in reach, the named move destinations, and where an area spell could be aimed \
 and who it would catch. Reading it is up to you; you still act by the tool calls \
 above."""
+
+#: C1's action section. Mirrors C2's "exactly one … and nothing else" so the two
+#: differ in channel, not in how much the model is invited to say. The examples use a
+#: creature and abilities that appear in no study scenario (a test enforces it), so
+#: they teach the syntax without advising on any real board.
+_FREE_TEXT_ACTION = """\
+How to act:
+- Respond with EXACTLY ONE line, in this form, and nothing else:
+    ACTION: <command>
+- Commands:
+    attack <target> with <attack name>
+    cast <spell name> at <target>
+    cast <spell name> at x=<feet> z=<feet>
+    move to x=<feet> z=<feet>
+    end turn
+  Add "at level <n>" after a cast to use a higher spell slot. To leave yourself a \
+reminder for next turn: end turn \u2014 note: <reminder>
+- Name targets by their entity_id and your attacks and spells by name, as shown on \
+the battlefield. Destinations and area-spell aim points are ground coordinates in feet.
+- Examples:
+    ACTION: attack hobgoblin-2 with Warhammer
+    ACTION: cast Stinking Cloud at x=12.5 z=40
+    ACTION: move to x=-5 z=20"""
 
 _MENU_ACTION = """\
 How to act:
@@ -200,18 +224,18 @@ class RawParamsInterface(ActionInterface):
 class FreeTextInterface(ActionInterface):
     """C1 — plain text in a declared grammar, parsed deterministically.
 
-    Not implemented yet: the grammar and its parser are their own piece of work and
-    must be frozen and adversarially tested before the pilot (V1_PLAN §3.1). The class
-    exists so the seam is visible and the registry is honest about what is missing —
-    :meth:`interpret` receives ``record.raw_output``, which is where the model's text
-    already arrives, so C1 needs a parser rather than a second agent loop.
+    The model is offered no tools; its answer is the text in ``record.raw_output``,
+    read by :func:`~src.arena.free_text.read_response` into the same
+    :class:`ToolCall` a C2 model would send. The parser checks *form* only — names are
+    resolved and legality refereed by the shared executor — so C1 differs from C2 in
+    the channel and nothing else. See ``docs/current/C1_PARSER_OPTIONS.md``.
     """
 
     name = C1
     shows_menu = False
 
     def action_prompt(self) -> str:
-        raise NotImplementedError("C1's grammar is not written yet")
+        return _FREE_TEXT_ACTION
 
     def api_tools(self, observation: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []  # a text condition offers no tools at all
@@ -222,7 +246,41 @@ class FreeTextInterface(ActionInterface):
         record: RequestRecord,
         observation: Dict[str, Any],
     ) -> Optional[ToolCall]:
-        raise NotImplementedError("C1's parser is not written yet")
+        """Read the model's text; ignore any stray tool call (none was offered).
+
+        How the text was read is written onto *record*, so the transcript carries the
+        parse layer of every accepted action and the reason for every refusal.
+        """
+        reading = read_response(record.raw_output)
+        if reading.call is not None:
+            record.interpretation = {"layer": reading.layer, "line": reading.line}
+            return reading.call
+        if reading.code is None:
+            return None  # no action at all: the correction path
+        record.interpretation = {
+            "code": reading.code,
+            "reason": reading.reason,
+            "line": reading.line,
+        }
+        raise RejectedResponse(
+            reading.code,
+            reading.reason,
+            ToolCall(UNREAD_TEXT, {"text": reading.line or ""}),
+        )
+
+    def correction(self) -> str:
+        return "Respond with exactly one line: ACTION: <command>"
+
+    def format_rejected(self, action: Dict[str, Any]) -> str:
+        """Show the model its own rejected line, in its own syntax — never JSON."""
+        name = action.get("name", "")
+        arguments = dict(action.get("arguments", {}))
+        if name == UNREAD_TEXT:
+            return f'"{arguments.get("text", "")}"'
+        try:
+            return render_command(ToolCall(name, arguments))
+        except (KeyError, ValueError):
+            return describe_tool_call(action)  # not a C1 action; never expected
 
 
 class SchemaInterface(RawParamsInterface):

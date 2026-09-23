@@ -61,6 +61,11 @@ class RequestRecord:
     tool_call: Optional[Dict[str, Any]] = None
     #: Set when the envelope itself was broken (a provider failure, not a decision).
     error: Optional[str] = None
+    #: How a text condition read this response: ``{"layer", "line"}`` for an accepted
+    #: action, ``{"code", "reason", "line"}`` for a refused one, absent when the
+    #: response held no action. The parse layer is what lets C1's validity be
+    #: re-scored offline under a stricter or more lenient parser.
+    interpretation: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """A JSON-safe record, scrubbed.
@@ -74,6 +79,12 @@ class RequestRecord:
         data = asdict(self)
         data["raw_output"] = scrub(self.raw_output)
         data["error"] = scrub(self.error)
+        if self.interpretation is not None:
+            # Copies the model's own text (the line it wrote), so the same guard.
+            data["interpretation"] = {
+                key: scrub(value) if isinstance(value, str) else value
+                for key, value in self.interpretation.items()
+            }
         return data
 
 

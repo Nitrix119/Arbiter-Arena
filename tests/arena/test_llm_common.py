@@ -3,7 +3,7 @@
 import pytest
 
 from src.arena.agent import RejectedResponse
-from src.arena.interfaces import C2_MENU, C3, get_interface
+from src.arena.interfaces import C1, C2_MENU, C3, get_interface
 from src.arena.llm_common import (
     augment_tools_with_notes,
     capture_notes,
@@ -171,3 +171,43 @@ def test_the_loop_describes_rejections_through_the_interface():
     obs = {"rejected_actions": [{"action": {"name": "move"}, "error": "blocked"}]}
     decide_one_action(capture, agent, obs, _Loud())
     assert "- <<move>> -> blocked" in seen[0]
+
+
+def _texts(*replies):
+    """A text-only provider: each request returns the next reply and no tool call."""
+    queue = list(replies)
+
+    def request(messages, tools):
+        assert tools == []  # C1 offers the model nothing to call
+        return None, RequestRecord(raw_output=queue.pop(0))
+
+    return request
+
+
+def test_c1_reads_its_action_from_text_after_one_correction():
+    agent = _StubAgent()
+    request = _texts("Hmm, the raiders are close.", "ACTION: end turn")
+
+    call = decide_one_action(request, agent, {}, get_interface(C1))
+
+    assert call.name == "end_turn"
+    assert agent.telemetry.request_count == 2
+    assert agent.telemetry.requests[1].interpretation["layer"] == 0
+
+
+def test_c1_end_turn_note_reaches_the_scratchpad():
+    agent = _StubAgent()
+    request = _texts("ACTION: end turn \u2014 note: fireball when they bunch")
+
+    call = decide_one_action(request, agent, {}, get_interface(C1))
+
+    assert call.arguments == {}
+    assert agent.notes == "fireball when they bunch"
+
+
+def test_c1_unreadable_attempt_is_refused_not_retried():
+    agent = _StubAgent()
+    with pytest.raises(RejectedResponse) as refused:
+        decide_one_action(_texts("ACTION: attack"), agent, {}, get_interface(C1))
+    assert refused.value.code == "malformed_output"
+    assert agent.telemetry.request_count == 1

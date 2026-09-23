@@ -283,6 +283,17 @@ def test_scrub_survives_fields_being_filled_in_after_construction():
     assert secret not in data["error"]
 
 
+def test_how_a_response_was_read_is_scrubbed_too():
+    """C1 copies the model's text into `interpretation`, so it passes the same guard."""
+    secret = "sk-or-v1-0123456789abcdef0123"
+    record = RequestRecord(latency_ms=1.0)
+    record.interpretation = {"code": "malformed_output", "line": f"say {secret}"}
+
+    data = record.to_dict()
+    assert secret not in str(data["interpretation"])
+    assert data["interpretation"]["code"] == "malformed_output"
+
+
 def test_an_echoed_key_never_reaches_the_saved_transcript(
     make_entity, make_combat, tmp_path
 ):

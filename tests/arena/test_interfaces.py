@@ -10,6 +10,7 @@ condition-specific sentence in the shared body would be invisible and fatal.
 import pytest
 
 from src.arena.agent import RejectedResponse
+from src.arena.free_text import UNREAD_TEXT
 from src.arena.interfaces import (
     C1,
     C2,
@@ -24,8 +25,10 @@ from src.arena.telemetry import RequestRecord
 from src.arena.tools import TOOLS, ToolCall
 from src.errors import UNKNOWN_ACTION, UNKNOWN_TARGET
 
-#: Conditions using raw parameters. C3 uses choose(); C1 is registered but not built.
-BUILT = [C2, C2_MENU]
+#: Every condition, for the guarantees that must hold across all of them.
+ALL = [C1, C2, C2_MENU, C3]
+#: Conditions answering with raw-parameter tool calls. C3 uses choose(); C1 writes text.
+RAW = [C2, C2_MENU]
 
 
 def _obs():
@@ -57,7 +60,7 @@ def test_each_interface_reports_its_own_name():
 # -- the §3.1 guarantee ------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", BUILT)
+@pytest.mark.parametrize("name", ALL)
 def test_the_shared_body_is_byte_identical_in_every_condition(name):
     """The world model must not drift between conditions by so much as a character."""
     assert get_interface(name).system_prompt().startswith(SHARED_PROMPT)
@@ -71,7 +74,7 @@ def test_prompts_differ_only_in_the_action_section():
     and every between-condition result has a second possible cause.
     """
     remainders = set()
-    for name in BUILT:
+    for name in ALL:
         interface = get_interface(name)
         full = interface.system_prompt()
         remainders.add(full.replace(interface.action_prompt(), "").strip())
@@ -82,8 +85,8 @@ def test_prompts_differ_only_in_the_action_section():
 
 def test_the_action_sections_actually_differ():
     """A guarantee that everything is identical would be trivially satisfiable."""
-    sections = {get_interface(name).action_prompt() for name in BUILT}
-    assert len(sections) == len(BUILT)
+    sections = {get_interface(name).action_prompt() for name in ALL}
+    assert len(sections) == len(ALL)
 
 
 def test_the_shared_body_never_mentions_a_menu():
@@ -131,40 +134,124 @@ def test_shaping_does_not_mutate_the_callers_observation():
     assert "legal_actions" in observation
 
 
-@pytest.mark.parametrize("name", BUILT)
+@pytest.mark.parametrize("name", RAW)
 def test_raw_param_conditions_offer_the_full_tool_set(name):
     offered = {t["name"] for t in get_interface(name).api_tools(_obs())}
     assert offered == {t["name"] for t in TOOLS}
 
 
-@pytest.mark.parametrize("name", BUILT)
+@pytest.mark.parametrize("name", RAW)
 def test_a_raw_param_condition_passes_the_call_through(name):
     call = ToolCall("attack", {"action_name": "Dagger", "defender_id": "raider-1"})
     interpreted = get_interface(name).interpret(call, RequestRecord(), _obs())
     assert interpreted is call
 
 
-@pytest.mark.parametrize("name", BUILT)
+@pytest.mark.parametrize("name", RAW)
 def test_no_call_means_no_action(name):
     assert get_interface(name).interpret(None, RequestRecord(), _obs()) is None
 
 
-# -- what is not built yet ----------------------------------------------------
+# -- C1: plain text in a declared grammar ----------------------------------------
 
 
-def test_c1_declines_loudly_rather_than_degrading():
-    """Declining beats pretending (CLAUDE.md §1): a silently degraded condition would
-    produce data that looks fine and means nothing."""
-    interface = get_interface(C1)
-    with pytest.raises(NotImplementedError):
-        interface.interpret(None, RequestRecord(), _obs())
-    with pytest.raises(NotImplementedError):
-        interface.action_prompt()
+def _read(text):
+    """Interpret *text* as a C1 response; return (action, the request record)."""
+    record = RequestRecord(raw_output=text)
+    return get_interface(C1).interpret(None, record, _obs()), record
 
 
 def test_c1_offers_no_tools_at_all():
     """A text condition must not be handed a tool schema — that would be C2."""
     assert get_interface(C1).api_tools(_obs()) == []
+
+
+def test_c1_reads_an_action_from_the_models_text():
+    action, record = _read("ACTION: attack raider-1 with Dagger")
+
+    assert action == ToolCall(
+        "attack", {"action_name": "Dagger", "defender_id": "raider-1"}
+    )
+    assert record.interpretation == {"layer": 0, "line": "attack raider-1 with Dagger"}
+
+
+def test_c1_refuses_an_unreadable_line_with_a_code():
+    """An attempt the grammar cannot read is malformed_output, counted, not retried."""
+    with pytest.raises(RejectedResponse) as refused:
+        _read("ACTION: attack raider-1")
+
+    assert refused.value.code == "malformed_output"
+    assert refused.value.call == ToolCall(UNREAD_TEXT, {"text": "attack raider-1"})
+    assert "with <attack name>" in str(refused.value)
+
+
+def test_c1_records_how_a_refused_line_was_read():
+    record = RequestRecord(raw_output="ACTION: fly to x=0 z=0")
+    with pytest.raises(RejectedResponse):
+        get_interface(C1).interpret(None, record, _obs())
+    assert record.interpretation["code"] == "unknown_action"
+    assert record.interpretation["line"] == "fly to x=0 z=0"
+
+
+def test_c1_prose_without_an_action_takes_the_correction_path():
+    action, record = _read("Let me think about where the raiders will go.")
+    assert action is None
+    assert record.interpretation is None
+
+
+def test_c1_ignores_any_tool_call_a_provider_returns():
+    """No tools are offered; a stray call is not C1's answer — the text is."""
+    stray = ToolCall("end_turn", {})
+    record = RequestRecord(raw_output="ACTION: move to x=0 z=35")
+    action = get_interface(C1).interpret(stray, record, _obs())
+    assert action.name == "move"
+
+
+def test_c1_describes_rejections_in_its_own_syntax():
+    """C1 must never be shown C2's tool-call JSON when it errs."""
+    interface = get_interface(C1)
+    parsed = {
+        "name": "attack",
+        "arguments": {"action_name": "Dagger", "defender_id": "raider-3"},
+    }
+    unread = {"name": UNREAD_TEXT, "arguments": {"text": "attack raider-1"}}
+
+    assert interface.format_rejected(parsed) == "attack raider-3 with Dagger"
+    assert interface.format_rejected(unread) == '"attack raider-1"'
+    assert "{" not in interface.format_rejected(parsed)
+
+
+def test_c1_correction_asks_for_the_action_line():
+    assert "ACTION:" in get_interface(C1).correction()
+
+
+def test_c1_prompt_examples_are_canonical_and_name_no_study_creature():
+    """The worked examples must parse exactly, and must not hint at any real board.
+
+    An example naming a study creature or weapon would be advice for that scenario
+    rather than a description of the syntax.
+    """
+    from src.arena.free_text import read_response
+    from src.arena.scenarios import SCENARIOS
+
+    section = get_interface(C1).action_prompt()
+    examples = [
+        line.strip()
+        for line in section.splitlines()
+        if line.strip().startswith("ACTION: ") and "<" not in line
+    ]
+    assert len(examples) >= 2
+    for example in examples:
+        assert read_response(example).layer == 0, example
+
+    study_names = set()
+    for scenario in SCENARIOS.values():
+        for entity in scenario.build().combatants:
+            study_names |= {entity.entity_id, entity.name}
+            study_names |= {a.name for a in entity.stat_block.actions}
+            study_names |= set(entity.stat_block.known_spells)
+    for name in study_names:
+        assert name.casefold() not in section.casefold(), name
 
 
 def test_c3_is_a_menu_condition():
@@ -205,7 +292,7 @@ def test_move_requires_the_ground_plane():
 
 
 def test_the_raw_param_action_section_never_mentions_an_option_id():
-    for name in BUILT:
+    for name in RAW:
         section = get_interface(name).action_prompt().lower()
         assert "option_id" not in section
         assert "action_id" not in section
@@ -311,7 +398,7 @@ def test_c3_saying_nothing_is_still_not_a_refusal():
     assert get_interface(C3).interpret(None, RequestRecord(), _menu_obs()) is None
 
 
-@pytest.mark.parametrize("name", BUILT)
+@pytest.mark.parametrize("name", [C1, *RAW])
 def test_no_other_condition_sees_the_enumerated_list(name):
     """The flat list is C3's affordance; handing it over would leak the condition."""
     shown = get_interface(name).shape_observation(_menu_obs())
