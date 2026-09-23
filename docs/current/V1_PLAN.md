@@ -687,3 +687,37 @@ was fixed in the next commit, and CLAUDE.md §9 records the lesson.
 
 Next, slice 4: the offline strict/lenient re-scorer and the terminal audit-labelling tool.
 Then the Phase 2 pilot, with your go-ahead.
+
+#### Slice 4 closing note (2026-09-24) — C1's bounds and audit are built
+
+1,415 tests pass; flake8, mypy and Black are clean. Three feature commits: the lenient bound
+(`0933b47`), the re-scorer (`d2cf78f`) and the audit tool (`aaafa60`).
+
+- **`free_text.read_lenient`** is C1's registered upper bound. It is used only offline.
+  - It adds the repairs a careful reader would accept: an implied sole weapon, a bare
+    `(x, z)` pair, the first clause of a two-action line, and the last of several actions.
+  - It also drops a trailing justification (ledger A8). This is the one addition to the
+    registered list, recorded in prereg §7.
+  - One design point came up while building it. An A8 line is *accepted* by the primary
+    parser, with a weapon the executor refuses, so the bound has to offer a repaired
+    alternative for an accepted line too. A decision counts as valid if either reading
+    executes, so the bounds stay ordered strict ≤ primary ≤ lenient, and a test enforces it.
+- **`src/arena/rescore.py`** judges the lenient reading with the real executor.
+  - It replays each C1 match through `run_match`, and at every model decision it probes a
+    deep copy of the live combat.
+  - The replay must reproduce the transcript's state hashes, or that match is reported as
+    not re-scored rather than bounded on the wrong state.
+  - The report now writes `c1_bounds.csv` and a "C1 under three parsers" section.
+- **`src/arena/audit.py`**: `sample` / `label` / `score`.
+  - Sampling is blind and stratified. The label file holds only the text; the verdicts are
+    sealed in a separate key.
+  - Labelling is a resumable terminal loop, with each label validated as a C1 command.
+  - Scoring weights the false-reject and false-accept rates to the population and evaluates
+    the registered decision rule. That rule is now pinned to pooled point estimates, which
+    the original wording left unstated; registered before any data.
+- **Small refactors on the way:** `model_team` moved to `scenarios.py`, to avoid a report ↔
+  re-scorer import cycle, and replay's `actions_by_team` became public rather than being
+  imported across modules as a private name.
+
+**Phase 1 tooling is now complete.** Next: review what else Phase 1 needs rounded out before
+the Phase 2 pilot.

@@ -379,6 +379,19 @@ pilot frequencies rather than in advance.
   first clause of a two-action line. Both bounds are recomputed **offline** from the
   recorded raw text against the replayed game state. This covers first-attempt validity
   only; later attempts and tactics depend on the live parser and are labelled as such.
+  *As implemented (2026-09-24; `free_text.read_lenient`, `src/arena/rescore.py`):*
+  - **Strict:** accepted in one request at parse layer 0.
+  - **Lenient:** the primary first attempt was valid, *or* the lenient reading of the first
+    response's text executes. It is judged by the real executor on a deep copy of the game
+    state at that decision, rebuilt by replay, and the replay must match the transcript's
+    state hashes or the match is not re-scored.
+  - One repair is **added** to the registered list: a trailing justification is dropped
+    ("… with Dagger since it's adjacent"; ledger A8).
+  - The primary parser *accepts* such a line, with a weapon name the executor refuses. So
+    when a repair reads an accepted line as a different action, the bound offers that
+    alternative, and the decision counts as valid if either reading executes.
+  - The bounds are therefore ordered strict ≤ primary ≤ lenient for every decision, and a
+    test enforces this.
 - **Parser audit and the C1 decision rule (registered 2026-09-24).** 200 C1 first-attempt
   outputs from the **final** run are hand-labelled without sight of the parser's verdict.
   From these, the false-reject and false-accept rates are reported with intervals.
@@ -386,6 +399,19 @@ pilot frequencies rather than in advance.
   parser, (b) under the lenient bound, and (c) after adding the upper 95% bound of the
   audited false-reject rate back onto C1's validity. If (a) holds but (b) or (c) fails,
   the C1 comparison is reported as **exploratory**, with all three figures.
+  *As implemented (2026-09-24; `src/arena/audit.py`):*
+  - The sample is half parser-accepted and half parser-refused first attempts (all of a
+    stratum if it has fewer), shuffled together.
+  - The labeller sees only the text. A label is a canonical C1 command, or "no single
+    action".
+  - A **false reject** is a refused item the labeller read as one action. A **false
+    accept** is an accepted item read as a different action, or as none. Actions are
+    compared by meaning: names by identifier key, points with the ground y.
+  - Each stratum's rate is weighted by that stratum's share of all C1 first attempts, with
+    Wilson intervals scaled by the same share.
+  - The rule's three comparisons are judged on **pooled point estimates** of first-attempt
+    validity per model, with the intervals reported alongside. *(Registered here, before any
+    data: the original wording said "holds" without saying on what.)*
 - Seeds are **paired** across conditions (same scenario and seed in every cell). LLM
   nondeterminism breaks pairing after the first differing decision; this is stated as
   a limitation rather than corrected for.

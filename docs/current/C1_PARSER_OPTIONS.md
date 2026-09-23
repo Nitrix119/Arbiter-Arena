@@ -626,7 +626,7 @@ Each step is one small commit, test-first:
    round-trip property test. The parser lives in its own module (`src/arena/free_text.py`), and
    `FreeTextInterface` calls it. The tag goes into the transcript next to the action.
 6. ✅ *(`68c5e14`, `1a7af3d`)* **The C1 action prompt** (§6.1). Update the prompt-difference test to cover C1.
-7. **Offline re-scorer** for the bounds (§5 D), built with the analysis script: rebuild the state
+7. ✅ *(`0933b47`, `d2cf78f`, with the audit tool `aaafa60`)* **Offline re-scorer** for the bounds (§5 D), built with the analysis script: rebuild the state
    at decision *k* via `ReplayAgent`, re-parse, and send the result through the executor.
 8. ✅ *(slice 2 close-out)* Update `PREREGISTRATION.md`: §2 (C1 row), §6 (the parser tag), §7 (bounds and the audit rule),
    and §11 (close the blocking item).

@@ -170,6 +170,21 @@ python -m src.arena.study report results/pilot                           # repor
   retries it. Bad model behaviour is data and is never excluded.
 - **Live runs cost money.** Every non-mock run needs your explicit go-ahead. Use
   `provider = "mock"` for any offline check.
+- **C1's bounds** come with the report: `report/c1_bounds.csv` and the "C1 under three
+  parsers" section. Both are recomputed offline by replaying each C1 match.
+
+**The parser audit** (after the *final* run; PREREGISTRATION §7):
+
+```
+python -m src.arena.audit sample results/final --out audit/ --n 200   # blind, stratified
+python -m src.arena.audit label audit/                                # resumable; ? for help
+python -m src.arena.audit score audit/ --report results/final/report  # rates + decision rule
+```
+
+While labelling you see only the model's text. Type the one action a careful reader would
+take it to mean, as a C1 command, or `n` for no single action. `s` skips an item, and `q` (or
+Ctrl-D/Ctrl-Z) saves and quits. Every label is saved as you give it. Use a fresh sample on
+**final-run** output only: pilot output helped shape the parser, so it can't also judge it.
 
 ## 8. Troubleshooting
 

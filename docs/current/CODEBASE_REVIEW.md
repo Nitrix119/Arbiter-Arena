@@ -269,6 +269,9 @@ names where it should be addressed. Append; strike through and date an item when
   the corpus as a known boundary rather than patched with a clause heuristic before any real
   output exists. → Phase 2 pilot: if it occurs, add a published tolerance before the freeze
   (and it is exactly what the §7 audit's false-reject rate would expose).
+  *2026-09-24:* the **lenient bound** now drops a trailing justification, so the study's
+  upper bound already credits these lines. The primary parser is unchanged, pending pilot
+  evidence.
 - **A9. A call's arguments reach the transcript unscrubbed, in every condition.** The secret
   scrub runs on `RequestRecord` fields at serialisation, but `Transcript.action` logs
   `call.arguments` as-is — so a model that echoes a key-shaped string into an end-turn `note`,

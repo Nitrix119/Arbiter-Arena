@@ -231,6 +231,7 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
 | Type-check | `mypy src/` |
 | Run a study grid (resumable) | `python -m src.arena.study run GRID.toml --out results/<name>` (`--dry-run` to preview) |
 | Report on a study bundle | `python -m src.arena.study report results/<name>` |
+| C1 parser audit | `python -m src.arena.audit sample results/<name> --out audit/` → `… label audit/` → `… score audit/ --report results/<name>/report` |
 
 - **Check exit codes, not tails.** In a chained command, never pipe a check through `tail`/`head`
   unless `set -o pipefail` is on: the pipe reports the *last* command's status, so a failing
