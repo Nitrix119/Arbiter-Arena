@@ -274,6 +274,10 @@ names where it should be addressed. Append; strike through and date an item when
   field is scrubbed (added with it, 2026-09-24); the arguments path is older and shared.
   → final cleanup: scrub string arguments at the transcript boundary, with a test that writes
   a real transcript and greps it (the 2026-09-21 lesson).
+- **A10. ~~Menu length was never recorded.~~ Fixed 2026-09-24.** Prereg §2 records menu length
+  per decision as a cost covariate, but nothing wrote it, and a report could only have
+  recovered it by replaying. `DecisionTelemetry.menu_length` now holds the number of legal
+  options shown (menu conditions only), set by `ActionInterface.menu_length`.
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 

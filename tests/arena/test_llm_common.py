@@ -3,7 +3,7 @@
 import pytest
 
 from src.arena.agent import RejectedResponse
-from src.arena.interfaces import C1, C2_MENU, C3, get_interface
+from src.arena.interfaces import C1, C2, C2_MENU, C3, get_interface
 from src.arena.llm_common import (
     augment_tools_with_notes,
     capture_notes,
@@ -211,3 +211,29 @@ def test_c1_unreadable_attempt_is_refused_not_retried():
         decide_one_action(_texts("ACTION: attack"), agent, {}, get_interface(C1))
     assert refused.value.code == "malformed_output"
     assert agent.telemetry.request_count == 1
+
+
+def test_the_decision_records_how_long_a_menu_it_was_shown():
+    agent = _StubAgent()
+    observation = {"enumerated_actions": [], "legal_actions": {}}
+    from src.arena.enumeration import EnumeratedAction
+
+    observation["enumerated_actions"] = [
+        EnumeratedAction("end_turn", "End your turn", ToolCall("end_turn", {})),
+        EnumeratedAction("x", "X", ToolCall("end_turn", {})),
+    ]
+
+    def choose_end(messages, tools):
+        return ToolCall("choose", {"action_id": "end_turn"}), RequestRecord()
+
+    decide_one_action(choose_end, agent, observation, get_interface(C3))
+    assert agent.telemetry.menu_length == 2
+    assert agent.telemetry.to_dict()["menu_length"] == 2
+
+    decide_one_action(
+        lambda m, t: (ToolCall("end_turn", {}), RequestRecord()),
+        agent,
+        observation,
+        get_interface(C2),
+    )
+    assert agent.telemetry.menu_length is None

@@ -97,6 +97,9 @@ class DecisionTelemetry:
     """
 
     requests: List[RequestRecord] = field(default_factory=list)
+    #: How many legal options the model was shown (menu conditions only) — a cost
+    #: covariate the study records per decision (prereg §2).
+    menu_length: Optional[int] = None
 
     @property
     def request_count(self) -> int:
@@ -131,6 +134,7 @@ class DecisionTelemetry:
             "output_tokens": self.output_tokens,
             "latency_ms": round(self.latency_ms, 3),
             "served_model": self.served_model,
+            "menu_length": self.menu_length,
         }
 
 

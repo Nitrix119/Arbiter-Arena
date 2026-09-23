@@ -196,6 +196,17 @@ class ActionInterface(ABC):
         """The single re-prompt sent when :meth:`interpret` returns ``None``."""
         return "Respond with exactly one tool call."
 
+    def menu_length(self, observation: Dict[str, Any]) -> Optional[int]:
+        """How many legal options this decision was shown, or ``None`` without a menu.
+
+        A per-decision cost covariate (prereg §2): a longer menu is more input tokens.
+        Counted from the *unshaped* observation's enumerated list — the same distinct
+        options both menu conditions display, as a flat list (C3) or grouped (C2+M).
+        """
+        if not self.shows_menu:
+            return None
+        return len(observation.get("enumerated_actions", []))
+
     def format_rejected(self, action: Dict[str, Any]) -> str:
         """How a rejected action is described back to the model.
 

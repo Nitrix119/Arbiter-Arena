@@ -460,3 +460,20 @@ def test_no_raw_param_tool_points_at_a_menu_c2_does_not_have():
         assert "menu" not in tool["description"].lower(), tool["name"]
         for field in tool["input_schema"].get("properties", {}).values():
             assert "menu" not in field.get("description", "").lower(), tool["name"]
+
+
+# -- menu length: a cost covariate recorded per decision ----------------------------
+
+
+@pytest.mark.parametrize(
+    "name, shown", [(C1, False), (C2, False), (C2_MENU, True), (C3, True)]
+)
+def test_menu_length_is_counted_only_where_a_menu_is_shown(name, shown):
+    """Prereg §2 records menu length per decision; it exists only under a menu."""
+    _, _, observation = _aoe_mage_observation()
+    length = get_interface(name).menu_length(observation)
+
+    if shown:
+        assert length == len(observation["enumerated_actions"]) > 1
+    else:
+        assert length is None
