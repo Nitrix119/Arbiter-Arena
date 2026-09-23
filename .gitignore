@@ -148,3 +148,7 @@ Thumbs.db
 
 # Google Drive sync temp folders (appear briefly while Drive uploads the docs)
 docs/current/.tmp*
+
+# Study run output: result bundles and audit samples (published separately)
+results/
+audit/

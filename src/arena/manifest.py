@@ -66,6 +66,25 @@ def git_commit(root: Optional[Path] = None) -> Optional[str]:
     return out.stdout.strip() or None if out.returncode == 0 else None
 
 
+def git_dirty(root: Optional[Path] = None) -> Optional[bool]:
+    """Whether tracked files differ from the recorded commit, or ``None`` if unknown.
+
+    A commit sha names the code only if the tree is clean. Untracked files (results,
+    scratch output) do not count: they cannot change what ran.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            cwd=str(root or _REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return bool(out.stdout.strip()) if out.returncode == 0 else None
+
+
 def prompt_hash(*parts: str) -> str:
     """A stable fingerprint of the prompt text a match was run with.
 
@@ -112,6 +131,11 @@ class Manifest:
     model: Optional[str] = None
     temperature: Optional[float] = None
     prompt_hash: Optional[str] = None
+    #: The fixed opponent the model faced (``scripted`` / ``heuristic``).
+    opponent: Optional[str] = None
+    #: True when the run began with uncommitted changes to tracked files, so
+    #: ``commit`` alone does not name the code that ran.
+    git_dirty: Optional[bool] = None
     schema_versions: Dict[str, str] = field(
         default_factory=lambda: dict(SCHEMA_VERSIONS)
     )
@@ -120,6 +144,7 @@ class Manifest:
     def for_run(cls, **fields: Any) -> "Manifest":
         """Build a manifest, resolving the commit from the working tree by default."""
         fields.setdefault("commit", git_commit())
+        fields.setdefault("git_dirty", git_dirty())
         return cls(**fields)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -137,6 +162,8 @@ class Manifest:
             "model": self.model,
             "temperature": self.temperature,
             "prompt_hash": self.prompt_hash,
+            "opponent": self.opponent,
+            "git_dirty": self.git_dirty,
         }
         present = {k: v for k, v in data.items() if v is not None}
         present["schema_versions"] = dict(self.schema_versions)

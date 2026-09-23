@@ -43,7 +43,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tupl
 from src.arena.agent import Agent, ScriptedAgent
 from src.arena.error_codes import PROVIDER_ERROR
 from src.arena.interfaces import C1, C2, REGISTRY, ActionInterface, get_interface
-from src.arena.manifest import Manifest, interface_fingerprint
+from src.arena.manifest import Manifest, git_dirty, interface_fingerprint
 from src.arena.match import DEFAULT_ROUND_CAP, run_match
 from src.arena.scenarios import SCENARIOS
 from src.arena.transcript import Transcript
@@ -422,6 +422,7 @@ def play_cell(
         model=cell.model.id,
         temperature=cell.model.temperature,
         prompt_hash=interface_fingerprint(interface),
+        opponent=grid.opponent,
     )
     transcript = Transcript()
     try:
@@ -561,8 +562,23 @@ def run_grid(
     factories: Dict[str, ModelFactory] = MODEL_FACTORIES,
     sleep: Callable[[float], None] = time.sleep,
     echo: Callable[[str], None] = print,
+    allow_dirty: bool = False,
 ) -> RunSummary:
-    """Run every cell not already on disk. Resumable; stops at the spend cap."""
+    """Run every cell not already on disk. Resumable; stops at the spend cap.
+
+    Refuses to start a **live** run from a tree with uncommitted changes (unless
+    *allow_dirty*): the manifest's commit would then name code that did not run.
+    Stops at the first cell that exhausts its retries — a quota or an outage would
+    otherwise fail, and bill, every remaining cell in turn.
+    """
+    live = any(m.provider != PROVIDER_MOCK for m in grid.models)
+    if live and not allow_dirty and git_dirty():
+        reason = (
+            "the working tree has uncommitted changes, so the recorded commit would "
+            "not name the code that ran — commit first, or pass --allow-dirty"
+        )
+        echo(reason)
+        return RunSummary(stopped=reason)
     out.mkdir(parents=True, exist_ok=True)
     if grid_path is not None:
         shutil.copyfile(grid_path, out / GRID_COPY)
@@ -612,6 +628,13 @@ def run_grid(
         else:
             summary.failed.append(cell.label())
             log("cell_failed", cell=cell.label())
+            summary.stopped = (
+                f"{cell.label()} failed all {grid.max_attempts} attempts — stopping "
+                "(a quota or an outage?); resume to retry it first"
+            )
+            log("stop", reason=summary.stopped)
+            echo(summary.stopped)
+            break
 
     log("run_end", done=summary.done, skipped=summary.skipped, spent_usd=spend)
     return summary
@@ -641,6 +664,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     run.add_argument("--out", type=Path, required=True)
     run.add_argument("--dry-run", action="store_true")
     run.add_argument("--skip-preflight", action="store_true")
+    run.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="run live models from a tree with uncommitted changes (recorded)",
+    )
     report = commands.add_parser("report", help="summarise a result bundle")
     report.add_argument("bundle", type=Path)
     args = parser.parse_args(argv)
@@ -666,7 +694,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             for problem in problems:
                 print(f"preflight: {problem}", file=sys.stderr)
             return 3
-    summary = run_grid(grid, args.out, grid_path=args.grid)
+    summary = run_grid(
+        grid, args.out, grid_path=args.grid, allow_dirty=args.allow_dirty
+    )
     print(
         f"done {summary.done}, skipped {summary.skipped}, excluded attempts "
         f"{summary.excluded_attempts}, failed {len(summary.failed)}"

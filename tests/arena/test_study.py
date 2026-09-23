@@ -351,3 +351,74 @@ def test_hosts_are_for_openrouter_models_only():
         "hosts": ["DeepInfra"],
     }
     assert _grid(models=[live], spend_cap_usd=1.0).models[0].hosts == ("DeepInfra",)
+
+
+# -- robustness and a self-describing manifest (Phase 1 review F7-F9) -----------------
+
+
+def test_a_run_stops_at_the_first_cell_that_exhausts_its_retries(tmp_path):
+    """A quota or outage must not fail, and bill, every remaining cell in turn."""
+    attempts = []
+
+    def always_429(seat):
+        attempts.append(seat.name)
+        return _Raises(RateLimitError("429"))
+
+    summary = run_grid(
+        _grid(max_attempts=2, conditions=[C1, C2, C3]),
+        tmp_path,
+        factories={**MODEL_FACTORIES, PROVIDER_MOCK: always_429},
+        sleep=lambda _: None,
+        echo=lambda _: None,
+    )
+    assert len(attempts) == 2  # only the first cell was tried
+    assert summary.stopped and "failed all 2 attempts" in summary.stopped
+
+
+def _live_grid():
+    return _grid(
+        models=[
+            {
+                "id": "org/m",
+                "provider": "openrouter",
+                "usd_per_m_input": 0.1,
+                "usd_per_m_output": 0.1,
+            }
+        ],
+        spend_cap_usd=1.0,
+    )
+
+
+def test_a_live_run_refuses_a_dirty_tree(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.arena.study.git_dirty", lambda: True)
+    summary = run_grid(_live_grid(), tmp_path / "out", echo=lambda _: None)
+    assert summary.stopped and "uncommitted" in summary.stopped
+    assert not (tmp_path / "out").exists()  # refused before anything ran
+
+
+def test_a_mock_run_does_not_care_about_the_tree(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.arena.study.git_dirty", lambda: True)
+    assert run_grid(_grid(), tmp_path, echo=lambda _: None).done == 1
+
+
+def test_the_manifest_names_the_opponent_and_the_tree_state(tmp_path):
+    run_grid(_grid(), tmp_path, echo=lambda _: None)
+    (path,) = tmp_path.rglob("seed1.jsonl")
+    start = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+    assert start["opponent"] == "scripted"
+    assert "git_dirty" in start
+
+
+def test_the_heuristic_opponent_plays_and_replays(tmp_path):
+    from src.arena.replay import verify
+    from src.arena.scenarios import SCENARIOS
+
+    run_grid(
+        _grid(opponent="heuristic", scenarios=["alpha_strike"], conditions=[C3]),
+        tmp_path,
+        echo=lambda _: None,
+    )
+    (path,) = tmp_path.rglob("seed1.jsonl")
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+    assert records[0]["opponent"] == "heuristic"
+    assert verify(records, SCENARIOS["alpha_strike"].build).ok
