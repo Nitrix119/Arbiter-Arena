@@ -147,7 +147,10 @@ class MockModelAgent(Agent):
             messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]
         ) -> Tuple[Optional[ToolCall], RequestRecord]:
             prompt = "".join(str(m.get("content", "")) for m in messages)
-            answer = text if text is not None else json.dumps(call.arguments)
+            # Every written answer is text (C1) or a call (the tool conditions).
+            answer = text if text is not None else ""
+            if call is not None:
+                answer = answer or json.dumps(call.arguments)
             record = RequestRecord(
                 latency_ms=0.0,
                 input_tokens=_synthetic_tokens(prompt),
