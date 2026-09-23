@@ -1,7 +1,7 @@
 """The study grid runner: every cell, once, resumably, within a spend cap.
 
     python -m src.arena.study run GRID.toml --out results/<name> [--dry-run]
-    python -m src.arena.study report results/<name>   (added with the report)
+    python -m src.arena.study report results/<name>
 
 A **cell** is one match: model × condition × scenario × seed. The runner plays each
 through the ordinary :func:`~src.arena.match.run_match` — there is no second match path
@@ -599,7 +599,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     run.add_argument("--out", type=Path, required=True)
     run.add_argument("--dry-run", action="store_true")
     run.add_argument("--skip-preflight", action="store_true")
+    report = commands.add_parser("report", help="summarise a result bundle")
+    report.add_argument("bundle", type=Path)
     args = parser.parse_args(argv)
+
+    if args.command == "report":
+        from src.arena.study_report import write_report
+
+        for written in write_report(args.bundle):
+            print(f"wrote {written}")
+        return 0
 
     try:
         grid = load_grid(args.grid)
