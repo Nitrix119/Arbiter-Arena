@@ -319,10 +319,44 @@ def _menu_obs():
 
 
 def test_c3_offers_exactly_one_tool():
-    """The condition's whole point: one tool, one argument."""
+    """The condition's whole point: one tool, one required argument (plus the note)."""
     tools = get_interface(C3).api_tools(_menu_obs())
     assert [t["name"] for t in tools] == ["choose"]
-    assert list(tools[0]["input_schema"]["properties"]) == ["action_id"]
+    assert tools[0]["input_schema"]["required"] == ["action_id"]
+    assert set(tools[0]["input_schema"]["properties"]) == {"action_id", "note"}
+
+
+def test_a_c3_note_rides_on_ending_the_turn():
+    """Note parity: C3 can leave itself a reminder exactly where C2 can, at end_turn."""
+    call = ToolCall("choose", {"action_id": "end_turn", "note": "focus raider-2"})
+    resolved = get_interface(C3).interpret(call, RequestRecord(), _menu_obs())
+    assert resolved == ToolCall("end_turn", {"note": "focus raider-2"})
+
+
+def test_a_c3_note_on_any_other_choice_is_dropped():
+    """As in C2, where the note field exists only on end_turn."""
+    call = ToolCall("choose", {"action_id": "attack:dagger:raider-1", "note": "stray"})
+    resolved = get_interface(C3).interpret(call, RequestRecord(), _menu_obs())
+    assert "note" not in resolved.arguments
+
+
+def test_every_condition_can_leave_itself_a_note():
+    """A between-turn scratchpad in some conditions but not others is a confound.
+
+    C3 had none until 2026-09-24: the note field was added only to a tool *named*
+    end_turn, which C3 does not offer. Memory would then have differed by condition,
+    the same class of artefact as opaque ids or unlabelled coordinates.
+    """
+    from src.arena.llm_common import augment_tools_with_notes
+
+    for name in ALL:
+        interface = get_interface(name)
+        tools = augment_tools_with_notes(interface.api_tools(_menu_obs()))
+        in_schema = any(
+            "note" in t["input_schema"].get("properties", {}) for t in tools
+        )
+        in_prompt = "note:" in interface.action_prompt()
+        assert in_schema or in_prompt, name
 
 
 def test_c3_shows_ids_and_labels_but_never_raw_parameters():

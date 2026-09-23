@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional
 from src.arena.agent import RejectedResponse
 from src.arena.free_text import UNREAD_TEXT, read_response, render_command
 from src.arena.telemetry import RequestRecord
-from src.arena.tools import TOOLS, ToolCall
+from src.arena.tools import TOOL_END_TURN, TOOLS, ToolCall
 from src.errors import UNKNOWN_ACTION, UNKNOWN_TARGET
 
 #: Condition names, used in the manifest, transcripts and the batch grid.
@@ -328,7 +328,16 @@ CHOOSE_TOOL: Dict[str, Any] = {
             "action_id": {
                 "type": "string",
                 "description": "id of a listed action, copied exactly.",
-            }
+            },
+            # Note parity (prereg §2): every condition has a between-turn scratchpad,
+            # and in C2 it lives on end_turn — so here it rides on choosing it.
+            "note": {
+                "type": "string",
+                "description": (
+                    "Optional: when the chosen action ends your turn, a short "
+                    "reminder to your future self for next turn."
+                ),
+            },
         },
         "required": ["action_id"],
     },
@@ -397,7 +406,11 @@ class MenuInterface(ActionInterface):
             if action.action_id == chosen:
                 # A fresh ToolCall: the enumeration is rebuilt each decision and its
                 # arguments must not be mutable state shared with the menu.
-                return ToolCall(action.call.name, dict(action.call.arguments))
+                resolved = ToolCall(action.call.name, dict(action.call.arguments))
+                note = call.arguments.get("note")
+                if note and resolved.name == TOOL_END_TURN:
+                    resolved.arguments["note"] = note  # popped by capture_notes
+                return resolved
         raise RejectedResponse(
             UNKNOWN_TARGET,
             f"No listed action {chosen!r}; choose an action_id from the list.",

@@ -205,6 +205,25 @@ def test_c1_end_turn_note_reaches_the_scratchpad():
     assert agent.notes == "fireball when they bunch"
 
 
+def test_a_c3_end_turn_note_reaches_the_scratchpad():
+    from src.arena.enumeration import EnumeratedAction
+
+    agent = _StubAgent()
+    observation = {
+        "enumerated_actions": [
+            EnumeratedAction("end_turn", "End your turn", ToolCall("end_turn", {}))
+        ]
+    }
+
+    def choose(messages, tools):
+        call = ToolCall("choose", {"action_id": "end_turn", "note": "kite left"})
+        return call, RequestRecord()
+
+    call = decide_one_action(choose, agent, observation, get_interface(C3))
+    assert call == ToolCall("end_turn", {})
+    assert agent.notes == "kite left"
+
+
 def test_c1_unreadable_attempt_is_refused_not_retried():
     agent = _StubAgent()
     with pytest.raises(RejectedResponse) as refused:
