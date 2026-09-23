@@ -90,16 +90,23 @@ class LLMAgent(Agent):
         self, messages: List[Dict[str, Any]], api_tools: List[Dict[str, Any]]
     ) -> Tuple[Optional[ToolCall], RequestRecord]:
         """One Anthropic request; return its tool call (or None) and what it cost."""
+        # A text condition (C1) offers no tools, and the API refuses `tool_choice`
+        # without `tools` — so both are omitted rather than sent empty.
+        tool_fields: Dict[str, Any] = {}
+        if api_tools:
+            tool_fields = {
+                "tools": api_tools,
+                "tool_choice": {"type": "auto", "disable_parallel_tool_use": True},
+            }
         started = time.perf_counter()
         response = self._client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
             system=self.interface.system_prompt(),
             messages=messages,
-            tools=api_tools,
-            tool_choice={"type": "auto", "disable_parallel_tool_use": True},
             thinking={"type": "adaptive"},
             output_config={"effort": self.effort},
+            **tool_fields,
         )
         usage = getattr(response, "usage", None)
         record = RequestRecord(

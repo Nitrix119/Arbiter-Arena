@@ -249,3 +249,18 @@ def test_a_flaky_response_costs_a_failure_but_not_the_match(make_entity, make_co
     assert outcome.forced_end is False  # the agent still ended its own turn
     failed = [r for r in transcript.records_of("action") if r["result"]["ok"] is False]
     assert [r["result"]["code"] for r in failed] == [PROVIDER_ERROR]
+
+
+def test_a_text_condition_sends_no_tool_fields():
+    """C1 offers no tools; `tool_choice` without `tools` is an API error, so both go."""
+    message = SimpleNamespace(tool_calls=None, content="ACTION: end turn")
+    client = FakeClient([SimpleNamespace(choices=[SimpleNamespace(message=message)])])
+    agent = OpenRouterAgent("O", "a", client=client)
+
+    call, record = agent._request_action([{"role": "user", "content": "go"}], [])
+
+    kwargs = client.calls[0]
+    assert "tools" not in kwargs
+    assert "tool_choice" not in kwargs
+    assert call is None
+    assert record.raw_output == "ACTION: end turn"

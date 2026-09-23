@@ -150,15 +150,19 @@ class OpenRouterAgent(Agent):
         """One OpenRouter (chat-completions) request; return its tool call and cost."""
         system = self.interface.system_prompt()
         oai_messages = [{"role": "system", "content": system}, *messages]
+        # A text condition (C1) offers no tools, and the API refuses `tool_choice`
+        # without `tools` — so both are omitted rather than sent empty.
+        tool_fields: Dict[str, Any] = {}
+        if api_tools:
+            tool_fields = {"tools": _to_openai_tools(api_tools), "tool_choice": "auto"}
         started = time.perf_counter()
         response = self._client.chat.completions.create(
             model=self.model,
             messages=oai_messages,
-            tools=_to_openai_tools(api_tools),
-            tool_choice="auto",
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             extra_headers=_RANKING_HEADERS,
+            **tool_fields,
         )
         input_tokens, output_tokens = _usage(response)
         record = RequestRecord(

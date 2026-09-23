@@ -163,3 +163,21 @@ def test_llm_agent_drives_a_real_turn(make_entity, make_combat):
     assert outcome.forced_end is False
     assert len(client.calls) == 2
     assert combat.get_current_entity() is not fighter  # the turn advanced
+
+
+def test_a_text_condition_sends_no_tool_fields():
+    """C1 offers no tools, and the API rejects `tool_choice` without `tools`.
+
+    So both keys are omitted outright rather than sent empty, and the model's text is
+    kept verbatim in `raw_output` — under C1 that text *is* the answer.
+    """
+    client = FakeClient([response(text("ACTION: end turn"))])
+    agent = LLMAgent("A", "a", client=client)
+
+    call, record = agent._request_action([{"role": "user", "content": "go"}], [])
+
+    kwargs = client.calls[0]
+    assert "tools" not in kwargs
+    assert "tool_choice" not in kwargs
+    assert call is None
+    assert record.raw_output == "ACTION: end turn"
