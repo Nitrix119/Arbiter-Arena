@@ -593,3 +593,28 @@ Next: settle the above, then **C1**, then the batch runner and the analysis scri
 > **2026-09-24:** the options, a recommendation and four prerequisite wiring fixes are
 > written up in [`C1_PARSER_OPTIONS.md`](C1_PARSER_OPTIONS.md). **Decided 2026-09-24:** every
 > recommendation in its §9 accepted. Build order: slice 1 (parity prerequisites), then the parser.
+
+#### C1 slice 1 closing note (2026-09-24) — parity prerequisites done
+
+Three fixes to the **already-built** conditions, each one needed before a C1 parser could be fair.
+1,198 tests green; flake8, mypy and Black clean.
+
+- **Own capabilities in the shared body** (`b7e0fb4`). Under C1/C2 a creature's own attack and
+  spell names lived only in the stripped menu. The Mage could see the raiders' Greatsword but not
+  its own Dagger. That was a **live C2 confound**, and C2 → C2+M was measuring "being told what you
+  are" as well as affordance. Kept out of the state snapshot so recorded hashes are unaffected.
+- **Coded interface refusals** (`4b1198b`). A C3 invented `action_id` used to get an uncounted
+  free retry and was then logged as `no_tool_call`. It is now `unknown_target`, counted and fed
+  back exactly like a C2 executor refusal. Replay re-raises it by the same route. C1's
+  unparseable lines will use this path as `malformed_output`.
+- **Shared identifier resolver** (`d3f4151`). Tolerant of spelling (`Raider 1` = `raider-1`),
+  strict about identity (no edit distance), with ambiguity refused. One resolver serves every
+  raw-parameter condition, so C1 gets nothing C2 lacks. A scenario test keeps the study
+  rosters free of key collisions.
+
+All three change measured behaviour before the freeze, and all three are recorded in
+PREREGISTRATION §4.2 and §6. Prompt hashes change, which is expected.
+
+Next, slice 2: the adapters must handle an empty tool list, rejection feedback must be formatted
+per interface, then the Lark grammar, the layered parser, the §8 corpus and the round-trip property
+test.

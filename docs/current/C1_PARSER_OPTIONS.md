@@ -615,11 +615,11 @@ Two further tests matter more than any single item:
 
 Each step is one small commit, test-first:
 
-1. **Own capabilities in the shared observation** (§3.1), with a C2 name round-trip test. Prompt
+1. ✅ *(`b7e0fb4`)* **Own capabilities in the shared observation** (§3.1), with a C2 name round-trip test. Prompt
    hashes change, as expected.
-2. **Coded interface rejections** (§3.2): a generic route and the corrected docstrings. C3 unknown
+2. ✅ *(`4b1198b`)* **Coded interface rejections** (§3.2): a generic route and the corrected docstrings. C3 unknown
    ids move to `unknown_target`.
-3. **Shared identifier resolver** in `ToolExecutor` (decision 3), with the key-uniqueness test.
+3. ✅ *(`d3f4151`)* **Shared identifier resolver** in `ToolExecutor` (decision 3), with the key-uniqueness test.
 4. **Adapters handle an empty tool list** (§3.4), and **interface-formatted rejection feedback**
    (§3.3).
 5. **The C1 parser**: the grammar, the layers with per-layer tags, and the §8 corpus plus the
