@@ -225,3 +225,38 @@ after P1 adds a spell-JSON schema validator (E4) so the skill gets structured fe
   as a counted failure) rather than crash. Belongs with the batch-runner robustness work — a batch
   must survive one flaky response. Same fragility class as the dead default model
   (`DEFAULT_MODEL = nvidia/nemotron-nano-9b-v2:free` 404s; needs a live-model preflight).
+
+#### Interface-study ledger (C1 work, opened 2026-09-24)
+
+Problems noticed while building the conditions, logged here so they are fixed deliberately in
+a later slice or the final cleanup rather than folded silently into unrelated commits. Each
+names where it should be addressed. Append; strike through and date an item when fixed.
+
+- **A2. First-attempt validity must count the correction re-prompt as a failure.** A decision
+  whose first response contained no action gets one free re-prompt (`decide_one_action`), so a
+  decision can succeed "eventually" after a failed first attempt that no rejection records. The
+  H1 metric must treat `request_count > 1` *or* any rejection as first-attempt invalid, in
+  every condition alike. → slice 3 (analysis script).
+- **A3. `cast <area spell> at <creature>` sends `target_ids` to an AoE spell.** C1 reads that
+  phrasing into exactly the call a C2 model would send (parity holds), but how the engine
+  answers an AoE spell given targets and no point is unverified — if it is `engine_error`, both
+  conditions are being charged for an engine gap rather than a model error. → checked in C1
+  slice 2 (parser corpus); outcome recorded here.
+- **A4. Identifier tie-break with duplicate names.** The resolver tries ids before display
+  names, so with two creatures named "Goblin" (`goblin`, `goblin-2`) the spelling `Goblin`
+  resolves to `goblin`, though a reader might call it ambiguous. No study roster can hit this
+  (`test_every_identifier_in_a_scenario_has_its_own_key`); revisit if duplicate names enter the
+  study.
+- **A5. Multiple tool calls are handled differently per provider.** Anthropic disables parallel
+  tool use; OpenRouter's adapter silently takes the first of several calls. That is a provider
+  asymmetry inside C2/C2+M/C3 and discards evidence. Record the count of extra calls per
+  request so the analysis can see it. → final cleanup (before the pilot).
+- **A6. Capability entries carry an empty `description`** for every scenario attack
+  (`_serialize_action` reuse) — token noise in every prompt. Drop empty descriptions. → final
+  cleanup (changes prompt hashes; do before the freeze).
+- **A7. Repo hygiene.** CI lints `src/` and `web/` but not `tests/` (one pre-existing E501 in
+  `tests/arena/test_interfaces.py:1`); working copies have mixed line endings (LF/CRLF warnings
+  on files written by tooling) — add a `.gitattributes`. → final cleanup.
+- *(Known and declared in code, not duplicated here: multi-target spells are enumerated
+  nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
+
