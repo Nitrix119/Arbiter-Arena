@@ -84,6 +84,20 @@ def test_a_live_model_needs_prices_and_a_spend_cap():
     assert _grid(models=[priced], spend_cap_usd=5.0).models[0].id == "org/model"
 
 
+def test_stumbles_are_for_the_mock_only():
+    live = {
+        "id": "org/model",
+        "provider": "openrouter",
+        "usd_per_m_input": 0.1,
+        "usd_per_m_output": 0.1,
+        "stumble_on": [0],
+    }
+    with pytest.raises(GridError, match="mock only"):
+        _grid(models=[live], spend_cap_usd=1.0)
+    mock = _grid(models=[{"id": "mock", "provider": "mock", "stumble_on": [0, 3]}])
+    assert mock.models[0].stumble_on == (0, 3)
+
+
 def test_direct_anthropic_routing_is_refused():
     """Prereg §5: every live model goes through OpenRouter — no mixed routing."""
     with pytest.raises(GridError, match="OpenRouter"):

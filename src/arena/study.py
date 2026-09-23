@@ -85,6 +85,9 @@ class ModelSpec:
     temperature: float = 0.0
     usd_per_m_input: float = 0.0
     usd_per_m_output: float = 0.0
+    #: Mock only: decision indices at which the mock answers malformed, so an offline
+    #: grid exercises the refusal paths and the report's taxonomy.
+    stumble_on: Tuple[int, ...] = ()
 
     def cost_usd(self, input_tokens: int, output_tokens: int) -> float:
         return (
@@ -186,6 +189,14 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
                 f"{what} ({model_id}): usd_per_m_input and usd_per_m_output are "
                 "required for a live model — the spend cap is computed from them"
             )
+        stumble_on = entry.get("stumble_on", [])
+        if stumble_on and provider != PROVIDER_MOCK:
+            raise GridError(f"{what} ({model_id}): stumble_on is for the mock only")
+        if not isinstance(stumble_on, list) or not all(
+            isinstance(i, int) and not isinstance(i, bool) and i >= 0
+            for i in stumble_on
+        ):
+            raise GridError(f"{what}: stumble_on must be a list of decision indices")
         models.append(
             ModelSpec(
                 id=model_id,
@@ -193,6 +204,7 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
                 temperature=_number(entry, "temperature", 0.0, what),
                 usd_per_m_input=_number(entry, "usd_per_m_input", 0.0, what),
                 usd_per_m_output=_number(entry, "usd_per_m_output", 0.0, what),
+                stumble_on=tuple(stumble_on),
             )
         )
     if len({m.id for m in models}) != len(models):
@@ -293,7 +305,7 @@ def _mock_agent(
 ) -> Agent:
     from src.arena.mock_model import MockModelAgent
 
-    return MockModelAgent(name, team, interface)
+    return MockModelAgent(name, team, interface, stumble_on=spec.stumble_on)
 
 
 MODEL_FACTORIES: Dict[str, ModelFactory] = {
