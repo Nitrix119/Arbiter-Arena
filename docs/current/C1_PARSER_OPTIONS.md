@@ -607,7 +607,7 @@ Two further tests matter more than any single item:
 | 4 | Fix the missing own-capabilities in the shared observation first (§3.1) | **Yes, and first.** It is a live C2 confound regardless of C1 |
 | 5 | Route C1 parse failures (and C3 unknown ids) as coded rejections (§3.2) | **Yes** |
 | 6 | Audit size and the H1 decision rule (§7) | 200 labelled outputs; the (a)+(b)+(c) rule, with option E as the fallback |
-| 7 | Lark as a dependency (§6.3) | **Yes**, in `[agents]` and `[dev]` |
+| 7 | Lark as a dependency (§6.3) | **Yes**, and as a **core** dependency. *(Amended 2026-09-24 from "`[agents]` and `[dev]`": the parser is harness code, and replay, re-scoring and the audit must run with no LLM SDK installed.)* |
 
 ---
 
@@ -620,15 +620,15 @@ Each step is one small commit, test-first:
 2. ✅ *(`4b1198b`)* **Coded interface rejections** (§3.2): a generic route and the corrected docstrings. C3 unknown
    ids move to `unknown_target`.
 3. ✅ *(`d3f4151`)* **Shared identifier resolver** in `ToolExecutor` (decision 3), with the key-uniqueness test.
-4. **Adapters handle an empty tool list** (§3.4), and **interface-formatted rejection feedback**
+4. ✅ *(`7936b66`, `2ae97b2`)* **Adapters handle an empty tool list** (§3.4), and **interface-formatted rejection feedback**
    (§3.3).
-5. **The C1 parser**: the grammar, the layers with per-layer tags, and the §8 corpus plus the
+5. ✅ *(`992e364`)* **The C1 parser**: the grammar, the layers with per-layer tags, and the §8 corpus plus the
    round-trip property test. The parser lives in its own module (`src/arena/free_text.py`), and
    `FreeTextInterface` calls it. The tag goes into the transcript next to the action.
-6. **The C1 action prompt** (§6.1). Update the prompt-difference test to cover C1.
+6. ✅ *(`68c5e14`, `1a7af3d`)* **The C1 action prompt** (§6.1). Update the prompt-difference test to cover C1.
 7. **Offline re-scorer** for the bounds (§5 D), built with the analysis script: rebuild the state
    at decision *k* via `ReplayAgent`, re-parse, and send the result through the executor.
-8. Update `PREREGISTRATION.md`: §2 (C1 row), §6 (the parser tag), §7 (bounds and the audit rule),
+8. ✅ *(slice 2 close-out)* Update `PREREGISTRATION.md`: §2 (C1 row), §6 (the parser tag), §7 (bounds and the audit rule),
    and §11 (close the blocking item).
 
 **Debt and convolution note.** This removes two misclassification paths (C1 parse failures and

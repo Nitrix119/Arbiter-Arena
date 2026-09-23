@@ -333,8 +333,9 @@ The three conditions:
       (prompt text, tools, response decoder). Keep one `decide_one_action` skeleton, so there is no
       second agent loop (CLAUDE.md §2.7). _(`src/arena/interfaces.py`; a test asserts the assembled
       prompts differ **only** in the action section.)_
-- [ ] **C1:** grammar, deterministic parser, prompt examples. Tests include adversarial and
-      near-miss text. **The one substantial build left — see the C1 note in §10.**
+- [x] **C1:** grammar, deterministic parser, prompt examples. Tests include adversarial and
+      near-miss text. _(`src/arena/free_text.py`; the corpus is `tests/arena/test_free_text.py`.
+      Built in two slices, 2026-09-24. See the §10 closing notes.)_
 - [x] **C2:** the current tools with the menu stripped from the observation.
 - [x] **C3:** `enumerate_legal_actions` with stable deterministic IDs and a neutral candidate rule,
       plus a `choose(action_id)` tool. Every listed ID must execute successfully (a property test).
@@ -618,3 +619,38 @@ PREREGISTRATION §4.2 and §6. Prompt hashes change, which is expected.
 Next, slice 2: the adapters must handle an empty tool list, rejection feedback must be formatted
 per interface, then the Lark grammar, the layered parser, the §8 corpus and the round-trip property
 test.
+
+#### C1 slice 2 closing note (2026-09-24) — all four conditions are built
+
+C1 runs end to end offline. 1,287 tests green; flake8, mypy and Black clean. Six commits: the
+issues ledger (`36194e4`), adapters with an empty tool list (`7936b66`), per-condition rejection
+feedback (`2ae97b2`), the parser (`992e364`), the interface (`68c5e14`) and a whole offline C1
+match (`1a7af3d`).
+
+- **The parser** (`src/arena/free_text.py`) is a pure function of the text. Its Lark grammar is a
+  module constant, so the published grammar and the executed one are the same string. The
+  accept/reject boundary is a test table. Every accepted action records its parse layer, derived
+  by comparing the text with the canonical rendering of what was read.
+- **C1 can say everything C3 can list.** This is proved by a round-trip test over every
+  enumerated action in every scenario, at the opening and through a scripted match.
+- **A whole C1 match plays, records and replays at 100%.** A mocked model writes the scripted
+  policy's decisions as text, and everything after that is the real path.
+- **`lark` is a core dependency**, amended from the options doc's `[agents]` extra, because the
+  parser is harness code.
+
+Found on the way and logged in the CODEBASE_REVIEW §8 ledger, not fixed inline:
+
+- **A3 checked.** An area spell aimed at a creature is a typed `unknown_target`, identical in C1
+  and C2. That leaves only a taxonomy question.
+- **A8.** A trailing justification ("…with Dagger since it's adjacent") is read into the name. It
+  is pinned as a known boundary for the pilot to decide.
+- **A9.** Call arguments reach the transcript unscrubbed, in every condition.
+
+Also fixed: the prompt-identity tests had covered only C2 and C2+M, never C3. They now cover all
+four conditions.
+
+PREREGISTRATION now records the as-built C1 (§2), its refusal coding (§6), and the three-parser
+reporting and the audit decision rule (§7).
+
+Next, slice 3: the batch runner and the analysis script, with the offline strict/lenient
+re-scorer, the first-attempt metric (ledger A2) and the audit labelling tool.

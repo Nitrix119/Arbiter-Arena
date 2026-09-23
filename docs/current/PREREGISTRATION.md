@@ -78,6 +78,18 @@ failure is the `malformed_output` category. The parser is frozen before the pilo
 covered by adversarial and near-miss tests. It is **never** an LLM parser — that would
 introduce a second model into the measurement.
 
+*As built (2026-09-24; design in `C1_PARSER_OPTIONS.md`):* the parser is
+`src/arena/free_text.py`, deterministic and state-free (it imports nothing that can see
+the board). Its Lark grammar is the module constant `GRAMMAR`, so the published and the
+executed grammar are one string. The **accept/reject boundary is
+`tests/arena/test_free_text.py`**, a table giving every item's verdict, including known
+boundary cases pinned rather than patched. The parser checks *form* only. Names pass
+through to the executor's shared resolver and legality is refereed as in C2, so C1
+differs from C2 in the channel alone. Every accepted action records its **parse layer**
+(0 canonical, 1 surface-normalised, 2 grammatical but not canonical, 3 extracted from
+prose or untagged), in `RequestRecord.interpretation`. A test proves every action C3 can
+enumerate is expressible in C1 at layer 0.
+
 ---
 
 ## 3. Hypotheses
@@ -308,6 +320,12 @@ the failure budget, and is fed back, with no free correction. Only a response co
 no action at all takes the one correction re-prompt and, failing that, `no_tool_call`.
 Before this date a C3 invented id was logged as `no_tool_call` after an uncounted retry.
 
+A C1 refusal is logged as a call named `(unread_text)` carrying the line the model wrote,
+with the parser's code (`malformed_output`, or `unknown_action` for a line that does not
+start with a known verb) and the reason it was given. C1 text containing no action line
+at all is `no_tool_call` after the one correction, exactly as silence is in the tool
+conditions.
+
 Three entries differ from the V1_PLAN §3.4 draft, which was written before the codes
 met the engine's real refusal sites. `not_your_turn` is separated from
 `action_economy_spent` (they are different mistakes); "cannot afford" is split by the
@@ -336,6 +354,20 @@ pilot frequencies rather than in advance.
 
 - Decisions within a match are **not independent**. Per-decision rates use a
   **cluster (match-level) bootstrap**; win rates use **Wilson** intervals. **No Elo.**
+- **C1 is reported under three parsers (registered 2026-09-24).** The *primary* parser
+  is the one used live. A *strict* bound accepts only layer 0; a *lenient* bound adds the
+  defensible readings the primary parser refuses: an implied weapon when the creature has
+  only one attack, a bare `(x, z)` pair, the last of several differing actions, and the
+  first clause of a two-action line. Both bounds are recomputed **offline** from the
+  recorded raw text against the replayed game state. This covers first-attempt validity
+  only; later attempts and tactics depend on the live parser and are labelled as such.
+- **Parser audit and the C1 decision rule (registered 2026-09-24).** 200 C1 first-attempt
+  outputs from the **final** run are hand-labelled without sight of the parser's verdict.
+  From these, the false-reject and false-accept rates are reported with intervals.
+  *C1 < C2* in H1 is reported as **supported** only if it holds (a) under the primary
+  parser, (b) under the lenient bound, and (c) after adding the upper 95% bound of the
+  audited false-reject rate back onto C1's validity. If (a) holds but (b) or (c) fails,
+  the C1 comparison is reported as **exploratory**, with all three figures.
 - Seeds are **paired** across conditions (same scenario and seed in every cell). LLM
   nondeterminism breaks pairing after the first differing decision; this is stated as
   a limitation rather than corrected for.
@@ -417,7 +449,8 @@ against the incorrect figure.
       building C1.**
       Options analysed in `C1_PARSER_OPTIONS.md` (2026-09-24), including an offline
       strict/lenient re-scoring design and a parser audit rule. **Decided 2026-09-24:**
-      C1 runs; all recommendations accepted. Close this item when the parser is frozen.
+      C1 runs; all recommendations accepted. **Built 2026-09-24** (C1 slice 2); this
+      item closes when the parser is frozen with the rest at `study-freeze`.
 - [ ] Opponent: Scripted vs Heuristic, decided in the pilot
 - [ ] Whether `invalid_target_relation` splits, from pilot frequencies (§6)
 
