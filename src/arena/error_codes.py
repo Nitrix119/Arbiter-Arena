@@ -22,10 +22,11 @@ Two sources, joined here:
 
 from src.errors import ENGINE_ERROR_CODES
 
-#: The model produced no action at all (prose instead of a tool call, or, under the
-#: free-text condition, output the grammar parser could not read).
+#: The model answered, but not in a form that can be executed: a call missing a
+#: required argument, or, under the free-text condition, a line the grammar parser
+#: could not read.
 MALFORMED_OUTPUT = "malformed_output"
-#: The model called a tool that does not exist, or omitted a required argument.
+#: The model produced no action at all — prose or silence instead of a call.
 NO_TOOL_CALL = "no_tool_call"
 #: The provider itself failed — an empty/error payload, not a model decision. These are
 #: the §3.5 pre-declared exclusions: infra, never bad model behaviour.

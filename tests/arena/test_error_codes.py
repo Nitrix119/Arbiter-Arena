@@ -453,3 +453,32 @@ def test_every_tool_failure_carries_a_declared_code(make_entity, make_combat):
         result = executor.apply(fighter, call)
         assert result["ok"] is False, call
         assert result["code"] in codes.ALL_CODES, (call, result)
+
+
+def test_every_interface_refusal_raises_a_declared_code():
+    """A study condition's coded refusal lands in the taxonomy like any other.
+
+    ``RejectedResponse(CODE, ...)`` is raised in ``src/arena`` rather than the engine,
+    so the drift test above never sees it. Each site must name its code by a constant
+    that resolves to a declared code — a typo'd string would silently open a category
+    the analysis does not know.
+    """
+    sites = []
+    for path in sorted((_SRC / "arena").rglob("*.py")):
+        if path.name == "replay.py":
+            continue  # re-raises the code a transcript recorded, not a new one
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "RejectedResponse"
+            ):
+                code = node.args[0]
+                assert isinstance(code, ast.Name), f"{path.name}: use a named code"
+                value = getattr(engine_errors, code.id, None) or getattr(
+                    codes, code.id, None
+                )
+                assert value in codes.ALL_CODES, f"{path.name}: {code.id}"
+                sites.append(code.id)
+    assert sites, "no interface refusals found — has the scan gone stale?"

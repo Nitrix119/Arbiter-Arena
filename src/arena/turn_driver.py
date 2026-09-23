@@ -16,7 +16,7 @@ own ``end_turn`` (executed by the ``ToolExecutor``) or a single forced ``end_tur
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from src.arena.agent import Agent, NoToolCallError, ProviderError
+from src.arena.agent import Agent, NoToolCallError, ProviderError, RejectedResponse
 from src.arena.error_codes import NO_TOOL_CALL, PROVIDER_ERROR
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
 from src.arena.observation import build_observation, snapshot_state
@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 MAX_CONSECUTIVE_FAILURES = 3
 MAX_TOTAL_FAILURES = 5
 MAX_ACTIONS_PER_TURN = 20
+#: ``result["stage"]`` of a refusal made by the study condition, not the executor.
+INTERFACE_STAGE = "interface"
 
 
 @dataclass
@@ -88,6 +90,17 @@ def run_turn(
             call = ToolCall("(no_tool_call)", {})
             code = PROVIDER_ERROR if isinstance(exc, ProviderError) else NO_TOOL_CALL
             result = {"ok": False, "code": code, "error": str(exc)}
+            if isinstance(exc, RejectedResponse):
+                # The model *did* answer; its condition refused the answer with a code.
+                # Log the attempt and the real code, and mark the stage so a replay
+                # re-raises it rather than handing the call to the executor.
+                call = exc.call or call
+                result = {
+                    "ok": False,
+                    "code": exc.code,
+                    "error": str(exc),
+                    "stage": INTERFACE_STAGE,
+                }
         else:
             result = executor.apply(actor, call, policy)
         if transcript is not None:

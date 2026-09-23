@@ -2,10 +2,11 @@
 
 from typing import Any, Dict, List
 
-from src.arena.agent import Agent, NoToolCallError, ScriptedAgent
+from src.arena.agent import Agent, NoToolCallError, RejectedResponse, ScriptedAgent
 from src.arena.tools import ToolCall
 from src.arena.transcript import Transcript
 from src.arena.turn_driver import run_turn
+from src.errors import UNKNOWN_TARGET
 
 import math
 
@@ -201,3 +202,44 @@ def test_transcript_records_turn(make_entity, make_combat):
     assert transcript.records_of("turn_start")
     assert transcript.records_of("action")
     assert transcript.records_of("turn_end")
+
+
+class _RefusedAgent(Agent):
+    """Its every answer is refused by the interface with a code — an invented menu id."""
+
+    def __init__(self):
+        super().__init__("Refused", "a")
+        self.observations = []
+
+    def decide(self, observation):
+        self.observations.append(observation)
+        raise RejectedResponse(
+            UNKNOWN_TARGET,
+            "No listed action 'attack:dagger:ghost'.",
+            ToolCall("choose", {"action_id": "attack:dagger:ghost"}),
+        )
+
+
+def test_an_interface_refusal_is_recorded_with_its_code(make_entity, make_combat):
+    """Logged as the attempted call under its real code — not as `no_tool_call`."""
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+    agent = _RefusedAgent()
+    transcript = Transcript()
+
+    outcome = run_turn(combat, fighter, agent, transcript=transcript)
+
+    assert outcome.failures == 3  # counted against the budget
+    assert outcome.forced_end is True
+    first = transcript.records_of("action")[0]
+    assert first["call"] == {
+        "name": "choose",
+        "arguments": {"action_id": "attack:dagger:ghost"},
+    }
+    assert first["result"]["code"] == UNKNOWN_TARGET
+    assert first["result"]["stage"] == "interface"
+    # ...and fed back, so the model can correct itself like any rejection.
+    fed_back = agent.observations[1]["rejected_actions"][0]
+    assert fed_back["code"] == UNKNOWN_TARGET
+    assert fed_back["action"]["name"] == "choose"

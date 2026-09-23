@@ -60,6 +60,26 @@ class ProviderError(NoToolCallError):
         self.record = record
 
 
+class RejectedResponse(NoToolCallError):
+    """The model answered, but its study condition refused the answer, with a code.
+
+    Distinct from "said nothing": a C3 ``choose`` naming an id that is not on the list
+    is an *attempt* at a target that does not exist — the same ``unknown_target`` a C2
+    model gets for an invented entity id — and a C1 line the grammar cannot read is
+    ``malformed_output``. Raising this rather than returning ``None`` from
+    ``interpret`` keeps both out of the correction retry (C2's executor rejections get
+    no free second try either) and lets the turn driver log the real code and the call
+    that was attempted.
+
+    Subclasses :class:`NoToolCallError` so every existing handler still contains it.
+    """
+
+    def __init__(self, code: str, message: str, call: Optional[ToolCall]) -> None:
+        super().__init__(message)
+        self.code = code
+        self.call = call
+
+
 class Agent(ABC):
     """Base class: decides one action from an observation.
 

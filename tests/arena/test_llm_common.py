@@ -2,7 +2,8 @@
 
 import pytest
 
-from src.arena.interfaces import C2_MENU, get_interface
+from src.arena.agent import RejectedResponse
+from src.arena.interfaces import C2_MENU, C3, get_interface
 from src.arena.llm_common import (
     augment_tools_with_notes,
     capture_notes,
@@ -102,3 +103,28 @@ def test_a_failed_decision_still_reports_what_it_spent():
     assert agent.telemetry.input_tokens == 20
     assert agent.telemetry.output_tokens == 10
     assert agent.telemetry.latency_ms == 4.0
+
+
+def test_a_coded_refusal_is_not_retried():
+    """An answer the interface refuses with a code is a rejected action, not silence.
+
+    C2's executor rejections are counted with no free second try, so a condition-level
+    refusal must not get one either — otherwise C3 (and later C1) would be spared a
+    failure that C2 is charged for.
+    """
+    agent = _StubAgent()
+    requests = {"n": 0}
+
+    def invented_id(messages, tools):
+        requests["n"] += 1
+        return (
+            ToolCall("choose", {"action_id": "attack:dagger:nobody"}),
+            RequestRecord(latency_ms=1.0, input_tokens=10, output_tokens=5),
+        )
+
+    observation = {"enumerated_actions": []}
+    with pytest.raises(RejectedResponse):
+        decide_one_action(invented_id, agent, observation, get_interface(C3))
+
+    assert requests["n"] == 1
+    assert agent.telemetry.request_count == 1  # still accounted for

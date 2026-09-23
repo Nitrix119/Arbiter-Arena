@@ -26,8 +26,10 @@ as another entry rather than as a special case in the loop.
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
+from src.arena.agent import RejectedResponse
 from src.arena.telemetry import RequestRecord
 from src.arena.tools import TOOLS, ToolCall
+from src.errors import UNKNOWN_ACTION, UNKNOWN_TARGET
 
 #: Condition names, used in the manifest, transcripts and the batch grid.
 C1 = "C1"
@@ -142,10 +144,19 @@ class ActionInterface(ABC):
         record: RequestRecord,
         observation: Dict[str, Any],
     ) -> Optional[ToolCall]:
-        """Turn one model response into an executable :class:`ToolCall`, or ``None``.
+        """Turn one model response into an executable :class:`ToolCall`.
 
-        ``None`` means "the model did not produce an action I can use", which the
-        shared loop answers with one correction and then a loud failure. Taking both
+        Two ways to decline, and they mean different things:
+
+        * return ``None`` — the model produced **no action at all** (prose, silence).
+          The shared loop answers with one correction and then a loud failure, logged
+          as ``no_tool_call``.
+        * raise :class:`~src.arena.agent.RejectedResponse` — the model **did** answer,
+          and this condition refuses the answer with a taxonomy code. It is logged as
+          a rejected action under that code, with no free retry, exactly as an
+          executor refusal would be.
+
+        Taking both
         the decoded *call* and the raw *record* lets a text condition read
         ``record.raw_output`` without the loop knowing which kind of condition it is
         driving.
@@ -282,19 +293,32 @@ class MenuInterface(ActionInterface):
     ) -> Optional[ToolCall]:
         """Resolve a chosen id back to the real action.
 
-        An id that is not on the list returns ``None`` rather than a guess: the shared
-        loop then re-prompts once and, failing that, records a refusal. Resolving a
-        near-miss would silently repair a hallucination the study is trying to count.
+        An id that is not on the list is refused as ``unknown_target`` — never
+        resolved to its nearest neighbour, which would silently repair a hallucination
+        the study is trying to count. It is the C2 analogue of naming an entity that
+        does not exist, so it is coded and charged the same way. Calling any tool but
+        ``choose`` is ``unknown_action``: this condition offers no other.
         """
-        if call is None or call.name != CHOOSE_TOOL["name"]:
+        if call is None:
             return None
+        if call.name != CHOOSE_TOOL["name"]:
+            raise RejectedResponse(
+                UNKNOWN_ACTION,
+                f"Unknown tool {call.name!r}: the only tool is "
+                "choose(action_id=...).",
+                call,
+            )
         chosen = call.arguments.get("action_id")
         for action in observation.get("enumerated_actions", []):
             if action.action_id == chosen:
                 # A fresh ToolCall: the enumeration is rebuilt each decision and its
                 # arguments must not be mutable state shared with the menu.
                 return ToolCall(action.call.name, dict(action.call.arguments))
-        return None
+        raise RejectedResponse(
+            UNKNOWN_TARGET,
+            f"No listed action {chosen!r}; choose an action_id from the list.",
+            call,
+        )
 
     def correction(self) -> str:
         return (

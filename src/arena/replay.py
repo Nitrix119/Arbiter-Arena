@@ -28,11 +28,12 @@ rebuilding needs nothing but the scenario — no seeding dance to make ids line 
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from src.arena.agent import Agent, NoToolCallError, ProviderError
+from src.arena.agent import Agent, NoToolCallError, ProviderError, RejectedResponse
 from src.arena.error_codes import PROVIDER_ERROR
 from src.arena.match import run_match
 from src.arena.tools import ToolCall
 from src.arena.transcript import Transcript
+from src.arena.turn_driver import INTERFACE_STAGE
 from src.combat.combat_system import CombatSystem
 
 #: The placeholder the turn driver logs when an agent produced no call at all.
@@ -91,6 +92,16 @@ class ReplayAgent(Agent):
         self._index += 1
 
         name = record["call"]["name"]
+        result = record.get("result", {})
+        if result.get("stage") == INTERFACE_STAGE:
+            # A refusal by the study condition: re-raise it, so the driver logs it by
+            # the same route. Handing the call to the executor instead would record a
+            # different code for the same history.
+            raise RejectedResponse(
+                result.get("code", ""),
+                result.get("error", "refused (replayed)"),
+                ToolCall(name, dict(record["call"].get("arguments", {}))),
+            )
         if name == NO_TOOL_CALL_NAME:
             # Reproduce the original non-decision, with its original flavour, so the
             # failure budget advances exactly as it did the first time.

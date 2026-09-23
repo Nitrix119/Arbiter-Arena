@@ -126,6 +126,39 @@ def test_a_no_tool_call_failure_replays(make_entity, make_combat):
     assert report.ok, report.detail
 
 
+def test_an_interface_refusal_replays_by_the_same_route(make_entity, make_combat):
+    """A coded refusal is re-raised on replay, never handed to the executor.
+
+    The recorded call (`choose(...)`) is not a tool the executor knows, so replaying it
+    through the executor would log `unknown_action` where the original logged
+    `unknown_target` — the same history under a different code.
+    """
+    from src.arena.agent import RejectedResponse
+
+    combat, build = _combat_with_a_stubborn_agent()
+    transcript = Transcript()
+    run_match(
+        combat,
+        {"a": _RefusedThenEnd("A", "a"), "b": ScriptedAgent("B", "b")},
+        seed=5,
+        transcript=transcript,
+    )
+
+    refused = [
+        r
+        for r in transcript.records_of("action")
+        if r["result"].get("stage") == "interface"
+    ]
+    assert refused and refused[0]["result"]["code"] == "unknown_target"
+    assert verify(transcript.records, build).ok
+
+    replayer = ReplayAgent("A", "a", refused)
+    with pytest.raises(RejectedResponse) as again:
+        replayer.decide({})
+    assert again.value.code == "unknown_target"
+    assert again.value.call.name == "choose"
+
+
 # -- the verifier must be able to fail ---------------------------------------
 
 
@@ -351,4 +384,24 @@ class _NoToolCallThenEnd(Agent):
         if not self._failed:
             self._failed = True
             raise NoToolCallError("the model said nothing useful")
+        return ToolCall(TOOL_END_TURN, {})
+
+
+class _RefusedThenEnd(Agent):
+    """Has one answer refused by the interface with a code, then ends."""
+
+    def __init__(self, name, team):
+        super().__init__(name, team)
+        self._refused = False
+
+    def decide(self, observation):
+        from src.arena.agent import RejectedResponse
+
+        if not self._refused:
+            self._refused = True
+            raise RejectedResponse(
+                "unknown_target",
+                "No listed action 'attack:dagger:ghost'.",
+                ToolCall("choose", {"action_id": "attack:dagger:ghost"}),
+            )
         return ToolCall(TOOL_END_TURN, {})

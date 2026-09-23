@@ -9,6 +9,7 @@ condition-specific sentence in the shared body would be invisible and fatal.
 
 import pytest
 
+from src.arena.agent import RejectedResponse
 from src.arena.interfaces import (
     C1,
     C2,
@@ -21,6 +22,7 @@ from src.arena.interfaces import (
 )
 from src.arena.telemetry import RequestRecord
 from src.arena.tools import TOOLS, ToolCall
+from src.errors import UNKNOWN_ACTION, UNKNOWN_TARGET
 
 #: Conditions using raw parameters. C3 uses choose(); C1 is registered but not built.
 BUILT = [C2, C2_MENU]
@@ -270,21 +272,43 @@ def test_c3_resolution_does_not_alias_the_menu():
     assert second.arguments == {}
 
 
+def _refusal(call, observation):
+    """Interpret *call* under C3 and return the coded refusal it must raise."""
+    with pytest.raises(RejectedResponse) as refused:
+        get_interface(C3).interpret(call, RequestRecord(), observation)
+    return refused.value
+
+
 def test_c3_refuses_an_invented_id_rather_than_guessing():
-    """Resolving a near-miss would silently repair a hallucination the study counts."""
+    """Resolving a near-miss would silently repair a hallucination the study counts.
+
+    The refusal is *coded*: an invented id names a target that does not exist, the
+    same `unknown_target` a C2 model gets for an invented entity id. It used to be a
+    bare `None`, which the shared loop answered with a free correction and then logged
+    as `no_tool_call` — miscoding it and sparing C3 a failure C2 would be charged.
+    """
     call = ToolCall("choose", {"action_id": "attack:dagger:raider-9"})
-    assert get_interface(C3).interpret(call, RequestRecord(), _menu_obs()) is None
+    refused = _refusal(call, _menu_obs())
+
+    assert refused.code == UNKNOWN_TARGET
+    assert refused.call is call  # the attempt is kept, for the transcript
+    assert "attack:dagger:raider-9" in str(refused)
 
 
 def test_c3_refuses_a_call_to_any_other_tool():
-    """A model reaching past `choose` is not acting in this condition."""
+    """A model reaching past `choose` is calling a tool this condition does not have."""
     direct = ToolCall("attack", {"action_name": "Dagger", "defender_id": "raider-1"})
-    assert get_interface(C3).interpret(direct, RequestRecord(), _menu_obs()) is None
+    assert _refusal(direct, _menu_obs()).code == UNKNOWN_ACTION
 
 
-def test_c3_with_nothing_enumerated_produces_no_action():
+def test_c3_with_nothing_enumerated_refuses_the_id():
     call = ToolCall("choose", {"action_id": "end_turn"})
-    assert get_interface(C3).interpret(call, RequestRecord(), _obs()) is None
+    assert _refusal(call, _obs()).code == UNKNOWN_TARGET
+
+
+def test_c3_saying_nothing_is_still_not_a_refusal():
+    """No call at all keeps the correction path: that is `no_tool_call`, not a code."""
+    assert get_interface(C3).interpret(None, RequestRecord(), _menu_obs()) is None
 
 
 @pytest.mark.parametrize("name", BUILT)

@@ -141,7 +141,9 @@ def decide_one_action(
     there is exactly one agent path no matter how many conditions exist (CLAUDE.md §3).
 
     If the interface cannot make an action out of the response we re-prompt once; if it
-    still cannot, we fail loudly (never silently end the turn).
+    still cannot, we fail loudly (never silently end the turn). A response the interface
+    *refuses with a code* (:class:`~src.arena.agent.RejectedResponse`) is not retried:
+    it propagates to the turn driver as a rejected action, as an executor refusal would.
 
     Every request's cost is accumulated onto ``agent.telemetry`` as it happens — before
     any raise — so a decision that ended in failure still reports the tokens it spent.
