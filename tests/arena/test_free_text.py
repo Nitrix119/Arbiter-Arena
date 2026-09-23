@@ -313,3 +313,68 @@ def test_the_parser_never_looks_at_the_board():
             imported.update(alias.name for alias in node.names)
     allowed = {"src.arena.tools", "src.arena.error_codes", "src.errors"}
     assert {m for m in imported if m.startswith("src")} <= allowed, imported
+
+
+# -- the lenient bound (offline re-scoring only; prereg §7) ------------------------------
+
+from src.arena.free_text import LENIENT_LAYER, read_lenient  # noqa: E402
+
+#: (text, sole attack name, expected call). Each row is a registered lenient reading
+#: the primary parser refuses.
+LENIENT = [
+    # A trailing justification is dropped (ledger A8).
+    ("ACTION: attack raider-1 with Dagger since it's adjacent", None, _attack()),
+    ("ACTION: attack raider-1 with Dagger because it is closest", None, _attack()),
+    # The first clause of a two-action line.
+    ("ACTION: attack raider-1 with Dagger then move to x=0 z=0", None, _attack()),
+    ("ACTION: attack raider-1 with Dagger; end turn", None, _attack()),
+    # The last of several differing actions.
+    (
+        "ACTION: attack raider-2 with Dagger\nACTION: attack raider-1 with Dagger",
+        None,
+        _attack(),
+    ),
+    # A bare pair read as (x, z).
+    ("ACTION: cast Fireball at (7.5, 60)", None, _cast_at_point(7.5, 60)),
+    ("ACTION: move to 0, 35", None, _move(0, 35)),
+    # An implied weapon, when the creature has exactly one attack.
+    ("ACTION: attack raider-1", "Dagger", _attack()),
+]
+
+
+@pytest.mark.parametrize("text, sole_attack, call", LENIENT)
+def test_the_lenient_bound_accepts_what_it_registers(text, sole_attack, call):
+    # The primary parser refuses it, or (A8) reads it as a different action ...
+    assert read_response(text).call != call
+    reading = read_lenient(text, sole_attack=sole_attack)
+    assert reading.call == call  # ... the lenient bound reads it
+    assert reading.layer == LENIENT_LAYER
+
+
+#: Accepted rows no repair touches. The A8 boundary row is the one exception: primary
+#: accepts it with a junk weapon, and lenient offers the repaired alternative.
+_UNTOUCHED = [row for row in ACCEPTED if "since" not in row[0]]
+
+
+@pytest.mark.parametrize("text, call, layer", _UNTOUCHED)
+def test_the_lenient_bound_never_changes_a_primary_reading(text, call, layer):
+    """A bound, not a different parser: whatever primary accepts, lenient keeps."""
+    reading = read_lenient(text, sole_attack="Dagger")
+    assert (reading.call, reading.layer) == (call, layer)
+
+
+@pytest.mark.parametrize(
+    "text, sole_attack",
+    [
+        ("ACTION: attack raider-1", None),  # no single attack to imply
+        ("ACTION: fly to x=0 z=0", "Dagger"),  # still not an action
+        ("ACTION: move toward raider-1", "Dagger"),  # still no point
+        ("Let me think about it.", "Dagger"),  # still no action at all
+    ],
+)
+def test_the_lenient_bound_still_refuses_what_no_reader_could_resolve(
+    text, sole_attack
+):
+    reading = read_lenient(text, sole_attack=sole_attack)
+    assert reading.call is None
+    assert reading == read_response(text)  # refused exactly as primary refuses

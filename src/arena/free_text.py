@@ -425,3 +425,76 @@ def read_response(text: Optional[str]) -> Reading:
     first = readable[0]
     assert first.call is not None
     return Reading(first.call, 3, first.line, None, "")
+
+
+# -- the lenient bound (offline re-scoring only) -------------------------------------
+
+#: The layer a reading gets when only the lenient bound could make it.
+LENIENT_LAYER = 4
+
+_JUSTIFICATION = re.compile(
+    r"\s+(?:since|because|as|so that|so|to\s+(?:avoid|stay|keep|finish|get))\b.*$",
+    re.IGNORECASE,
+)
+_NUMBER = r"-?\d+(?:\.\d+)?"
+_BARE_PAIR = re.compile(rf"\(\s*({_NUMBER})\s*,\s*({_NUMBER})\s*\)")
+_TRAILING_PAIR = re.compile(rf"\b(at|to)\s+({_NUMBER})\s*,\s*({_NUMBER})\s*$", re.I)
+_HAS_WEAPON = re.compile(r"\b(?:with|using)\b", re.IGNORECASE)
+
+
+def _repair(line: str, sole_attack: Optional[str]) -> str:
+    """Apply every registered lenient repair to one command line, in a fixed order."""
+    line = _JUSTIFICATION.sub("", line)
+    second = _SECOND_ACTION.search(line)
+    if second:
+        line = line[: second.start()]
+    line = line.strip().rstrip(",;").strip()
+    line = _BARE_PAIR.sub(r"x=\1 z=\2", line)
+    line = _TRAILING_PAIR.sub(r"\1 x=\2 z=\3", line)
+    words = _LEADING_FILLER.sub("", line).split()
+    is_attack = bool(words) and words[0].casefold() in _ATTACK_WORDS
+    if is_attack and sole_attack and not _HAS_WEAPON.search(line):
+        line = f"{line} with {sole_attack}"
+    return line
+
+
+def read_lenient(text: Optional[str], *, sole_attack: Optional[str] = None) -> Reading:
+    """The most any defensible parser could accept — for offline re-scoring only.
+
+    Registered in PREREGISTRATION §7 as C1's upper bound. It is **never** used live.
+    Whatever the primary parser accepts is returned unchanged, unless a repair reads
+    that same line as a *different* action, which is then offered as the alternative
+    (layer 4). Otherwise the candidate lines (the tagged ones, or every line if none is
+    tagged) are tried **last first**, with these repairs applied:
+
+    * drop a trailing justification ("… since it's adjacent"; ledger A8);
+    * keep the first clause of a two-action line;
+    * read a bare ``(x, z)`` pair, or a trailing ``at x, z``, as ground coordinates;
+    * add the weapon to an attack that names none, if the creature has exactly one
+      (*sole_attack*, passed in as data so this module still never sees the board).
+
+    Trying the last line first is the "last of several differing actions" reading. A
+    line that no repair makes readable leaves the primary verdict standing, so the
+    bound can only ever add acceptances.
+    """
+    primary = read_response(text)
+    if text is None:
+        return primary
+    if primary.call is not None:
+        # The primary reading stands unless a repair reads the same line differently:
+        # "with Dagger since it's adjacent" *parses*, with a weapon the executor will
+        # refuse. The alternative is offered, never forced — the re-scorer counts the
+        # decision valid if either reading executes, so the bound only adds.
+        repaired = _read_command(_repair(primary.line or "", sole_attack))
+        if repaired.call is not None and repaired.call != primary.call:
+            return Reading(repaired.call, LENIENT_LAYER, primary.line, None, "")
+        return primary
+
+    lines = [ln for ln in text.splitlines() if not _FENCE.match(ln)]
+    content = [surface(ln) for ln in lines if surface(ln)]
+    tagged = [m.group(1) for m in (_TAG.match(ln) for ln in content) if m]
+    for line in reversed(tagged or content):
+        reading = _read_command(_repair(line, sole_attack))
+        if reading.call is not None:
+            return Reading(reading.call, LENIENT_LAYER, line, None, "")
+    return primary
