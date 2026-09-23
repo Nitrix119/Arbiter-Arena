@@ -16,7 +16,7 @@ exception and wires a scoped spell registry.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.arena.setup import build_combat
 from src.combat.combat_system import CombatSystem
@@ -269,3 +269,19 @@ SCENARIOS: Dict[str, Scenario] = {
         build=_build_aoe_placement,
     ),
 }
+
+
+def model_team(start: Dict[str, Any], records: List[Dict[str, Any]]) -> Optional[str]:
+    """Which team the model played in a transcript: the scenario's ``llm_team``.
+
+    For a roster no scenario names, the model's team is the one whose decisions carry
+    telemetry — the only side that called a provider.
+    """
+    scenario = SCENARIOS.get(start.get("scenario", ""))
+    if scenario is not None:
+        return scenario.llm_team
+    by_actor = {a: t for t, ids in start.get("teams", {}).items() for a in ids}
+    for record in records:
+        if record.get("kind") == "action" and record.get("telemetry"):
+            return by_actor.get(record["actor_id"])
+    return None

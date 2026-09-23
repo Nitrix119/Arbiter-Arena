@@ -221,7 +221,7 @@ def _rows(text):
 
 
 def test_the_report_counts_exactly_the_injected_stumbles(bundle):
-    decisions_csv, matches_csv, summary = build_report(bundle)
+    decisions_csv, matches_csv, _, summary = build_report(bundle)
     decisions = _rows(decisions_csv)
     matches = _rows(matches_csv)
 
@@ -261,7 +261,7 @@ def test_the_report_is_byte_identical_every_run(bundle):
     first = [p.read_bytes() for p in sorted((bundle / "report").iterdir())]
     assert main(["report", str(bundle)]) == 0
     second = [p.read_bytes() for p in sorted((bundle / "report").iterdir())]
-    assert first == second and len(first) == 3
+    assert first == second and len(first) == 4
 
 
 def test_decision_rows_carry_every_registered_field():
@@ -292,3 +292,18 @@ def test_the_harness_itself_adds_no_between_condition_effect(bundle):
         by_cell.setdefault(key, set()).add(tuple(match[k] for k in outcome))
     assert len(by_cell) == 4
     assert all(len(outcomes) == 1 for outcomes in by_cell.values()), by_cell
+
+
+def test_c1_is_reported_under_three_ordered_parsers(bundle):
+    """Prereg §7: strict <= primary <= lenient, per decision, from the recorded text."""
+    _, _, bounds_csv, summary = build_report(bundle)
+    rows = _rows(bounds_csv)
+
+    assert rows and {r["match"].split("/")[1] for r in rows} == {"C1"}
+    for row in rows:
+        strict, primary, lenient = (
+            row[k] == "True" for k in ("strict", "primary", "lenient")
+        )
+        assert strict <= primary <= lenient, row
+    assert "## C1 under three parsers (prereg §7)" in summary
+    assert "Not re-scored" not in summary  # every C1 match replayed

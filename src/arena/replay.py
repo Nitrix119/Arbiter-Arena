@@ -116,7 +116,7 @@ class ReplayDivergence(RuntimeError):
     """The replay could not follow the transcript (not a hash mismatch)."""
 
 
-def _actions_by_team(
+def actions_by_team(
     records: Sequence[Dict[str, Any]], teams: Dict[str, List[str]]
 ) -> Dict[Optional[str], List[Dict[str, Any]]]:
     """Group recorded actions by the team of the entity that took them.
@@ -171,7 +171,7 @@ def verify(
             ),
         )
 
-    grouped = _actions_by_team(records, start["teams"])
+    grouped = actions_by_team(records, start["teams"])
     agents: Dict[Optional[str], Agent] = {
         team: ReplayAgent(f"replay:{team}", team, calls)
         for team, calls in grouped.items()

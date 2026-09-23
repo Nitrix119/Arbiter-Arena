@@ -41,7 +41,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from src.arena.free_text import UNREAD_TEXT
 from src.arena.interfaces import REGISTRY
 from src.arena.metrics import area_hits, compute_report
-from src.arena.scenarios import SCENARIOS
+from src.arena.rescore import Bounded, RescoreError, rescore
+from src.arena.scenarios import SCENARIOS, model_team
 from src.utils import dice
 
 REPORT_DIR = "report"
@@ -211,21 +212,9 @@ def classify(call: Dict[str, Any]) -> Tuple[str, Optional[bool]]:
     return "unknown_tool", None
 
 
-def _model_team(start: Dict[str, Any], records: List[Dict[str, Any]]) -> Optional[str]:
-    scenario = SCENARIOS.get(start.get("scenario", ""))
-    if scenario is not None:
-        return scenario.llm_team
-    # An unknown roster: the model's team is the one whose decisions cost something.
-    by_actor = {a: t for t, ids in start.get("teams", {}).items() for a in ids}
-    for record in records:
-        if record.get("kind") == "action" and record.get("telemetry"):
-            return by_actor.get(record["actor_id"])
-    return None
-
-
 def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
     start = next(r for r in records if r["kind"] == "match_start")
-    team = _model_team(start, records)
+    team = model_team(start, records)
     members = set(start.get("teams", {}).get(team, []))
     out: List[Decision] = []
     round_number = turn = 0
@@ -327,7 +316,7 @@ def match_of(
 ) -> Match:
     start = next(r for r in records if r["kind"] == "match_start")
     scenario = str(start.get("scenario", "?"))
-    team = _model_team(start, records) or ""
+    team = model_team(start, records) or ""
     report = compute_report(records, scenario if scenario in SCENARIOS else None)
     team_metrics = report.teams.get(team)
     members = set(start.get("teams", {}).get(team, []))
@@ -703,34 +692,119 @@ def _match_row(match: Match) -> Dict[str, Any]:
     return row
 
 
-def build_report(bundle: Path) -> Tuple[str, str, str]:
-    """(decisions.csv, matches.csv, summary.md) for *bundle*: pure, deterministic."""
+@dataclass
+class _Bounds:
+    """One C1 match's first attempts under the three parsers (prereg §7)."""
+
+    model: str
+    match: str
+    decisions: List[Bounded]
+
+
+def _bounds_of(
+    relative: Path, records: List[Dict[str, Any]], problems: List[str]
+) -> Optional[_Bounds]:
+    start = next(r for r in records if r["kind"] == "match_start")
+    scenario = SCENARIOS.get(str(start.get("scenario")))
+    if start.get("condition") != "C1" or scenario is None:
+        return None
+    try:
+        bounded = rescore(records, scenario.build)
+    except RescoreError as exc:
+        problems.append(f"{relative.as_posix()}: {exc}")
+        return None
+    return _Bounds(str(start.get("model", "?")), relative.as_posix(), bounded)
+
+
+def _bounds_section(bounds: List[_Bounds], problems: List[str]) -> List[str]:
+    if not bounds and not problems:
+        return []
+    by_model: Dict[str, List[_Bounds]] = defaultdict(list)
+    for b in bounds:
+        by_model[b.model].append(b)
+
+    def rate(group: List[_Bounds], which: str) -> str:
+        return _fmt_ci(
+            cluster_ratio(
+                [
+                    (sum(getattr(d, which) for d in b.decisions), len(b.decisions))
+                    for b in group
+                ]
+            )
+        )
+
+    parts = [
+        "",
+        "## C1 under three parsers (prereg §7)",
+        "",
+        "First-attempt validity, re-scored offline from the recorded text. *Strict* "
+        "accepts only canonical text; *lenient* adds every registered repair, judged "
+        "by the executor in the state the game was in. Later attempts and tactics "
+        "depend on the live parser and are not re-scored.",
+        "",
+        _table(
+            ["model", "matches", "strict", "primary (live)", "lenient"],
+            [
+                [
+                    model,
+                    str(len(group)),
+                    rate(group, "strict"),
+                    rate(group, "primary"),
+                    rate(group, "lenient"),
+                ]
+                for model, group in sorted(by_model.items())
+            ],
+        ),
+    ]
+    if problems:
+        parts += ["", "**Not re-scored** (the match did not replay):", ""]
+        parts += [f"- {p}" for p in problems]
+    return parts
+
+
+def build_report(bundle: Path) -> Tuple[str, str, str, str]:
+    """(decisions.csv, matches.csv, c1_bounds.csv, summary.md) for *bundle*.
+
+    Pure and deterministic: the same bundle always gives byte-identical output.
+    """
     prices = _prices(bundle)
     decisions: List[Decision] = []
     matches: List[Match] = []
+    bounds: List[_Bounds] = []
+    problems: List[str] = []
     for path, records in completed_transcripts(bundle):
         relative = path.relative_to(bundle)
         mine = decisions_of(relative, records)
         decisions += mine
         matches.append(match_of(relative, records, mine, prices))
-    name = bundle.name
-    summary = summarise(name, decisions, matches, excluded_attempts(bundle))
+        bounded = _bounds_of(relative, records, problems)
+        if bounded is not None:
+            bounds.append(bounded)
+    summary = summarise(bundle.name, decisions, matches, excluded_attempts(bundle))
+    summary = summary.rstrip("\n") + "\n" + "\n".join(_bounds_section(bounds, problems))
+    bound_rows = [
+        {"model": b.model, "match": b.match, **asdict(d)}
+        for b in bounds
+        for d in b.decisions
+    ]
     return (
         _csv([asdict(d) for d in decisions]),
         _csv([_match_row(m) for m in matches]),
-        summary,
+        _csv(bound_rows),
+        summary.rstrip("\n") + "\n",
     )
 
 
 def write_report(bundle: Path) -> List[Path]:
     """Write the report files under ``<bundle>/report/`` and return their paths."""
-    decisions_csv, matches_csv, summary = build_report(bundle)
+    decisions_csv, matches_csv, bounds_csv, summary = build_report(bundle)
     out = bundle / REPORT_DIR
     out.mkdir(parents=True, exist_ok=True)
     written = []
     for filename, content in (
         ("decisions.csv", decisions_csv),
         ("matches.csv", matches_csv),
+        ("c1_bounds.csv", bounds_csv),
         ("summary.md", summary),
     ):
         path = out / filename
