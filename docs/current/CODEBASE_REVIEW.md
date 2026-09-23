@@ -242,6 +242,10 @@ names where it should be addressed. Append; strike through and date an item when
   answers an AoE spell given targets and no point is unverified — if it is `engine_error`, both
   conditions are being charged for an engine gap rather than a model error. → checked in C1
   slice 2 (parser corpus); outcome recorded here.
+  *Checked 2026-09-24:* not an engine gap — the engine refuses with a **typed** code,
+  `unknown_target` ("Fireball is an AOE spell and requires a target point"), identically for
+  C1 and C2. Open only as a taxonomy question: `invalid_target_relation` may be the truer
+  category. → decide with the other taxonomy splits at the freeze (prereg §6).
 - **A4. Identifier tie-break with duplicate names.** The resolver tries ids before display
   names, so with two creatures named "Goblin" (`goblin`, `goblin-2`) the spelling `Goblin`
   resolves to `goblin`, though a reader might call it ambiguous. No study roster can hit this
@@ -257,6 +261,12 @@ names where it should be addressed. Append; strike through and date an item when
 - **A7. Repo hygiene.** CI lints `src/` and `web/` but not `tests/` (one pre-existing E501 in
   `tests/arena/test_interfaces.py:1`); working copies have mixed line endings (LF/CRLF warnings
   on files written by tooling) — add a `.gitattributes`. → final cleanup.
+- **A8. C1 reads a trailing justification into the final name.** `ACTION: attack raider-1
+  with Dagger since it's adjacent` parses with the weapon "Dagger since it's adjacent", which
+  the executor refuses as `unknown_action`, though a reader would find the action. Pinned in
+  the corpus as a known boundary rather than patched with a clause heuristic before any real
+  output exists. → Phase 2 pilot: if it occurs, add a published tolerance before the freeze
+  (and it is exactly what the §7 audit's false-reject rate would expose).
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 

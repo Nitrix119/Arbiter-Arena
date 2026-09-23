@@ -16,7 +16,12 @@ authors = [
     { name = "Nitrix119" }
 ]
 
-dependencies = []
+# Core, not an extra: C1's free-text parser (src/arena/free_text.py) is harness code —
+# replay, offline re-scoring and the parser audit must run with no LLM SDK installed.
+# Pure Python, no dependencies of its own.
+dependencies = [
+    "lark>=1.2,<2",
+]
 
 [project.optional-dependencies]
 dev = [
