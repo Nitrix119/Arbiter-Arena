@@ -231,3 +231,16 @@ def test_the_state_snapshot_does_not_carry_capabilities(make_entity, make_combat
     me, ally, enemy, combat = _setup(make_entity, make_combat)
     for entity in snapshot_state(combat)["entities"]:
         assert "capabilities" not in entity
+
+
+def test_no_capability_carries_an_empty_description():
+    """Ledger A6: an empty description is prompt noise repeated in every observation."""
+    from src.arena.scenarios import SCENARIOS
+
+    for scenario in SCENARIOS.values():
+        combat = scenario.build()
+        for entity in combat.combatants:
+            for attack in build_observation(combat, entity)["self"]["capabilities"][
+                "attacks"
+            ]:
+                assert attack.get("description", "x") != "", (scenario.name, attack)

@@ -123,7 +123,9 @@ class LLMAgent(Agent):
             block_type = getattr(block, "type", None)
             if block_type == "text":
                 texts.append(getattr(block, "text", "") or "")
-            elif block_type == "tool_use" and call is None:
+            elif block_type == "tool_use" and call is not None:
+                record.extra_tool_calls += 1  # acted on the first; counted (A5)
+            elif block_type == "tool_use":
                 record.tool_call = {"name": block.name, "arguments": dict(block.input)}
                 # SDK returns block.input as a dict; copy so `note` can be popped
                 # safely.

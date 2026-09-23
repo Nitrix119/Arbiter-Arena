@@ -181,3 +181,14 @@ def test_a_text_condition_sends_no_tool_fields():
     assert "tool_choice" not in kwargs
     assert call is None
     assert record.raw_output == "ACTION: end turn"
+
+
+def test_extra_tool_calls_are_counted():
+    """Ledger A5: parallel calls are disabled, but if two arrive the second is counted."""
+    client = FakeClient(
+        [response(tool_use("end_turn", {}), tool_use("attack", {}, block_id="t2"))]
+    )
+    agent = LLMAgent("A", "a", client=client)
+    call = agent.decide(_obs())
+    assert call.name == "end_turn"
+    assert agent.telemetry.requests[0].extra_tool_calls == 1

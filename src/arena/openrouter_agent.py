@@ -179,7 +179,9 @@ class OpenRouterAgent(Agent):
         choice = response.choices[0]
         record.finish_reason = getattr(choice, "finish_reason", None)
 
-        for tc in getattr(message, "tool_calls", None) or []:
+        tool_calls = getattr(message, "tool_calls", None) or []
+        record.extra_tool_calls = max(0, len(tool_calls) - 1)
+        for tc in tool_calls:
             fn = tc.function
             arguments = fn.arguments
             record.tool_call = {"name": fn.name, "arguments": arguments}

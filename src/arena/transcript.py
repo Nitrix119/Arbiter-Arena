@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.arena.manifest import state_hash
-from src.arena.telemetry import DecisionTelemetry
+from src.arena.telemetry import DecisionTelemetry, scrub_value
 from src.arena.tools import ToolCall
 
 DEFAULT_MATCH_DIR = "matches"
@@ -91,8 +91,11 @@ class Transcript:
         self.log(
             "action",
             actor_id=actor_id,
-            call={"name": call.name, "arguments": call.arguments},
-            result=result,
+            # The call's arguments and the referee's reply are model text too: a
+            # key-shaped target id reappears in "Unknown entity_id: '...'". Scrubbed
+            # here, at the one boundary every action passes through (ledger A9).
+            call={"name": call.name, "arguments": scrub_value(call.arguments)},
+            result=scrub_value(result),
             **extra,
         )
 

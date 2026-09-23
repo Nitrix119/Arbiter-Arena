@@ -309,3 +309,49 @@ def test_an_echoed_key_never_reaches_the_saved_transcript(
     assert secret not in written
     assert REDACTED in written
     assert json.loads(written.splitlines()[0])  # still valid JSONL
+
+
+def test_a_key_in_a_call_or_its_result_never_reaches_the_saved_transcript(
+    make_entity, make_combat, tmp_path
+):
+    """Ledger A9: the arguments and the referee's echo of them are model text too.
+
+    A key-shaped string used as a target id is logged three ways: in the call's
+    arguments, in the provider's raw tool call, and in the engine's refusal message
+    ("Unknown entity_id: '...'"). None may reach disk.
+    """
+    secret = "sk-or-v1-feedfacefeedfacefeedface"
+    client = FakeClient(
+        [
+            _response(
+                fn_call(
+                    "attack",
+                    json.dumps({"action_name": "Longsword", "defender_id": secret}),
+                )
+            ),
+            _response(fn_call("end_turn", json.dumps({"note": f"remember {secret}"}))),
+        ]
+    )
+    transcript = _turn_with(client, make_entity, make_combat)
+    path = transcript.save_auto(str(tmp_path), "secrets")
+
+    written = path.read_text(encoding="utf-8")
+    assert secret not in written
+    assert written.count(REDACTED) >= 3
+
+
+def test_the_raw_tool_call_is_scrubbed():
+    secret = "sk-or-v1-0123456789abcdef0123"
+    record = RequestRecord(latency_ms=1.0)
+    record.tool_call = {"name": "end_turn", "arguments": f'{{"note": "{secret}"}}'}
+    assert secret not in json.dumps(record.to_dict())
+
+
+def test_extra_tool_calls_are_counted_not_silently_dropped():
+    """Ledger A5: the adapter acts on the first call; the rest are evidence."""
+    client = FakeClient(
+        [_response(fn_call("end_turn", "{}"), fn_call("attack", "{}", call_id="t2"))]
+    )
+    agent = OpenRouterAgent("O", "a", client=client)
+    agent.decide(_obs())
+    assert agent.telemetry.requests[0].extra_tool_calls == 1

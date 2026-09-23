@@ -30,6 +30,17 @@ _SECRET_PATTERNS = (
 REDACTED = "[REDACTED]"
 
 
+def scrub_value(value: Any) -> Any:
+    """:func:`scrub` every string inside *value* — lists and dicts, recursively."""
+    if isinstance(value, str):
+        return scrub(value)
+    if isinstance(value, list):
+        return [scrub_value(v) for v in value]
+    if isinstance(value, dict):
+        return {k: scrub_value(v) for k, v in value.items()}
+    return value
+
+
 def scrub(text: Optional[str]) -> Optional[str]:
     """Redact anything key-shaped from *text*."""
     if not text:
@@ -66,6 +77,9 @@ class RequestRecord:
     #: response held no action. The parse layer is what lets C1's validity be
     #: re-scored offline under a stricter or more lenient parser.
     interpretation: Optional[Dict[str, Any]] = None
+    #: Tool calls the provider returned beyond the first, which the adapter does not
+    #: act on (ledger A5). Recorded so a provider that emits several is visible.
+    extra_tool_calls: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         """A JSON-safe record, scrubbed.
@@ -79,12 +93,9 @@ class RequestRecord:
         data = asdict(self)
         data["raw_output"] = scrub(self.raw_output)
         data["error"] = scrub(self.error)
-        if self.interpretation is not None:
-            # Copies the model's own text (the line it wrote), so the same guard.
-            data["interpretation"] = {
-                key: scrub(value) if isinstance(value, str) else value
-                for key, value in self.interpretation.items()
-            }
+        # The raw call and C1's reading both copy the model's own text.
+        data["tool_call"] = scrub_value(self.tool_call)
+        data["interpretation"] = scrub_value(self.interpretation)
         return data
 
 

@@ -155,7 +155,7 @@ def _capabilities(combat: "CombatSystem", entity: Entity) -> Dict[str, Any]:
     """
     return {
         "attacks": [
-            _serialize_action(a)
+            _without_empty_description(_serialize_action(a))
             for a in entity.stat_block.actions + entity.granted_actions
             if isinstance(a, AttackAction)
         ],
@@ -163,6 +163,13 @@ def _capabilities(combat: "CombatSystem", entity: Entity) -> Dict[str, Any]:
             _spell_capability(combat, name) for name in entity.stat_block.known_spells
         ],
     }
+
+
+def _without_empty_description(view: Dict[str, Any]) -> Dict[str, Any]:
+    """Drop a blank description: shown in every observation, it is only noise (A6)."""
+    if not view.get("description"):
+        view.pop("description", None)
+    return view
 
 
 def _friendly(combat: "CombatSystem", entity: Entity) -> Dict[str, Any]:
