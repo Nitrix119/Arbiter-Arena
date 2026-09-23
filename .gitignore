@@ -145,3 +145,6 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Google Drive sync temp folders (appear briefly while Drive uploads the docs)
+docs/current/.tmp*
