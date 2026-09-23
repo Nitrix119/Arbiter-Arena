@@ -128,3 +128,46 @@ def test_a_coded_refusal_is_not_retried():
 
     assert requests["n"] == 1
     assert agent.telemetry.request_count == 1  # still accounted for
+
+
+def test_rejected_actions_are_described_by_the_given_formatter():
+    """Each condition shows a rejected action in its own format.
+
+    The default is the tool-call rendering the raw-parameter conditions always saw;
+    a text condition must not have C2's JSON format leaked into its prompt.
+    """
+    obs = {
+        "round": 2,
+        "rejected_actions": [
+            {
+                "action": {"name": "move", "arguments": {"x": 5, "z": 0}},
+                "error": "destination overlaps Bandit",
+            },
+        ],
+    }
+    default = render_observation("", obs)
+    assert '- move {"x": 5, "z": 0} -> destination overlaps Bandit' in default
+
+    custom = render_observation("", obs, format_rejected=lambda a: "MOVE TO 5,0")
+    assert "- MOVE TO 5,0 -> destination overlaps Bandit" in custom
+    assert '{"x": 5' not in custom
+
+
+def test_the_loop_describes_rejections_through_the_interface():
+    """`decide_one_action` hands the condition's formatter to the renderer."""
+    from src.arena.interfaces import SchemaInterface
+
+    class _Loud(SchemaInterface):
+        def format_rejected(self, action):
+            return f"<<{action['name']}>>"
+
+    agent = _StubAgent()
+    seen = []
+
+    def capture(messages, tools):
+        seen.append(messages[0]["content"])
+        return ToolCall("end_turn", {}), RequestRecord()
+
+    obs = {"rejected_actions": [{"action": {"name": "move"}, "error": "blocked"}]}
+    decide_one_action(capture, agent, obs, _Loud())
+    assert "- <<move>> -> blocked" in seen[0]

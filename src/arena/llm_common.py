@@ -15,7 +15,7 @@ import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.arena.agent import NoToolCallError, ProviderError
-from src.arena.interfaces import SHARED_PROMPT, ActionInterface
+from src.arena.interfaces import SHARED_PROMPT, ActionInterface, describe_tool_call
 from src.arena.telemetry import DecisionTelemetry, RequestRecord
 from src.arena.tools import TOOL_END_TURN, ToolCall
 
@@ -57,7 +57,11 @@ def augment_tools_with_notes(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]
     return augmented
 
 
-def render_observation(notes: str, observation: Dict[str, Any]) -> str:
+def render_observation(
+    notes: str,
+    observation: Dict[str, Any],
+    format_rejected: Callable[[Dict[str, Any]], str] = describe_tool_call,
+) -> str:
     """Render an observation as the user message.
 
     Order: prior note → any rejected-action feedback (a compact header, so the model
@@ -78,10 +82,7 @@ def render_observation(notes: str, observation: Dict[str, Any]) -> str:
         ]
         for r in rejected:
             action = r.get("action", {})
-            lines.append(
-                f"- {action.get('name')} {json.dumps(action.get('arguments', {}))}"
-                f" -> {r.get('error')}"
-            )
+            lines.append(f"- {format_rejected(action)} -> {r.get('error')}")
         parts.append("\n".join(lines))
     # Deliberately says nothing about *how* to act or what is listed: that is the
     # action section's job, and it is the only text allowed to differ between
@@ -153,7 +154,12 @@ def decide_one_action(
     shown = interface.shape_observation(observation)
     api_tools = augment_tools_with_notes(interface.api_tools(shown))
     messages: List[Dict[str, Any]] = [
-        {"role": "user", "content": render_observation(agent.notes, shown)}
+        {
+            "role": "user",
+            "content": render_observation(
+                agent.notes, shown, interface.format_rejected
+            ),
+        }
     ]
     telemetry = DecisionTelemetry()
     agent.telemetry = telemetry

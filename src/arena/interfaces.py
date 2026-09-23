@@ -23,6 +23,7 @@ and one ``decide_one_action`` loop, so there is no second agent path to drift
 as another entry rather than as a special case in the loop.
 """
 
+import json
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
@@ -97,6 +98,11 @@ How to act:
 - Everything you can do this turn is in that list, including ending your turn."""
 
 
+def describe_tool_call(action: Dict[str, Any]) -> str:
+    """A rejected action as the tool-call conditions see it: ``name {json args}``."""
+    return f"{action.get('name')} {json.dumps(action.get('arguments', {}))}"
+
+
 class ActionInterface(ABC):
     """How one condition expresses an action, and what it is shown.
 
@@ -165,6 +171,15 @@ class ActionInterface(ABC):
     def correction(self) -> str:
         """The single re-prompt sent when :meth:`interpret` returns ``None``."""
         return "Respond with exactly one tool call."
+
+    def format_rejected(self, action: Dict[str, Any]) -> str:
+        """How a rejected action is described back to the model.
+
+        Part of the action section in spirit: the feedback must speak the condition's
+        own format, or a text condition would be shown C2's tool-call syntax every
+        time it erred. The surrounding header is shared and stays in the loop.
+        """
+        return describe_tool_call(action)
 
 
 class RawParamsInterface(ActionInterface):
