@@ -180,3 +180,34 @@ def test_booleans_are_not_collapsed_into_numbers():
     """``bool`` is an ``int`` subclass — a careless normaliser makes True == 1."""
     assert state_hash({"alive": True}) != state_hash({"alive": 1})
     assert "true" in canonical_json({"alive": True})
+
+
+# -- the interface fingerprint: everything the model is shown ---------------------------
+
+
+def test_the_fingerprint_covers_the_tool_schemas_not_just_the_prompt(monkeypatch):
+    """A tool description is part of what the model reads, so editing one must show.
+
+    The hash used to cover the system prompt alone, while C2's tool descriptions were
+    edited on 2026-09-24 — a change the recorded hash could never have revealed.
+    """
+    from src.arena import tools
+    from src.arena.interfaces import C2, get_interface
+    from src.arena.manifest import interface_fingerprint
+
+    before = interface_fingerprint(get_interface(C2))
+    edited = [dict(t) for t in tools.TOOLS]
+    edited[0] = {**edited[0], "description": edited[0]["description"] + " (edited)"}
+    monkeypatch.setattr(tools, "TOOLS", edited)
+    monkeypatch.setattr("src.arena.interfaces.TOOLS", edited)
+
+    assert interface_fingerprint(get_interface(C2)) != before
+
+
+def test_each_condition_has_its_own_stable_fingerprint():
+    from src.arena.interfaces import REGISTRY, get_interface
+    from src.arena.manifest import interface_fingerprint
+
+    prints = {name: interface_fingerprint(get_interface(name)) for name in REGISTRY}
+    assert len(set(prints.values())) == len(REGISTRY)
+    assert prints == {n: interface_fingerprint(get_interface(n)) for n in REGISTRY}

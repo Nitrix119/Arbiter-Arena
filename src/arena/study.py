@@ -43,7 +43,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tupl
 from src.arena.agent import Agent, ScriptedAgent
 from src.arena.error_codes import PROVIDER_ERROR
 from src.arena.interfaces import C1, C2, REGISTRY, ActionInterface, get_interface
-from src.arena.manifest import Manifest, prompt_hash
+from src.arena.manifest import Manifest, interface_fingerprint
 from src.arena.match import DEFAULT_ROUND_CAP, run_match
 from src.arena.scenarios import SCENARIOS
 from src.arena.transcript import Transcript
@@ -385,7 +385,7 @@ def play_cell(
         condition=cell.condition,
         model=cell.model.id,
         temperature=cell.model.temperature,
-        prompt_hash=prompt_hash(interface.system_prompt()),
+        prompt_hash=interface_fingerprint(interface),
     )
     transcript = Transcript()
     try:

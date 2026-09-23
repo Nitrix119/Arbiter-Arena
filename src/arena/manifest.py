@@ -80,6 +80,22 @@ def prompt_hash(*parts: str) -> str:
     return digest.hexdigest()
 
 
+def interface_fingerprint(interface: Any) -> str:
+    """A fingerprint of **everything** a condition shows the model before the state.
+
+    The system prompt *and* the tool schemas (with the note field the loop adds), in
+    canonical JSON. Hashing the prompt alone would let a tool-description edit — part
+    of what the model reads — pass unrecorded; §3.1's "every prompt variant hashed"
+    means every variant of what is shown.
+    """
+    from src.arena.llm_common import augment_tools_with_notes
+
+    tools = augment_tools_with_notes(interface.api_tools({}))
+    return prompt_hash(
+        interface.system_prompt(), json.dumps(tools, sort_keys=True, default=str)
+    )
+
+
 @dataclass
 class Manifest:
     """Everything needed to place one transcript in the experimental grid.
