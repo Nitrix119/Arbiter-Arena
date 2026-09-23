@@ -4,6 +4,8 @@ Transcripts are built in-process (a real scripted match, or hand-assembled recor
 precise edge cases) because match logs are git-ignored and must not be a test dependency.
 """
 
+import pytest
+
 from src.arena.agent import ScriptedAgent
 from src.arena.match import run_match
 from src.arena.metrics import (
@@ -12,6 +14,7 @@ from src.arena.metrics import (
     compute_report,
     group_turns,
 )
+from src.arena.tools import ToolCall
 from src.arena.transcript import Transcript
 
 from .conftest import melee_attack
@@ -369,3 +372,75 @@ def test_group_turns_handles_orphan_turn_end_as_skip():
     ]
     turns = group_turns(records)
     assert len(turns) == 1 and turns[0].end_cause == "skip"
+
+
+# -- area spells: who each cast caught (H4b) --------------------------------------------
+
+
+class _CastOnce:
+    """The mage casts one Fireball at a chosen point, then everyone just ends turns."""
+
+    def __init__(self, point):
+        from src.arena.agent import Agent
+
+        outer = self
+
+        class _Agent(Agent):
+            def decide(self, observation):
+                me = observation["self"]
+                if me["name"] == "Mage" and not outer.cast:
+                    outer.cast = True
+                    return ToolCall(
+                        "cast_spell",
+                        {"spell_name": "Fireball", "target_point": outer.point},
+                    )
+                return ToolCall("end_turn", {})
+
+        self.point = point
+        self.cast = False
+        self.agent = _Agent("caster", "a")
+
+
+@pytest.mark.parametrize(
+    "point, expected",
+    [
+        ({"x": 7.5, "z": 60}, (2, 0)),  # both raiders, clean
+        ({"x": 7.5, "z": 45}, (2, 1)),  # both raiders and the bodyguard
+    ],
+)
+def test_area_hits_count_enemies_and_allies_per_cast(point, expected):
+    from src.arena.metrics import area_hits
+    from src.arena.scenarios import SCENARIOS
+
+    caster = _CastOnce(point)
+    transcript = Transcript()
+    run_match(
+        SCENARIOS["aoe_placement"].build(),
+        {"a": caster.agent, "b": ScriptedAgent("B", "b")},
+        seed=5,  # the mage wins initiative, so it aims at the opening board
+        round_cap=1,
+        transcript=transcript,
+    )
+    first = transcript.records_of("action")[0]
+    assert first["actor_id"] == "mage", "fixture precondition: the mage acts first"
+
+    (hit,) = area_hits(transcript.records)
+    assert hit.actor_id == "mage"
+    assert (hit.enemies, hit.allies) == expected
+
+
+def test_the_aoe_scenario_declares_its_scope():
+    """An undeclared scenario reports 'unknown scenario' — aoe_placement is known."""
+    from src.arena.metrics import compute_report
+    from src.arena.scenarios import SCENARIOS
+
+    transcript = Transcript()
+    run_match(
+        SCENARIOS["aoe_placement"].build(),
+        {"a": ScriptedAgent("A", "a"), "b": ScriptedAgent("B", "b")},
+        seed=1,
+        round_cap=1,
+        transcript=transcript,
+    )
+    report = compute_report(transcript.records, "aoe_placement")
+    assert all(s.applicable for s in report.scoped)

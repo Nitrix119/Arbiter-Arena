@@ -282,6 +282,8 @@ _SCENARIO_SCOPES: Dict[str, List[Tuple[str, str]]] = {
     "protect_squishy": [("protected_survival", "unique_fragile")],
     # coordination is a global (focus-fire) metric, added in a later slice
     "alpha_strike": [],
+    # Area placement is measured per cast by area_hits (H4b), not by a scoped subject.
+    "aoe_placement": [],
 }
 
 
@@ -411,6 +413,51 @@ _SCOPED_COMPUTERS = {
     "kiting_adherence": _kiting_adherence,
     "protected_survival": _protected_survival,
 }
+
+
+# ---------------------------------------------------------------------------
+# Area spells — who each cast caught (H4b)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class AreaHit:
+    """One successful area-spell cast, and whom it caught."""
+
+    actor_id: str
+    enemies: int
+    allies: int  # including the caster itself
+
+
+def area_hits(records: List[dict]) -> List[AreaHit]:
+    """Every successful cast aimed at a *point*, with the enemies and allies it caught.
+
+    5e area damage has no falloff, so the set caught is the whole outcome of a
+    placement — which is why realised expressivity (prereg H4b) is measured as targets
+    hit per cast. Read from the transcript alone: the call's ``target_point`` marks an
+    area cast, and the result lists every creature it resolved against.
+    """
+    roster = build_roster(records)
+    hits: List[AreaHit] = []
+    for record in _of_kind(records, "action"):
+        call, result = record["call"], record["result"]
+        if call["name"] != "cast_spell" or not result.get("ok"):
+            continue
+        if "target_point" not in call.get("arguments", {}):
+            continue
+        actor = roster.get(record["actor_id"])
+        if actor is None:
+            continue
+        caught = [roster.get(r["target_id"]) for r in result.get("results", [])]
+        teams = [c.team for c in caught if c is not None]
+        hits.append(
+            AreaHit(
+                actor_id=actor.entity_id,
+                enemies=sum(1 for t in teams if t != actor.team),
+                allies=sum(1 for t in teams if t == actor.team),
+            )
+        )
+    return hits
 
 
 # ---------------------------------------------------------------------------
