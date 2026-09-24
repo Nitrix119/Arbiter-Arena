@@ -30,10 +30,12 @@ from src.arena.action_space import move_candidates
 from src.arena.error_codes import ENGINE_ERROR, MALFORMED_OUTPUT
 from src.arena.identifiers import resolve
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
-from src.errors import UNKNOWN_ACTION, UNKNOWN_TARGET, RuleViolation
-from src.models.action import AttackAction
+from src.errors import OUT_OF_RANGE, UNKNOWN_ACTION, UNKNOWN_TARGET, RuleViolation
+from src.models.action import AttackAction, SpellAction
 from src.models.entity import Entity
+from src.models.spell_properties import AOEShape
 from src.spatial.geometry import Point3D
+from src.spatial.range_check import effective_range_ft
 
 if TYPE_CHECKING:
     from src.combat.combat_system import CombatSystem
@@ -318,6 +320,32 @@ def _gate_roll(
     return dict(roll_detail)
 
 
+def _refuse_out_of_range_aim(actor: Entity, spell: SpellAction, point: Point3D) -> None:
+    """Refuse an area aim beyond the spell's range, rather than let it be moved.
+
+    SRD: an area is centred on "a point you choose within range". The engine clamps an
+    over-range aim onto the edge of range (``derive_aoe_origin``), which silently
+    repairs a spatial error in the raw-parameter conditions — the category H2 counts —
+    while the menu condition can never make one (review 2026-09-24, H-4). The test is
+    the engine's own: distance from the caster's centre against range plus half its
+    size. Cones and lines start at the caster and are only *pointed*, so any point is
+    in range for them.
+    """
+    if spell.aoe is None or spell.aoe.shape in (AOEShape.CONE, AOEShape.LINE):
+        return
+    range_ft = effective_range_ft(spell)
+    if range_ft is None:
+        return
+    reach = range_ft + actor.stat_block.size.size_ft / 2.0
+    distance = actor.bounding_box.center().distance_to(point)
+    if distance > reach:
+        raise RuleViolation(
+            OUT_OF_RANGE,
+            f"{spell.name} must be aimed within its {range_ft:g} ft range; that "
+            f"point is {distance:.1f} ft away.",
+        )
+
+
 class ToolExecutor:
     """Validates a :class:`ToolCall` and applies it via the ``CombatSystem`` referee.
 
@@ -459,6 +487,7 @@ class ToolExecutor:
                     f"got {tp!r}."
                 )
             target_point = _point(tp, "cast_spell target_point")
+            _refuse_out_of_range_aim(actor, spell_action, target_point)
 
         results = self._combat.resolve_spell(
             actor,

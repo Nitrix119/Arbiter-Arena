@@ -385,17 +385,37 @@ and `engine_error` are non-model buckets and are excluded from validity rates.
 pilot frequencies rather than in advance.
 
 **Exact definitions, as implemented (registered 2026-09-24; `src/arena/study_report.py`):**
-- **First-attempt valid:** the decision was accepted **and** took a single request. A
-  decision rescued by the one correction re-prompt failed its first attempt, even though it
-  was eventually accepted. The rule is the same in every condition. *Eventually accepted* is
-  reported alongside.
+- **Fresh decision (amended 2026-09-24, before any data):** a decision that is not a
+  retry. A decision is a retry when the same actor's previous decision in the same turn was
+  rejected. H1, H2 and the C1 bounds are all measured over fresh decisions only.
+  - Why: every call used to count as a decision. A retry accepted after a rejection
+    therefore scored as a first-attempt success *and* as a recovery. That mixed recovery
+    into the headline number, and gave the most weight to the hardest decisions in the
+    conditions that fail most.
+  - A retry is measured only by **recovery**.
+  - *Per-call acceptance* (every call accepted in one request, retries included) is
+    reported alongside as a secondary figure.
+- **First-attempt valid:** a **fresh** decision that was accepted **and** took a single
+  request. A decision rescued by the one correction re-prompt failed its first attempt, even
+  though it was eventually accepted. The rule is the same in every condition. *Eventually
+  accepted* is reported alongside.
 - **Recovery:** after a rejected decision, the same actor's next decision **in the same
   turn** was accepted. A rejection with no later decision that turn (the turn was forced to
   end) is not counted either way.
 - **Spatial** (H2): a move, or a spell aimed at a point. For a refused attempt, spatial is
   judged from what was attempted: a C1 line whose verb is a move verb, or a cast that gives
   coordinates; a C3 id naming a move or an aim point. A response containing no action at all
-  is neither spatial nor non-spatial, and is excluded from the H2 split.
+  is neither spatial nor non-spatial, and is excluded from the H2 split. That includes a C3
+  `choose` that names no id.
+- **An area aim beyond the spell's range is `out_of_range` (2026-09-24, before any
+  data).**
+  - SRD: an area is centred on "a point you choose within range".
+  - The engine silently clamps an over-range aim onto the edge of the range. That would
+    repair a spatial error in C1, C2 and C2+M, the very category H2 counts, while C3 can
+    never make one.
+  - The arena therefore refuses the aim, using the engine's own test: distance from the
+    caster's centre against the range plus half the caster's size.
+  - Cones and lines start at the caster and are only pointed, so they are exempt.
 - Only the **model's team** is counted; the fixed opponent's actions are not decisions.
 
 **Secondary:**
@@ -462,6 +482,35 @@ pilot frequencies rather than in advance.
 - Seeds are **paired** across conditions (same scenario and seed in every cell). LLM
   nondeterminism breaks pairing after the first differing decision; this is stated as
   a limitation rather than corrected for.
+- **Decision rules for H1–H3 (registered 2026-09-24, before any data).** Until this date
+  only the C1 comparison had a rule for "supported". Every hypothesis now has one. The
+  report prints each verdict (`registered_verdicts` in `src/arena/study_report.py`).
+  - **Unit.** Each rule is judged **per model**, on the (scenario, seed) pairs that both
+    conditions in the contrast have. A pair missing from either side drops out of that
+    contrast.
+  - **Interval.** A **paired cluster bootstrap** resamples whole pairs, so both of a
+    pair's matches travel together. It uses 2,000 resamples from seed 20260924 and takes
+    the 2.5th and 97.5th percentiles.
+  - **Verdict.** A directional contrast is **supported** when its 95% interval lies
+    entirely above zero. Anything else is **not supported**. A contrast with no shared
+    pairs is **insufficient data**.
+  - **H1.** The ordering is judged as its three adjacent contrasts, each in pooled
+    first-attempt validity over fresh decisions: C3 − C2+M, C2+M − C2 and C2 − C1. Each
+    one is reported separately.
+    - C2 − C1 must *also* pass the C1 rule below (primary, lenient and audited bounds).
+    - The full ordering is supported only if all three contrasts are.
+  - **H2.** For X in {C1, C2}, "the deficit concentrates in spatial actions" means:
+    - (C3 − X) in spatial first-attempt validity, minus (C3 − X) in non-spatial
+      first-attempt validity, is greater than zero.
+    - The deficit is measured against the menu, C3, so that spatial actions simply being
+      harder in every condition cannot count.
+  - **H3.** The C3 − C1 gap in first-attempt validity must exceed the *absolute* C3 − C1
+    gap in tactics.
+    - Both sides are in percentage points of a 0–1 scale.
+    - The rule is judged separately for **win rate** and for **model HP fraction**, and
+      H3 is supported only if both hold.
+    - The tactical gap is taken in absolute value, so a constraint that made play
+      *worse* cannot count in H3's favour.
 - **Baselines** (Random, Scripted, Heuristic) run through the **C3 path** using the
   same executor, to anchor tactical metrics. They cost no API calls.
   *Amended 2026-09-24, before any data:* Random (uniform over the enumerated actions) and

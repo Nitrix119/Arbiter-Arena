@@ -670,3 +670,44 @@ def test_arguments_that_are_not_an_object_are_malformed(make_entity, make_combat
 
     assert result["ok"] is False
     assert result["code"] == "malformed_output"
+
+
+# -- out-of-range area aim (review 2026-09-24, H-4) ----------------------------------
+
+
+def test_an_area_aim_beyond_range_is_refused_not_moved(
+    make_entity, make_combat, registry_with
+):
+    """SRD: an area spell is centred on "a point you choose within range".
+
+    The engine clamps an over-range aim onto the edge of range, which silently repairs
+    a spatial error in the raw-parameter conditions — the category H2 counts — while
+    the menu condition can never make one. The arena refuses it instead, and the
+    refusal costs nothing: no slot, no action.
+    """
+    combat, wizard, goblin, fireball = _fireball_fight(
+        make_entity, make_combat, registry_with
+    )
+    slots_before = dict(wizard.spell_slots.remaining)
+
+    result = ToolExecutor(combat).apply(
+        wizard, _fireball_call(target_point={"x": 0, "z": 400})
+    )
+
+    assert result["ok"] is False
+    assert result["code"] == "out_of_range"
+    assert "150" in result["error"]  # states the range it was measured against
+    assert dict(wizard.spell_slots.remaining) == slots_before
+    assert wizard.resources.actions == 1
+
+
+def test_an_area_aim_at_the_edge_of_range_is_accepted(
+    make_entity, make_combat, registry_with
+):
+    combat, wizard, _, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(
+        wizard, _fireball_call(target_point={"x": 0, "z": 150})
+    )
+
+    assert result["ok"] is True, result

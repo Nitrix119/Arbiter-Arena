@@ -17,6 +17,7 @@ from src.arena.interfaces import REGISTRY
 from src.arena.study import main, parse_grid, run_grid
 from src.arena.study_report import (
     Decision,
+    Match,
     bootstrap_mean,
     build_report,
     classify,
@@ -100,6 +101,9 @@ def test_empty_denominators_give_no_estimate():
             "choose",
             False,
         ),
+        # A choice naming no id names no action: neither spatial nor not (prereg §6).
+        ({"name": "choose", "arguments": {"action_id": None}}, "choose", None),
+        ({"name": "choose", "arguments": {}}, "choose", None),
         ({"name": "(no_tool_call)", "arguments": {}}, "none", None),
     ],
 )
@@ -143,6 +147,26 @@ def test_a_decision_that_needed_the_correction_failed_its_first_attempt():
     )
     assert [d.ok for d in decisions] == [True, True]
     assert [d.first_attempt_valid for d in decisions] == [True, False]
+
+
+def test_a_retry_after_a_rejection_is_not_a_fresh_decision():
+    """H1 is over fresh decisions: a retry is recovery, not a second first attempt.
+
+    Counting a retry as a new decision let a recovered retry score as a first-attempt
+    success, mixing recovery into the headline number (review 2026-09-24, H-1).
+    """
+    decisions = decisions_of(
+        Path("m.jsonl"),
+        _records(
+            (True, 1, True),  # fresh, valid
+            (False, 1, False),  # fresh, rejected ...
+            (True, 1, False),  # ... a retry, not fresh
+            (True, 1, False),  # after a success: fresh again
+            (False, 1, False),  # fresh, rejected, and the turn ends
+            (True, 1, True),  # a new turn: fresh
+        ),
+    )
+    assert [d.fresh for d in decisions] == [True, True, False, True, True, True]
 
 
 def test_recovery_counts_the_next_decision_in_the_same_turn_only():
@@ -233,8 +257,13 @@ def test_the_report_counts_exactly_the_injected_stumbles(bundle):
         assert mine[0]["ok"] == "False"
         expected = STUMBLE_CODE.get(match["condition"], "malformed_output")
         assert rejected[0]["code"] == expected
-        # Every other decision was valid first time, and the stumble recovered.
-        assert int(match["first_attempt_valid"]) == len(mine) - 1
+        # The stumble is a fresh decision that failed; the decision after it is a
+        # retry, not a fresh decision, so it counts toward recovery and never toward
+        # first-attempt validity (prereg §6). Every other decision was valid.
+        assert [d["fresh"] for d in mine[:2]] == ["True", "False"]
+        assert int(match["fresh_decisions"]) == len(mine) - 1
+        assert int(match["first_attempt_valid"]) == len(mine) - 2
+        assert int(match["per_call_valid"]) == len(mine) - 1
         assert (match["recovered"], match["recovery_eligible"]) == ("1", "1")
         assert float(match["cost_usd"]) > 0
 
@@ -268,6 +297,7 @@ def test_decision_rows_carry_every_registered_field():
     fields = set(Decision.__dataclass_fields__)
     assert {
         "first_attempt_valid",
+        "fresh",
         "spatial",
         "code",
         "menu_length",
@@ -350,6 +380,9 @@ def test_baselines_are_reported_beside_the_models(tmp_path):
     assert "| baseline-scripted | C3 |" in summary
     assert "| baseline-heuristic | native |" in summary
     assert "| mock | C2 |" in summary
+    # A baseline plays one condition, so it has nothing to contrast.
+    # (Here the mock plays one condition too, so no model has verdicts at all.)
+    assert "## Registered verdicts" not in summary
 
 
 # -- infrastructure, per condition (review 2026-09-24, H-2) -------------------------------
@@ -408,3 +441,122 @@ def test_exclusions_and_provider_retries_are_reported_per_condition(tmp_path):
     assert "| mock | C3 | 0 | 0 | — |" in summary
     retries = [int(row["provider_retries"]) for row in _rows(decisions_csv)]
     assert sum(retries) == 1
+
+
+# -- registered verdicts: paired, per model (review 2026-09-24, H-3) ------------------
+
+
+def _match(condition, scenario, seed, *, valid, fresh=10, won=False, hp=0.5, sp=None):
+    """A synthetic match: *valid* of *fresh* first attempts, split evenly by space
+    unless *sp* gives ``(spatial valid, spatial n, non-spatial valid, non-spatial n)``.
+    """
+    sv, sn, nv, nn = sp or (
+        valid // 2,
+        fresh // 2,
+        valid - valid // 2,
+        fresh - fresh // 2,
+    )
+    return Match(
+        model="m", condition=condition, scenario=scenario, seed=seed,
+        match=f"{condition}/{scenario}/{seed}", model_won=won, winner="a" if won else "b",
+        rounds=3, model_hp_fraction=hp, turns=3, forfeit_turns=0, decisions=fresh,
+        fresh_decisions=fresh, first_attempt_valid=valid, per_call_valid=valid,
+        accepted=valid, recovered=0, recovery_eligible=0, spatial_decisions=sn,
+        spatial_valid=sv, nonspatial_decisions=nn, nonspatial_valid=nv,
+        input_tokens=0, output_tokens=0, cost_usd=None, area_casts=0,
+        area_enemies=0, area_allies=0,
+    )  # fmt: skip
+
+
+PAIRS = [
+    (scenario, seed) for scenario in ("kiting", "alpha_strike") for seed in range(5)
+]
+
+
+def _verdict(verdicts, hypothesis, contrast):
+    return next(
+        v for v in verdicts if (v.hypothesis, v.contrast) == (hypothesis, contrast)
+    )
+
+
+def test_h1_contrasts_are_paired_and_directional():
+    from src.arena.study_report import registered_verdicts
+
+    matches = [
+        _match(cond, sc, seed, valid=v + (seed % 2))
+        for cond, v in (("C3", 9), ("C2+M", 8), ("C2", 6), ("C1", 6))
+        for sc, seed in PAIRS
+    ]
+    verdicts = registered_verdicts(matches)
+
+    assert _verdict(verdicts, "H1", "C3 − C2+M").verdict == "supported"
+    assert _verdict(verdicts, "H1", "C2+M − C2").verdict == "supported"
+    # Identical rates cannot support a directional claim.
+    tie = _verdict(verdicts, "H1", "C2 − C1")
+    assert tie.verdict == "not supported"
+    assert tie.estimate[0] == pytest.approx(0.0)
+    assert "§7 C1 rule" in tie.note
+
+
+def test_h2_is_the_spatial_deficit_against_the_menu_beyond_the_non_spatial_one():
+    from src.arena.study_report import registered_verdicts
+
+    matches = [_match("C3", sc, seed, valid=10, sp=(5, 5, 5, 5)) for sc, seed in PAIRS]
+    # C1 loses spatial decisions only; C2 loses both kinds equally.
+    matches += [_match("C1", sc, seed, valid=7, sp=(2, 5, 5, 5)) for sc, seed in PAIRS]
+    matches += [_match("C2", sc, seed, valid=8, sp=(4, 5, 4, 5)) for sc, seed in PAIRS]
+    verdicts = registered_verdicts(matches)
+
+    assert _verdict(verdicts, "H2", "C1").verdict == "supported"
+    assert _verdict(verdicts, "H2", "C2").verdict == "not supported"
+
+
+def test_h3_needs_the_validity_gap_to_exceed_both_tactical_gaps():
+    from src.arena.study_report import registered_verdicts
+
+    # Validity: C3 1.0 vs C1 0.5 (a 50-point gap). Win rate: identical. HP fraction:
+    # a 10-point gap. Both tactical gaps are smaller, so H3 is supported.
+    matches = [
+        _match("C3", sc, seed, valid=10, won=seed < 3, hp=0.6) for sc, seed in PAIRS
+    ] + [_match("C1", sc, seed, valid=5, won=seed < 3, hp=0.5) for sc, seed in PAIRS]
+    assert (
+        _verdict(registered_verdicts(matches), "H3", "C3 − C1").verdict == "supported"
+    )
+
+    # Now tactics move as much as validity: not supported.
+    matches = [
+        _match("C3", sc, seed, valid=10, won=True, hp=1.0) for sc, seed in PAIRS
+    ] + [_match("C1", sc, seed, valid=5, won=False, hp=0.0) for sc, seed in PAIRS]
+    assert (
+        _verdict(registered_verdicts(matches), "H3", "C3 − C1").verdict
+        == "not supported"
+    )
+
+
+def test_a_contrast_without_paired_data_says_so():
+    from src.arena.study_report import registered_verdicts
+
+    matches = [_match(c, sc, seed, valid=9) for c in ("C3", "C1") for sc, seed in PAIRS]
+    verdicts = registered_verdicts(matches)
+    assert _verdict(verdicts, "H1", "C3 − C2+M").verdict == "insufficient data"
+    assert _verdict(verdicts, "H3", "C3 − C1").verdict != "insufficient data"
+
+
+def test_only_seeds_present_in_both_conditions_are_paired():
+    """An excluded-and-unrerun seed must drop out of the pair, not skew one side."""
+    from src.arena.study_report import registered_verdicts
+
+    matches = [_match("C3", sc, seed, valid=10) for sc, seed in PAIRS]
+    matches += [_match("C2+M", sc, seed, valid=5) for sc, seed in PAIRS[:-1]]
+    matches.append(_match("C3", "extra", 99, valid=0))  # unpaired, must be ignored
+    verdict = _verdict(registered_verdicts(matches), "H1", "C3 − C2+M")
+    assert verdict.pairs == len(PAIRS) - 1
+    assert verdict.estimate[0] == pytest.approx(0.5)
+
+
+def test_verdicts_are_deterministic_and_in_the_summary(bundle):
+    from src.arena.study_report import registered_verdicts
+
+    summary = build_report(bundle)[3]
+    assert "## Registered verdicts (prereg §7)" in summary
+    assert registered_verdicts([]) == []

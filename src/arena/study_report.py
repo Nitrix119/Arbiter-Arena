@@ -12,9 +12,12 @@ analysed) and writes three files to ``<bundle>/report/``:
 
 **Definitions, exactly as registered** (PREREGISTRATION §6–§7):
 
-* *First-attempt valid*: the decision was accepted **and** took one request. A decision
-  that needed the correction re-prompt failed its first attempt even if the second
-  succeeded — the same rule in every condition (ledger A2).
+* *Fresh decision*: one not preceded by a rejection of the same actor in the same
+  turn. A retry after a rejection is **recovery**, never a second first attempt.
+* *First-attempt valid* (H1): a **fresh** decision that was accepted **and** took one
+  request. A decision that needed the correction re-prompt failed its first attempt
+  even if the second succeeded — the same rule in every condition (ledger A2).
+  *Per-call acceptance* (every call, retries included) is reported alongside.
 * *Recovery*: after a rejected decision, the same actor's next decision in the same turn
   was accepted. Rejections with no later decision that turn are not counted.
 * *Spatial* (H2): a move, or a spell aimed at a point. For a refused attempt, judged
@@ -24,6 +27,9 @@ analysed) and writes three files to ``<bundle>/report/``:
 * Rates are pooled over decisions; intervals are a **match-level (cluster) bootstrap**
   — decisions within a match are not independent — with a fixed seed, so the report
   is byte-identical every time it is run. Win rates use **Wilson** intervals.
+* *Registered verdicts* (H1–H3) use a **paired** cluster bootstrap over the
+  (scenario, seed) pairs both conditions share, per model; a directional hypothesis
+  is supported when the 95% interval of its contrast lies entirely above zero.
 
 Standard library only: no numpy, no pandas, no plots (ledger A11).
 """
@@ -271,6 +277,9 @@ class Decision:
     #: Requests the provider failed and that were retried unchanged (prereg §8).
     #: Cost, never a model attempt — ``request_count`` excludes them.
     provider_retries: int = 0
+    #: Not a retry: the same actor's previous decision this turn was not rejected.
+    #: H1 is measured over fresh decisions only (prereg §6).
+    fresh: bool = True
 
 
 def _attempted_verb(text: str) -> str:
@@ -298,7 +307,9 @@ def classify(call: Dict[str, Any]) -> Tuple[str, Optional[bool]]:
         )
         return "unread", spatial
     if name == "choose":
-        action_id = str(args.get("action_id", ""))
+        action_id = args.get("action_id")
+        if not isinstance(action_id, str) or not action_id:
+            return "choose", None  # names no action, so it is neither
         return "choose", action_id.startswith("move:") or ":aim:" in action_id
     if name == _NO_CALL:
         return "none", None
@@ -329,6 +340,13 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
         kind, spatial = classify(record["call"])
         ok = bool(record["result"].get("ok"))
         count = telemetry.get("request_count", 1)
+        before = out[-1] if out else None
+        retry = (
+            before is not None
+            and not before.ok
+            and before.turn == turn
+            and before.actor == record["actor_id"]
+        )
         out.append(
             Decision(
                 model=str(start.get("model", "?")),
@@ -353,6 +371,7 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
                 c1_layer=layer,
                 served_provider=host,
                 provider_retries=len(telemetry.get("provider_failures") or []),
+                fresh=not retry,
             )
         )
     return out
@@ -388,7 +407,12 @@ class Match:
     turns: int
     forfeit_turns: int
     decisions: int
+    #: Decisions that were not retries after a rejection — H1's denominator.
+    fresh_decisions: int
+    #: Fresh decisions valid first time (H1's numerator).
     first_attempt_valid: int
+    #: Every call accepted in one request, retries included (secondary).
+    per_call_valid: int
     accepted: int
     recovered: int
     recovery_eligible: int
@@ -429,8 +453,9 @@ def match_of(
         for key, value in sorted(scoped.values.items()):
             if isinstance(value, (bool, int, float)):
                 tactics[f"{scoped.name}.{key}"] = float(value)
-    spatial = [d for d in decisions if d.spatial is True]
-    nonspatial = [d for d in decisions if d.spatial is False]
+    fresh = [d for d in decisions if d.fresh]
+    spatial = [d for d in fresh if d.spatial is True]
+    nonspatial = [d for d in fresh if d.spatial is False]
     return Match(
         model=str(start.get("model", "?")),
         condition=str(start.get("condition", "?")),
@@ -444,7 +469,9 @@ def match_of(
         turns=team_metrics.turns if team_metrics else 0,
         forfeit_turns=team_metrics.forfeit_turns if team_metrics else 0,
         decisions=len(decisions),
-        first_attempt_valid=sum(d.first_attempt_valid for d in decisions),
+        fresh_decisions=len(fresh),
+        first_attempt_valid=sum(d.first_attempt_valid for d in fresh),
+        per_call_valid=sum(d.first_attempt_valid for d in decisions),
         accepted=sum(d.ok for d in decisions),
         recovered=recovered,
         recovery_eligible=eligible,
@@ -529,7 +556,9 @@ def summarise(
                 "condition",
                 "matches",
                 "decisions",
-                "first-attempt valid",
+                "fresh",
+                "first-attempt valid (fresh)",
+                "per-call acceptance",
                 "eventually accepted",
                 "recovery",
                 "forfeit turns / turn",
@@ -540,10 +569,14 @@ def summarise(
                     condition,
                     str(len(group)),
                     str(sum(m.decisions for m in group)),
+                    str(sum(m.fresh_decisions for m in group)),
                     _fmt_ci(
                         cluster_ratio(
-                            [(m.first_attempt_valid, m.decisions) for m in group]
+                            [(m.first_attempt_valid, m.fresh_decisions) for m in group]
                         )
+                    ),
+                    _fmt_ci(
+                        cluster_ratio([(m.per_call_valid, m.decisions) for m in group])
                     ),
                     _fmt_ci(cluster_ratio([(m.accepted, m.decisions) for m in group])),
                     _fmt_ci(
@@ -558,6 +591,8 @@ def summarise(
         ),
         "",
         "## Where validity fails: spatial vs non-spatial (H2)",
+        "",
+        "Fresh decisions only, as in H1.",
         "",
         _table(
             [
@@ -678,6 +713,7 @@ def summarise(
         ),
     ]
 
+    parts += _verdicts_section(registered_verdicts(matches))
     parts += _tactics_sections(matches)
     parts += _layer_section(decisions)
     parts += _hosts_section(decisions)
@@ -685,6 +721,246 @@ def summarise(
         decisions, matches, excluded_cells or {}, reasons or {}
     )
     return "\n".join(parts) + "\n"
+
+
+# -- registered verdicts (prereg §7) -------------------------------------------------
+
+#: H1's predicted ordering, as adjacent contrasts (higher first).
+H1_CONTRASTS = (("C3", "C2+M"), ("C2+M", "C2"), ("C2", "C1"))
+#: The conditions H2 is stated about, each measured against the menu (C3).
+H2_CONDITIONS = ("C1", "C2")
+
+Pair = Tuple[str, int]
+#: condition → (scenario, seed) → that match.
+_Cells = Dict[str, Dict[Pair, "Match"]]
+Estimate = Tuple[float, float, float]
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """One registered contrast for one model, and what the data say about it."""
+
+    model: str
+    hypothesis: str
+    contrast: str
+    pairs: int
+    estimate: Optional[Estimate]
+    verdict: str
+    note: str = ""
+
+
+def _rate(
+    matches: Iterable["Match"], numerator: str, denominator: str
+) -> Optional[float]:
+    num = den = 0.0
+    for m in matches:
+        num += float(getattr(m, numerator))
+        den += float(getattr(m, denominator))
+    return num / den if den else None
+
+
+def _mean(matches: Sequence["Match"], attribute: str) -> Optional[float]:
+    if not matches:
+        return None
+    return sum(float(getattr(m, attribute)) for m in matches) / len(matches)
+
+
+def paired_bootstrap(pairs: Sequence[Pair], statistic: Any) -> Optional[Estimate]:
+    """*statistic* over the pairs, with a paired cluster-bootstrap 95% interval.
+
+    Whole (scenario, seed) pairs are resampled, so both conditions' matches for a pair
+    travel together — the pairing the design registers. Resamples on which the
+    statistic is undefined (a zero denominator) are skipped. Seeded, so deterministic.
+    """
+    if not pairs:
+        return None
+    point = statistic(list(pairs))
+    if point is None:
+        return None
+    rng = dice.new_rng(BOOTSTRAP_SEED)  # dice.py owns every RNG (CLAUDE.md §7)
+    stats: List[float] = []
+    for _ in range(BOOTSTRAP_RESAMPLES):
+        sample = [pairs[rng.randrange(len(pairs))] for _ in pairs]
+        value = statistic(sample)
+        if value is not None:
+            stats.append(value)
+    if not stats:
+        return None
+    low, high = _percentiles(stats)
+    return point, low, high
+
+
+def _judge(estimate: Optional[Estimate]) -> str:
+    if estimate is None:
+        return "insufficient data"
+    return "supported" if estimate[1] > 0 else "not supported"
+
+
+def _difference(
+    cells: _Cells, high: str, low: str, numerator: str, denominator: str
+) -> Any:
+    def statistic(sample: Sequence[Pair]) -> Optional[float]:
+        a = _rate((cells[high][p] for p in sample), numerator, denominator)
+        b = _rate((cells[low][p] for p in sample), numerator, denominator)
+        return None if a is None or b is None else a - b
+
+    return statistic
+
+
+def _shared(cells: _Cells, *conditions: str) -> List[Pair]:
+    if not all(c in cells for c in conditions):
+        return []
+    common = set.intersection(*(set(cells[c]) for c in conditions))
+    return sorted(common)
+
+
+def _verdicts_for(model: str, cells: _Cells) -> List[Verdict]:
+    out: List[Verdict] = []
+
+    # H1 — each adjacent contrast in the predicted ordering, higher minus lower.
+    for high, low in H1_CONTRASTS:
+        pairs = _shared(cells, high, low)
+        estimate = paired_bootstrap(
+            pairs,
+            _difference(cells, high, low, "first_attempt_valid", "fresh_decisions"),
+        )
+        note = (
+            "also subject to the §7 C1 rule (primary, lenient and audited bounds)"
+            if low == "C1"
+            else ""
+        )
+        out.append(
+            Verdict(
+                model,
+                "H1",
+                f"{high} − {low}",
+                len(pairs),
+                estimate,
+                _judge(estimate),
+                note,
+            )
+        )
+
+    # H2 — the deficit against the menu is larger on spatial decisions than on
+    # non-spatial ones: (C3 − X)_spatial − (C3 − X)_non-spatial > 0.
+    for condition in H2_CONDITIONS:
+        pairs = _shared(cells, "C3", condition)
+        spatial = _difference(
+            cells, "C3", condition, "spatial_valid", "spatial_decisions"
+        )
+        other = _difference(
+            cells, "C3", condition, "nonspatial_valid", "nonspatial_decisions"
+        )
+
+        def h2(
+            sample: Sequence[Pair], spatial: Any = spatial, other: Any = other
+        ) -> Optional[float]:
+            a, b = spatial(sample), other(sample)
+            return None if a is None or b is None else a - b
+
+        estimate = paired_bootstrap(pairs, h2)
+        out.append(
+            Verdict(
+                model,
+                "H2",
+                condition,
+                len(pairs),
+                estimate,
+                _judge(estimate),
+                "spatial deficit vs C3 minus non-spatial deficit vs C3",
+            )
+        )
+
+    # H3 — the C3 − C1 validity gap exceeds the tactical gap, on both registered
+    # tactical measures (percentage points). The tactical gap is taken in absolute
+    # value, so a constraint that made play *worse* cannot count in H3's favour.
+    pairs = _shared(cells, "C3", "C1")
+    validity = _difference(cells, "C3", "C1", "first_attempt_valid", "fresh_decisions")
+    judged: List[str] = []
+    estimates: List[Optional[Estimate]] = []
+    for measure in ("model_won", "model_hp_fraction"):
+
+        def h3(sample: Sequence[Pair], measure: str = measure) -> Optional[float]:
+            gap = validity(sample)
+            a = _mean([cells["C3"][p] for p in sample], measure)
+            b = _mean([cells["C1"][p] for p in sample], measure)
+            if gap is None or a is None or b is None:
+                return None
+            return gap - abs(a - b)
+
+        estimate = paired_bootstrap(pairs, h3)
+        estimates.append(estimate)
+        judged.append(_judge(estimate))
+    if "insufficient data" in judged:
+        overall = "insufficient data"
+    elif all(j == "supported" for j in judged):
+        overall = "supported"
+    else:
+        overall = "not supported"
+    out.append(
+        Verdict(
+            model,
+            "H3",
+            "C3 − C1",
+            len(pairs),
+            estimates[0],
+            overall,
+            "validity gap minus abs(win-rate gap); HP-fraction variant: "
+            + _fmt_ci(estimates[1])
+            + f" ({judged[1]})",
+        )
+    )
+    return out
+
+
+def registered_verdicts(matches: Sequence["Match"]) -> List[Verdict]:
+    """Every registered contrast (H1–H3), per model, in a stable order.
+
+    Paired: a contrast uses only the (scenario, seed) pairs present in both of its
+    conditions, so a seed missing from one side drops out of that contrast rather
+    than skewing it. Directional: *supported* means the 95% interval lies entirely
+    above zero; anything else is *not supported*; no shared pairs is *insufficient
+    data*. The C1 comparison is additionally gated by the §7 C1 rule, reported
+    separately.
+    """
+    by_model: Dict[str, _Cells] = defaultdict(lambda: defaultdict(dict))
+    for m in matches:
+        by_model[m.model][m.condition][(m.scenario, m.seed)] = m
+    verdicts: List[Verdict] = []
+    for model in sorted(by_model):
+        cells = by_model[model]
+        if sum(c in cells for c in ("C1", "C2", "C2+M", "C3")) < 2:
+            continue  # a baseline plays one condition, so it has nothing to contrast
+        verdicts += _verdicts_for(model, cells)
+    return verdicts
+
+
+def _verdicts_section(verdicts: List[Verdict]) -> List[str]:
+    if not verdicts:
+        return []
+    return [
+        "",
+        "## Registered verdicts (prereg §7)",
+        "",
+        "Paired cluster bootstrap over shared (scenario, seed) pairs, per model. "
+        "*Supported* means the 95% interval of the contrast lies entirely above zero.",
+        "",
+        _table(
+            ["model", "hypothesis", "contrast", "pairs", "estimate", "verdict", "note"],
+            [
+                [
+                    v.model,
+                    v.hypothesis,
+                    v.contrast,
+                    str(v.pairs),
+                    _fmt_ci(v.estimate),
+                    v.verdict,
+                    v.note or "—",
+                ]
+                for v in verdicts
+            ],
+        ),
+    ]
 
 
 def _cost_row(
@@ -880,7 +1156,8 @@ def _bounds_section(bounds: List[_Bounds], problems: List[str]) -> List[str]:
         "",
         "## C1 under three parsers (prereg §7)",
         "",
-        "First-attempt validity, re-scored offline from the recorded text. *Strict* "
+        "First-attempt validity over fresh decisions, as in H1, re-scored offline "
+        "from the recorded text. *Strict* "
         "accepts only canonical text; *lenient* adds every registered repair, judged "
         "by the executor in the state the game was in. Later attempts and tactics "
         "depend on the live parser and are not re-scored.",
@@ -922,6 +1199,10 @@ def build_report(bundle: Path) -> Tuple[str, str, str, str]:
         matches.append(match_of(relative, records, mine, prices))
         bounded = _bounds_of(relative, records, problems)
         if bounded is not None:
+            # The bounds re-score first attempts, so like H1 they are over fresh
+            # decisions only; a retry after a refusal is recovery (prereg §6).
+            fresh = {d.index for d in mine if d.fresh}
+            bounded.decisions = [b for b in bounded.decisions if b.index in fresh]
             bounds.append(bounded)
     summary = summarise(
         bundle.name,

@@ -323,6 +323,17 @@ names where it should be addressed. Append; strike through and date an item when
   `DecisionTelemetry.provider_failures`, outside `request_count`), and the report breaks
   exclusions and retries down per model x condition. `is_infrastructure_error` moved to
   `agent.py` so the retry and the exclusion rule share one definition. Prereg §8.
+- **A16. ~~H1 counted retries as first attempts; H1–H3 had no decision rule; an
+  over-range area aim was silently repaired.~~ Fixed 2026-09-24** (Phase 1 review, H-1,
+  H-3, H-4).
+  - `Decision.fresh`: H1, H2 and the C1 bounds are measured over fresh decisions only;
+    per-call acceptance is reported as a secondary figure.
+  - `registered_verdicts`: a paired cluster bootstrap per model gives a directional
+    verdict for every registered contrast.
+  - `ToolExecutor` refuses an area aim beyond range as `out_of_range` instead of letting
+    the engine clamp it.
+  - A C3 `choose` naming no id is now excluded from the H2 split.
+  - All recorded in prereg §6–§7 before any data.
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 
