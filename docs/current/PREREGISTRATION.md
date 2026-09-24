@@ -332,7 +332,7 @@ implemented 2026-09-21):
 | `unknown_target` | The named entity or move option does not exist, or none was given where one is required |
 | `invalid_target_relation` | The target exists but is not legal for this action, including an illegal parameter combination |
 | `out_of_range` | Beyond the action's reach |
-| `destination_blocked` | Destination occupied by another creature |
+| `destination_blocked` | Destination occupied by another creature, or off the ground: no creature can fly, so a move may not change altitude (added 2026-09-24, before any data) |
 | `insufficient_resource` | A consumable is exhausted — movement feet, or a spell slot |
 | `action_economy_spent` | The action/bonus action/reaction is already used this turn |
 | `not_your_turn` | Acting out of initiative |

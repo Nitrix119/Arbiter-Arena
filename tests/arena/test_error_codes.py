@@ -75,6 +75,25 @@ def test_destination_blocked(make_entity, make_combat):
     )
 
 
+def test_destination_blocked_when_a_move_leaves_the_ground(make_entity, make_combat):
+    """No creature has a fly speed, so a voluntary move cannot change altitude.
+
+    A raw-coordinate condition can write any y, and an axis slip (y for z) used to be
+    an accepted, "valid" move into the air; the menu condition can never make one.
+    Refused *before* the cost check, so it is never read as spent movement.
+    """
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0))
+    goblin = make_entity("Goblin", team="b", pos=(100, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    call = ToolCall("move", {"x": 0.0, "y": 10.0, "z": 5.0})
+    assert _code(combat, fighter, call) == "destination_blocked"
+    assert (fighter.x, fighter.y, fighter.z) == (0, 0, 0)
+    assert fighter.resources.movement == 30  # nothing spent
+    far = ToolCall("move", {"x": 0.0, "y": 500.0, "z": 0.0})
+    assert _code(combat, fighter, far) == "destination_blocked"
+
+
 def test_insufficient_resource_when_movement_is_spent(make_entity, make_combat):
     fighter = make_entity("Fighter", team="a", pos=(0, 0, 0))
     goblin = make_entity("Goblin", team="b", pos=(200, 0, 0))

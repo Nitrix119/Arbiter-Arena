@@ -78,11 +78,34 @@ class TestMoveEntity:
         mover = _make_entity(speed=30)
         combat = _make_combat(mover)
 
-        combat.move_entity(mover, 3.0, 4.0, 0.0)
+        combat.move_entity(mover, 3.0, 0.0, 4.0)  # on the ground plane (x, z)
 
         assert mover.x == 3.0
-        assert mover.y == 4.0
+        assert mover.z == 4.0
         assert mover.resources.movement == 25  # 30 - 5
+
+    def test_a_voluntary_move_cannot_change_altitude(self):
+        """Flight is not modelled and no creature has a fly speed (SRD: a creature
+        without one cannot move up through the air), so a move keeps its y."""
+        from src.errors import DESTINATION_BLOCKED, RuleViolation
+
+        mover = _make_entity(speed=30)
+        combat = _make_combat(mover)
+
+        with pytest.raises(RuleViolation) as refused:
+            combat.move_entity(mover, 0.0, 5.0, 0.0)
+
+        assert refused.value.code == DESTINATION_BLOCKED
+        assert mover.y == 0.0
+        assert mover.resources.movement == 30  # nothing spent
+
+    def test_a_creature_placed_off_the_ground_moves_at_its_own_height(self):
+        mover = _make_entity(speed=30, y=10.0)
+        combat = _make_combat(mover)
+
+        combat.move_entity(mover, 5.0, 10.0, 0.0)
+
+        assert (mover.x, mover.y) == (5.0, 10.0)
 
     def test_move_cost_is_continuous_not_rounded_to_a_grid(self):
         """Movement is measured in feet, continuously — not snapped to 5-ft squares.

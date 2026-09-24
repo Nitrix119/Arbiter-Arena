@@ -678,8 +678,20 @@ class CombatSystem:
             ValueError: If it is not the entity's turn.
             ValueError: If the entity lacks sufficient movement resources.
             ValueError: If the destination overlaps an alive entity.
+            ValueError: If the move would change the entity's altitude (y).
         """
         self._assert_active(entity)
+        if new_y != entity.y:
+            # Flight is not modelled and no creature has a fly speed, and the SRD
+            # gives a creature without one no way up through the air — so a willing
+            # move keeps its height. Checked before the cost, so a move into the air
+            # is never misread as spent movement. Forced movement (push_entity) is
+            # not flight and is not bound by this.
+            raise RuleViolation(
+                DESTINATION_BLOCKED,
+                f"{entity.name} cannot fly: a move must stay at y={entity.y:g} "
+                "(its ground level); give x and z only",
+            )
         distance = math.sqrt(
             (new_x - entity.x) ** 2 + (new_y - entity.y) ** 2 + (new_z - entity.z) ** 2
         )
