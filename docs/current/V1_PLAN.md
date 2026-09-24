@@ -808,3 +808,43 @@ data exists. Ledger entries A14–A17 record them.
 
 Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml` (model id, host, prices,
 reasoning), dry-run it, and run it live only with the go-ahead.
+
+#### Phase 1 validity fixes (2026-09-24)
+
+A third review, made before the pilot, checked the finished harness for anything that would
+bias a registered contrast rather than crash. It found five defects, and the fixes found a
+sixth. All six are fixed in seven commits, `fe46006` to `d88c125`. 1,601 tests pass;
+flake8, mypy and Black are clean. Every rule they change is registered in PREREGISTRATION
+§2, §6, §7 and §9 before any data. Ledger A18 to A23.
+
+**Would have biased a hypothesis:**
+- **Double actions (H1, C2 − C1).** C1 refused two different ACTION lines, while the tool
+  conditions ran the first of several calls and counted the decision valid. Two
+  different calls are now refused in every condition, and `parallel_tool_calls: false` is
+  sent.
+- **The C1 gate (H1, C2 − C1).** The audit's decision rule and its sample counted retries,
+  while H1 and the lenient bound did not. All are now fresh-only.
+- **Area spells at a creature (H2).** They were classed as non-spatial. An area spell is
+  now spatial however it was aimed.
+- **Flight.** A willing move could leave the ground. An axis slip was an accepted move in
+  the raw-coordinate conditions, and the menu could never make one. The engine now refuses
+  it as `destination_blocked`.
+- **Float noise in the menu.** A move to `x = 4.4e-16` was valid in C3 and unsayable in
+  C1. Coordinates are now held to three decimal places, and the C1 round trip is tested on
+  every state a match reaches.
+
+**Reporting:**
+- A resume no longer overwrites excluded attempts, which undercounted §8 exclusions and
+  the spend cap.
+- A mock that casts now runs area aiming end to end in every condition, and the null
+  control holds with it.
+- The report prints the full H1 ordering as its own verdict.
+- The prereg states that the seven contrasts carry no multiplicity correction.
+
+**Open, and blocking the pilot: ledger A24.** Combat ends only when at most one
+*creature* is alive, not one *team*. A 2v2 won with two survivors plays on to round 20,
+with the winners acting against nobody. That wastes paid calls and pads H1 with trivial
+decisions, in exactly the matches a model wins. The fix needs a decision: where the end
+rule lives, and whether a turn stops at the killing blow.
+
+Next: settle and fix A24, then **the Phase 2 pilot**.

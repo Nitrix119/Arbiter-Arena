@@ -347,6 +347,57 @@ names where it should be addressed. Append; strike through and date an item when
   - **Still open, low:** pin `lark` exactly at `study-freeze` (a range today; the version
     is recorded per match). The menu lists attacks first, a primacy effect to declare in
     prereg §9. A7, A12 and A13 are unchanged.
+- **A18. ~~Tool conditions ran the first of several different calls.~~ Fixed 2026-09-24**
+  (`fe46006`). C1 refused two different ACTION lines, while C2, C2+M and C3 silently ran
+  the first of several tool calls and counted the decision valid. That biased H1's
+  C2 − C1 contrast toward its prediction. More than one *distinct* call is now
+  `malformed_output` everywhere, and identical repeats are one action.
+  `parallel_tool_calls: false` is sent, and multi-call responses are counted per cell.
+  Prereg §6.
+- **A19. ~~The C1 decision rule and audit counted retries.~~ Fixed 2026-09-24**
+  (`e6357ff`). `audit.decision_rule` pooled every decision while the lenient bound was
+  fresh-only, and the audit population included retries. Both now read freshness from
+  `study_report.decisions_of`. Prereg §7.
+- **A20. ~~H2 put an area spell aimed at a creature in the non-spatial bucket.~~ Fixed
+  2026-09-24** (`1808d9d`). `classify` now knows the scenario's area spells. Prereg §6.
+- **A21. ~~Creatures could move off the ground.~~ Fixed 2026-09-24** (`45799d8`).
+  `move_entity` accepted any `y`. A willing move now keeps its altitude, refused as
+  `destination_blocked`. Prereg §6.
+  - Open, low: `_clear_option_along` still follows the full 3D direction to a target. If
+    a creature is ever elevated, "close to melee" would propose a move the engine now
+    refuses, and the enumeration property test would fail loudly. The fix is to
+    flatten the unit vector onto the ground plane when elevation enters the study.
+- **A22. ~~A resume overwrote excluded attempts.~~ Fixed 2026-09-24** (`607a2f4`). The
+  attempt number restarted at 1 on each run, which undercounted the §8 exclusions and
+  the spend cap.
+- **A23. ~~Offered coordinates carried float noise C1 could not say.~~ Fixed 2026-09-24**
+  (`81f064f`).
+  - Found by the new casting mock: a move to `x = 4.44e-16` rendered in exponent
+    notation, which C1's grammar does not read.
+  - Candidates are now held to three decimal places. A property test covers every state
+    a random-policy match reaches.
+  - Also landed in `d88c125`: the casting mock (`policy = "random"` for the mock), the
+    `H1 | full ordering` row, and a multiplicity statement in prereg §7 and §9.
+  - Still open, low: C1's grammar reads no exponent notation, while C2 accepts it as a
+    JSON number. Models rarely write it. If the pilot shows any, decide it at the
+    freeze.
+- **A24. Combat does not end when one *team* is left — open, high; needs a decision
+  before the pilot.**
+  - `TurnManager.end_turn` ends combat only when at most one *creature* is alive. In a
+    2v2 whose winner keeps two survivors, the winners take turns against nobody until
+    round 20.
+  - Measured on 2026-09-24: in one random-baseline `aoe_placement` match, 34 of 48
+    model decisions came after the enemy team was wiped in round 3. `match_end` then
+    reports `rounds: 21`.
+  - Effect on the study, in the matches the model *wins*:
+    - paid LLM calls are wasted;
+    - H1's denominators are padded with trivially valid decisions, a padding that tracks
+      tactical success and so can track condition;
+    - the "rounds" measure is distorted.
+  - Kiting (1v1) and losses are unaffected.
+  - Fix options: end combat when at most one team has living members, in the engine
+    (`TurnManager`) or in the arena loop (`run_match`). Also decide whether a turn stops
+    mid-turn at the killing blow.
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 
