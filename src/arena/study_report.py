@@ -20,10 +20,11 @@ analysed) and writes three files to ``<bundle>/report/``:
   *Per-call acceptance* (every call, retries included) is reported alongside.
 * *Recovery*: after a rejected decision, the same actor's next decision in the same turn
   was accepted. Rejections with no later decision that turn are not counted.
-* *Spatial* (H2): a move, or a spell aimed at a point. For a refused attempt, judged
-  from what was attempted — a C1 line starting with a move verb or a cast giving
-  coordinates; a C3 id naming a move or an aim point. A response with no action at all
-  is neither.
+* *Spatial* (H2): a move, or a cast of an area spell however it was aimed (at a
+  point, or wrongly at a creature). For a refused attempt, judged from what was
+  attempted — a C1 line starting with a move verb, or a cast giving coordinates or
+  naming an area spell; a C3 id naming a move or an aim point. A response with no
+  action at all is neither.
 * Rates are pooled over decisions; intervals are a **match-level (cluster) bootstrap**
   — decisions within a match are not independent — with a fixed seed, so the report
   is byte-identical every time it is run. Win rates use **Wilson** intervals.
@@ -35,6 +36,7 @@ Standard library only: no numpy, no pandas, no plots (ledger A11).
 """
 
 import csv
+import functools
 import io
 import json
 import math
@@ -42,14 +44,16 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
 
 from src.arena.free_text import UNREAD_TEXT
+from src.arena.identifiers import identifier_key
 from src.arena.interfaces import REGISTRY
 from src.arena.metrics import area_hits, compute_report
 from src.arena.mock_model import MOCK_MODEL
 from src.arena.rescore import Bounded, RescoreError, rescore
 from src.arena.scenarios import SCENARIOS, model_team
+from src.models.spell_properties import AOEShape
 from src.utils import dice
 
 REPORT_DIR = "report"
@@ -297,23 +301,65 @@ def _attempted_verb(text: str) -> str:
     return words[0].casefold() if words else ""
 
 
-def classify(call: Dict[str, Any]) -> Tuple[str, Optional[bool]]:
-    """(kind, spatial) for a recorded call — what was attempted, accepted or not."""
+@functools.lru_cache(maxsize=None)
+def _area_spells(scenario: str) -> FrozenSet[str]:
+    """Identifier keys of the area spells *scenario*'s creatures know.
+
+    Only areas aimed at a point: a cone or line starts at the caster and is only
+    pointed, as :func:`~src.arena.tools._refuse_out_of_range_aim` treats it. An
+    unknown roster gives the empty set, which leaves classification by argument
+    shape alone.
+    """
+    entry = SCENARIOS.get(scenario)
+    if entry is None:
+        return frozenset()
+    combat = entry.build()
+    registry = combat.spell_registry
+    if registry is None:
+        return frozenset()
+    keys = set()
+    for creature in combat.combatants:
+        for name in creature.stat_block.known_spells:
+            if name not in registry:
+                continue
+            area = registry.get(name).aoe
+            if area is not None and area.shape not in (AOEShape.CONE, AOEShape.LINE):
+                keys.add(identifier_key(name))
+    return frozenset(keys)
+
+
+def _names_area_spell(written: Any, area_spells: FrozenSet[str]) -> bool:
+    return isinstance(written, str) and identifier_key(written) in area_spells
+
+
+def classify(
+    call: Dict[str, Any], area_spells: FrozenSet[str] = frozenset()
+) -> Tuple[str, Optional[bool]]:
+    """(kind, spatial) for a recorded call — what was attempted, accepted or not.
+
+    A cast of an *area* spell (*area_spells*, by identifier key) is spatial however
+    it was aimed: aiming one at a creature is the typical spatial mistake, and under
+    C3 every area option is spatial by its ``:aim:`` id (prereg §6).
+    """
     name = call.get("name", "")
     args = call.get("arguments", {}) or {}
     if name == "move":
         return "move", True
     if name == "cast_spell":
-        return (
-            ("cast_point", True) if "target_point" in args else ("cast_target", False)
-        )
+        if "target_point" in args:
+            return "cast_point", True
+        return "cast_target", _names_area_spell(args.get("spell_name"), area_spells)
     if name in ("attack", "end_turn"):
         return name, False
     if name == UNREAD_TEXT:
         text = str(args.get("text", ""))
         verb = _attempted_verb(text)
         spatial = verb in _MOVE_VERBS or (
-            verb == "cast" and bool(_COORDINATES.search(text))
+            verb == "cast"
+            and (
+                bool(_COORDINATES.search(text))
+                or any(key in identifier_key(text) for key in area_spells)
+            )
         )
         return "unread", spatial
     if name == "choose":
@@ -330,6 +376,7 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
     start = next(r for r in records if r["kind"] == "match_start")
     team = model_team(start, records)
     members = set(start.get("teams", {}).get(team, []))
+    area_spells = _area_spells(str(start.get("scenario", "")))
     out: List[Decision] = []
     round_number = turn = 0
     for record in records:
@@ -347,7 +394,7 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
             reading = requests[-1].get("interpretation") or {}
             layer = reading.get("layer")
             host = requests[-1].get("served_provider")
-        kind, spatial = classify(record["call"])
+        kind, spatial = classify(record["call"], area_spells)
         ok = bool(record["result"].get("ok"))
         count = telemetry.get("request_count", 1)
         before = out[-1] if out else None

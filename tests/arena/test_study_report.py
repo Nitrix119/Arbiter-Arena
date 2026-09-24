@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from src.arena.free_text import UNREAD_TEXT
+from src.arena.identifiers import identifier_key
 from src.arena.interfaces import REGISTRY
 from src.arena.study import main, parse_grid, run_grid
 from src.arena.study_report import (
@@ -109,6 +110,95 @@ def test_empty_denominators_give_no_estimate():
 )
 def test_what_counts_as_spatial(call, kind, spatial):
     assert classify(call) == (kind, spatial)
+
+
+# -- an area spell is spatial however it was aimed (review 2026-09-24, prereg §6) ---
+
+FIREBALL = frozenset({identifier_key("Fireball")})
+
+
+@pytest.mark.parametrize(
+    "call, spatial",
+    [
+        (
+            {
+                "name": "cast_spell",
+                "arguments": {"spell_name": "Fireball", "target_ids": ["raider-1"]},
+            },
+            True,
+        ),
+        (
+            {
+                "name": "cast_spell",
+                "arguments": {"spell_name": "fire ball", "target_ids": "raider-1"},
+            },
+            True,
+        ),
+        (
+            {
+                "name": "cast_spell",
+                "arguments": {"spell_name": "Fire Bolt", "target_ids": ["raider-1"]},
+            },
+            False,
+        ),
+        (
+            {
+                "name": "cast_spell",
+                "arguments": {"spell_name": None, "target_ids": ["raider-1"]},
+            },
+            False,
+        ),
+        (
+            {"name": UNREAD_TEXT, "arguments": {"text": "cast fireball at raider 1"}},
+            True,
+        ),
+        (
+            {"name": UNREAD_TEXT, "arguments": {"text": "cast Fire Bolt at raider"}},
+            False,
+        ),
+        ({"name": UNREAD_TEXT, "arguments": {"text": "attack the fireball"}}, False),
+    ],
+    ids=[
+        "aimed-at-a-creature",
+        "spelling-tolerant",
+        "single-target-spell",
+        "no-spell-named",
+        "unread-cast-at-a-creature",
+        "unread-single-target",
+        "unread-not-a-cast",
+    ],
+)
+def test_an_area_spell_is_spatial_however_it_was_aimed(call, spatial):
+    """A Fireball aimed at a creature is a spatial mistake, not a non-spatial one.
+
+    Deciding by argument shape put the most typical area-spell error (ledger A3) in
+    the non-spatial bucket, working against H2 on the one scenario built to test it;
+    under C3 every area option is spatial by its ``:aim:`` id.
+    """
+    assert classify(call, FIREBALL)[1] is spatial
+
+
+def test_area_spells_come_from_the_scenario_roster():
+    from src.arena.study_report import _area_spells
+
+    assert _area_spells("aoe_placement") == FIREBALL
+    assert _area_spells("kiting") == frozenset()
+    assert _area_spells("no-such-scenario") == frozenset()
+
+
+def test_a_transcript_classifies_by_its_scenarios_area_spells():
+    records = _records((False, 1, True))
+    records[0]["scenario"] = "aoe_placement"
+    records[0]["teams"] = {"a": ["archer"], "b": ["raider-1"]}
+    action = next(r for r in records if r["kind"] == "action")
+    action["call"] = {
+        "name": "cast_spell",
+        "arguments": {"spell_name": "Fireball", "target_ids": ["raider-1"]},
+    }
+
+    (decision,) = decisions_of(Path("m.jsonl"), records)
+
+    assert decision.spatial is True
 
 
 def _records(*decisions):

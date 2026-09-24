@@ -421,6 +421,14 @@ pilot frequencies rather than in advance.
   coordinates; a C3 id naming a move or an aim point. A response containing no action at all
   is neither spatial nor non-spatial, and is excluded from the H2 split. That includes a C3
   `choose` that names no id.
+  - **An area spell is spatial however it was aimed (2026-09-24, before any data).** A
+    cast of an area spell counts as spatial whether it gave a point or, wrongly, named a
+    creature. So does a refused C1 cast line naming one. Area spells are those the
+    scenario's creatures know whose area is aimed at a point. Cones and lines are only
+    pointed. Deciding by argument shape alone had put the typical area-spell mistake
+    (`cast Fireball at raider-1`, ledger A3) in the non-spatial bucket, which worked
+    against H2 on the one scenario built to test it. Under C3 every area option was
+    already spatial.
 - **An area aim beyond the spell's range is `out_of_range` (2026-09-24, before any
   data).**
   - SRD: an area is centred on "a point you choose within range".
