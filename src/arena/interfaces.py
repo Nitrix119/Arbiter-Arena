@@ -257,9 +257,10 @@ class RawParamsInterface(ActionInterface):
     ) -> Optional[ToolCall]:
         """Pass the call through, refusing only a move by menu id.
 
-        The executor still resolves ``option_id`` for the deterministic baselines, and
-        C2+M's menu shows every move's id. A host need not enforce the tool schema, so
-        without this a model could move by id — C3's format inside a raw-parameter
+        The executor still resolves ``option_id`` for the deterministic baselines, and a
+        model can guess one from a move's label even though C2+M's menu no longer
+        displays it. A host need not enforce the tool schema, so without this a model
+        could move by id — C3's format inside a raw-parameter
         condition, the dual path Phase 0 closed in the schema alone.
         """
         self._refuse_several(call, record)
@@ -358,6 +359,35 @@ class SchemaMenuInterface(RawParamsInterface):
 
     def action_prompt(self) -> str:
         return f"{_RAW_PARAMS_ACTION}\n{_MENU_NOTE}"
+
+    def shape_observation(self, observation: Dict[str, Any]) -> Dict[str, Any]:
+        """The menu, minus the move and aim ids this condition may not act by.
+
+        A move by ``option_id`` is refused here (:meth:`interpret`), so displaying
+        one set a trap only C2+M could fall into — biasing C2+M down, which inflates
+        C3 − C2+M and shrinks C2+M − C2, the very split the condition exists for.
+        Labels, coordinates, costs and who an aim catches all stay. A copy is
+        edited; the caller's observation keeps its ids for the baselines.
+        """
+        shown = super().shape_observation(observation)
+        menu = shown.get("legal_actions")
+        if menu is None:
+            return shown
+        menu = dict(menu)
+        menu["moves"] = [_without_id(m) for m in menu.get("moves", [])]
+        menu["spells"] = [
+            {
+                **spell,
+                "aim_points": [_without_id(a) for a in spell.get("aim_points", [])],
+            }
+            for spell in menu.get("spells", [])
+        ]
+        shown["legal_actions"] = menu
+        return shown
+
+
+def _without_id(option: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in option.items() if k != "option_id"}
 
 
 #: C3's entire tool vocabulary. One tool, one argument — the condition's whole point.

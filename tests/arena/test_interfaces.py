@@ -303,8 +303,8 @@ def test_move_requires_the_ground_plane():
 def test_a_raw_param_move_by_menu_id_is_refused_at_run_time(name, arguments):
     """The schema no longer offers option_id, but a host need not enforce a schema.
 
-    The executor still honours option_id for the baselines, and C2+M's menu *shows*
-    every move's option_id. So a model that sends one anyway would get C3's format
+    The executor still honours option_id for the baselines, and C2+M's menu used to
+    *show* every move's option_id. So a model that sends one anyway would get C3's format
     inside a raw-parameter condition. The guard has to be behavioural, not only a
     schema and a prompt that never mention it (review 2026-09-24, C-3).
     """
@@ -600,3 +600,29 @@ def test_a_c3_identical_repeat_is_one_action():
     call = ToolCall("choose", {"action_id": "end_turn"})
     resolved = get_interface(C3).interpret(call, _several(1), _menu_obs())
     assert resolved.name == "end_turn"
+
+
+# -- C2+M is not shown ids it may not use (review 2026-09-24) ------------------------
+
+
+def test_c2_menu_shows_no_id_it_cannot_act_by():
+    """A move or aim by menu id is refused in C2+M, so the menu must not display one.
+
+    Showing it set a trap only C2+M could fall into, biasing C2+M down: inflating
+    C3 − C2+M (the format effect) and shrinking C2+M − C2 (the affordance effect).
+    Everything a raw-parameter call needs is still shown.
+    """
+    import json
+
+    _, _, observation = _aoe_mage_observation()
+    shown = get_interface(C2_MENU).shape_observation(observation)
+
+    assert "option_id" not in json.dumps(shown, default=str)
+    menu = shown["legal_actions"]
+    assert menu["moves"] and all(
+        {"label", "x", "y", "z", "cost_ft"} <= set(m) for m in menu["moves"]
+    )
+    aims = [a for spell in menu["spells"] for a in spell["aim_points"]]
+    assert aims and all({"x", "y", "z", "hits"} <= set(a) for a in aims)
+    # The caller's copy keeps its ids: the deterministic baselines move by them.
+    assert all("option_id" in m for m in observation["legal_actions"]["moves"])
