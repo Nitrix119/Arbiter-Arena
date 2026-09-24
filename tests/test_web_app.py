@@ -222,3 +222,84 @@ class TestWebSocketCombat:
             assert msg["seq"] == 2
             # The current entity should have changed
             assert msg["current_entity_id"] != first_entity
+
+
+# ---------------------------------------------------------------------------
+# A fight ends at the killing blow (ledger A24)
+# ---------------------------------------------------------------------------
+
+
+class _FakeSocket:
+    def __init__(self):
+        self.sent = []
+
+    async def send_json(self, msg):
+        self.sent.append(msg)
+
+
+def test_a_killing_attack_announces_the_end_at_once():
+    """Two allies left standing is a finished fight: the UI hears so with the blow,
+    not after someone presses "end turn"."""
+    import asyncio
+
+    from src.arena.setup import build_combat
+    from src.models import (
+        AbilityScores,
+        AttackAction,
+        Damage,
+        DamageType,
+        Entity,
+        StatBlock,
+    )
+    from web.routers.combat import handle_attack
+
+    axe = AttackAction(
+        name="Executioner",
+        description="",
+        bonus_to_hit=50,
+        damage=[Damage(DamageType.SLASHING, formula="100")],
+        range_ft=5.0,
+    )
+
+    def creature(name, team, x, attacks=()):
+        block = StatBlock(
+            name=name,
+            ability_scores=AbilityScores(10, 10, 10, 10, 10, 10),
+            hit_points_max=5,
+            armor_class=10,
+            proficiency_bonus=2,
+            actions=list(attacks),
+        )
+        return Entity(stat_block=block, team=team, x=x, y=0.0, z=0.0)
+
+    fighter = creature("Fighter", "a", 0.0, [axe])
+    squire = creature("Squire", "a", -10.0)
+    goblin = creature("Goblin", "b", 5.0)
+    combat = build_combat([fighter, squire, goblin])
+    combat.start_combat()
+    tracker = combat.initiative_tracker
+    tracker.current_turn_index = next(
+        i for i, e in enumerate(tracker.initiative_order) if e.entity is fighter
+    )
+    combat.rng.seed(3)
+    lookup = {e.entity_id: e for e in combat.combatants}
+    ws = _FakeSocket()
+
+    asyncio.run(
+        handle_attack(
+            ws,
+            combat,
+            {
+                "attacker_id": fighter.entity_id,
+                "defender_id": goblin.entity_id,
+                "action_name": "Executioner",
+            },
+            7,
+            lookup,
+        )
+    )
+
+    assert [m["type"] for m in ws.sent] == ["action_result", "combat_ended"]
+    ended = ws.sent[1]
+    assert (ended["seq"], ended["winner"]) == (7, "a")
+    assert ended["combat_state"]["state"] == "ENDED"

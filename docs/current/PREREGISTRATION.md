@@ -155,6 +155,7 @@ model capability.
 | Temperature | 0 (or provider minimum), recorded. Still not deterministic — stated as a limitation. |
 | Failure budget | Existing: 3 consecutive **or** 5 total failed calls per turn → turn forced to end. Rejection feedback returned to the agent. |
 | Round cap | 20 (`DEFAULT_ROUND_CAP`) |
+| Match end | The moment one team has no one standing, at the killing blow. Added 2026-09-24, before any data. Combat used to end only when a single *creature* was left, so a 2v2 won with two survivors played on to the round cap. The winners then acted against nobody, which wasted paid calls and padded H1 with trivial decisions in exactly the matches a model won. Winners are unchanged, since the match result was already decided by team. A turn ended this way is recorded as `end_cause: over` and is neither forced nor forfeited. |
 | Seeds | 10 per cell, **paired** across conditions |
 | Engine | Pinned commit, recorded in every match manifest |
 | Combatant ids | Readable and roster-derived (`archer`, `fighter-a1`) — a control, §4.2 |

@@ -381,8 +381,17 @@ names where it should be addressed. Append; strike through and date an item when
   - Still open, low: C1's grammar reads no exponent notation, while C2 accepts it as a
     JSON number. Models rarely write it. If the pilot shows any, decide it at the
     freeze.
-- **A24. Combat does not end when one *team* is left — open, high; needs a decision
-  before the pilot.**
+- **A24. ~~Combat does not end when one *team* is left.~~ Fixed 2026-09-24**, in the
+  engine, as decided by the user: a fight ends the moment one side is left.
+  - `turn_manager.sides_standing` counts sides. A creature with no team fights for
+    itself, so a free-for-all is unchanged.
+  - `CombatSystem` checks right after every attack, spell and legendary action
+    (`_decides_fight`), and `end_turn` checks before advancing, which catches deaths
+    from effects. `end_turn` is a no-op once combat is over.
+  - The arena's turn driver stops at the killing blow (`end_cause: over`, not forced).
+    The web UI sends `combat_ended` straight after the deciding action.
+  - Re-measured: zero decisions after a win, and `rounds` is the round of the kill.
+    Winners are unchanged. Prereg §4 "Match end". Original report kept below.
   - `TurnManager.end_turn` ends combat only when at most one *creature* is alive. In a
     2v2 whose winner keeps two survivors, the winners take turns against nobody until
     round 20.

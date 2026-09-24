@@ -847,4 +847,10 @@ with the winners acting against nobody. That wastes paid calls and pads H1 with 
 decisions, in exactly the matches a model wins. The fix needs a decision: where the end
 rule lives, and whether a turn stops at the killing blow.
 
-Next: settle and fix A24, then **the Phase 2 pilot**.
+> **A24 fixed, 2026-09-24.** A fight now ends the moment one team is left, at the
+> killing blow, in the engine. The arena turn driver stops there too (`end_cause: over`),
+> and the web UI announces the end with the deciding action. Registered in prereg §4
+> ("Match end"); ledger A24.
+
+Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml` (model id, host, prices,
+reasoning), dry-run it, and run it live only with the go-ahead.

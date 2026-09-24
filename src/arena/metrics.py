@@ -97,11 +97,12 @@ class Turn:
 
     entity_id: str
     actions: List[dict]
-    end_cause: str  # "agent" | "budget" | "cap" | "skip"
+    end_cause: str  # "agent" | "budget" | "cap" | "skip" | "over"
 
     @property
     def forced(self) -> bool:
-        return self.end_cause != "agent"
+        """The driver ended it — not the agent, and not the fight ending."""
+        return self.end_cause not in ("agent", "over")
 
 
 def _end_cause(actions: List[dict]) -> str:

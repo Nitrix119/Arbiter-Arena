@@ -202,6 +202,31 @@ async def _send(ws: WebSocket, msg: dict[str, Any]) -> None:
     await ws.send_json(msg)
 
 
+def _combat_ended(combat: CombatSystem, seq: int | None, log: list) -> dict:
+    """The ``combat_ended`` message: the side still standing, and the final state."""
+    alive = combat.get_alive_entities()
+    return {
+        "type": "combat_ended",
+        "seq": seq,
+        "winner": alive[0].team if alive else None,
+        "log": log,
+        "combat_state": serialize_combat_state(combat),
+    }
+
+
+async def _announce_if_over(
+    ws: WebSocket, combat: CombatSystem, seq: int | None
+) -> None:
+    """Announce the end straight after the action that decided the fight.
+
+    The engine ends combat at the killing blow, not at the next end of turn
+    (ledger A24), so the action handlers say so at once. The blow's own log lines
+    already went out with its ``action_result``.
+    """
+    if combat.state.name == "ENDED":
+        await _send(ws, _combat_ended(combat, seq, []))
+
+
 async def _send_error(
     ws: WebSocket,
     seq: int | None,
@@ -368,6 +393,7 @@ async def handle_attack(
             "combat_state": serialize_combat_state(combat),
         },
     )
+    await _announce_if_over(ws, combat, seq)
 
 
 # ── Handler: cast_spell ────────────────────────────────────────────────────
@@ -437,6 +463,7 @@ async def handle_cast_spell(
             "combat_state": serialize_combat_state(combat),
         },
     )
+    await _announce_if_over(ws, combat, seq)
 
 
 # ── Handler: move ──────────────────────────────────────────────────────────
@@ -564,6 +591,7 @@ async def handle_legendary_action(
             "combat_state": serialize_combat_state(combat),
         },
     )
+    await _announce_if_over(ws, combat, seq)
 
 
 # ── Handler: end_turn ──────────────────────────────────────────────────────
@@ -582,19 +610,7 @@ async def handle_end_turn(
     new_logs = combat.get_combat_log()[log_before:]
 
     if combat.state.name == "ENDED":
-        # Determine winning team
-        alive = combat.get_alive_entities()
-        winner = alive[0].team if alive else None
-        await _send(
-            ws,
-            {
-                "type": "combat_ended",
-                "seq": seq,
-                "winner": winner,
-                "log": new_logs,
-                "combat_state": serialize_combat_state(combat),
-            },
-        )
+        await _send(ws, _combat_ended(combat, seq, new_logs))
     else:
         current = combat.get_current_entity()
         await _send(

@@ -44,7 +44,7 @@ from .initiative import InitiativeTracker
 from .damage_processor import DamageProcessor
 from .attack_resolver import AttackResolver
 from .spell_resolver import SpellResolver
-from .turn_manager import TurnManager
+from .turn_manager import TurnManager, sides_standing
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
@@ -83,6 +83,23 @@ def _with_rng(method: _F) -> _F:
     def wrapper(self: "CombatSystem", *args: Any, **kwargs: Any) -> Any:
         with dice.using_rng(self.rng):
             return method(self, *args, **kwargs)
+
+    return wrapper  # type: ignore[return-value]
+
+
+def _decides_fight(method: _F) -> _F:
+    """End combat as soon as *method* leaves at most one side standing.
+
+    A real fight is over the moment the last enemy falls, not at the end of the
+    round — so every action that can kill checks straight away, rather than leaving
+    the winners to act against nobody until someone ends a turn.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self: "CombatSystem", *args: Any, **kwargs: Any) -> Any:
+        result = method(self, *args, **kwargs)
+        self._end_if_decided()
+        return result
 
     return wrapper  # type: ignore[return-value]
 
@@ -279,6 +296,7 @@ class CombatSystem:
         )
         self._turn_manager.start()
 
+    @_decides_fight
     @_with_rng
     def resolve_attack(
         self, attacker: Entity, defender: Entity, action: AttackAction
@@ -319,6 +337,7 @@ class CombatSystem:
             self._log_action(attacker, log_msg)
         return hit, total_damage, roll_detail
 
+    @_decides_fight
     @_with_rng
     def resolve_spell(
         self,
@@ -427,6 +446,7 @@ class CombatSystem:
             for i, (hit, damage, _, roll_detail, healing, healed) in enumerate(results)
         ]
 
+    @_decides_fight
     @_with_rng
     def resolve_legendary_action(
         self,
@@ -547,6 +567,10 @@ class CombatSystem:
         Raises:
             ValueError: If *entity_id* is provided but not active.
         """
+        if self.state == CombatState.ENDED:
+            # Already decided (mid-turn, at the killing blow): nothing to advance. The
+            # web UI's "end turn" after a kill lands here and then reads the end.
+            return
         if entity_id is not None:
             entity = next(
                 (e for e in self.combatants if e.entity_id == entity_id),
@@ -563,6 +587,11 @@ class CombatSystem:
         else:
             self._log_action(self._turn_manager.get_current_entity(), "takes turn")
 
+    def _end_if_decided(self) -> None:
+        """End combat if it is running and at most one side is left standing."""
+        if self.state == CombatState.ACTIVE and sides_standing(self.combatants) <= 1:
+            self.end_combat()
+
     def end_combat(self) -> None:
         """End the combat encounter."""
         self.state = CombatState.ENDED
@@ -570,6 +599,8 @@ class CombatSystem:
 
         if len(alive) == 1:
             self._log_action(alive[0], "wins the battle!")
+        elif alive and sides_standing(alive) == 1:
+            self._log_action(None, f"Team {alive[0].team} wins the battle!")
         elif len(alive) == 0:
             self._log_action(None, "Combat ended with no survivors")
         else:
