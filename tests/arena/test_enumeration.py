@@ -317,6 +317,49 @@ def test_no_cap_bites_on_any_state_a_match_produces(scenario_name, seed):
     assert flags and not any(flags), (scenario_name, seed)
 
 
+class _RandomWatching(Agent):
+    """Plays the random menu policy — which wanders further than the scripted one —
+    and keeps every menu it is shown."""
+
+    def __init__(self, team):
+        from src.arena.mock_model import RandomMenuPolicy
+
+        super().__init__("watch", team)
+        self._policy = RandomMenuPolicy("watch", team)
+        self.menus = []
+
+    def reseed(self, seed):
+        self._policy.reseed(seed)
+
+    def decide(self, observation):
+        self.menus.append(observation["enumerated_actions"])
+        return self._policy.decide(observation)
+
+
+@pytest.mark.parametrize("scenario_name", sorted(SCENARIOS))
+@pytest.mark.parametrize("seed", [1, 2, 3])
+def test_every_listed_action_reads_back_in_c1_on_states_a_match_produces(
+    scenario_name, seed
+):
+    """C1 can say everything C3 can list — on the boards a match reaches, not only the
+    opening. A candidate carrying float noise (x = 4.4e-16 for a point on the axis)
+    rendered in exponent notation, which C1's grammar does not read: the same choice
+    was then valid in C3 and malformed in C1 (found 2026-09-24 by the casting mock).
+    """
+    from src.arena.free_text import read_response, render_command
+
+    watchers = {team: _RandomWatching(team) for team in ("a", "b")}
+    run_match(SCENARIOS[scenario_name].build(), watchers, seed=seed)
+
+    menus = [menu for w in watchers.values() for menu in w.menus]
+    assert menus
+    for menu in menus:
+        for action in menu:
+            text = "ACTION: " + render_command(action.call)
+            reading = read_response(text)
+            assert reading.call is not None and reading.layer == 0, text
+
+
 def test_a_biting_cap_is_flagged_in_the_observation(monkeypatch):
     from src.arena import observation as observation_module
 

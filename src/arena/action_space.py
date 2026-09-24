@@ -49,6 +49,11 @@ DEFAULT_AIM_STEP_FT = 5.0
 DEFAULT_MAX_AIM_POINTS = 24
 #: Largest creature half-extent to pad sweep bounds by (Gargantuan is 20 ft).
 _MAX_CREATURE_HALF_FT = 10.0
+#: Decimal places every offered coordinate is held to. Geometry leaves float noise
+#: (x = 4.4e-16 for a point on the axis) that no model should have to copy, and that
+#: C1's grammar cannot read in exponent form — so a listed move would be valid in C3
+#: and unsayable in C1. A thousandth of a foot changes no outcome.
+COORDINATE_DP = 3
 
 
 @dataclass(frozen=True)
@@ -343,9 +348,11 @@ def _clear_option_along(
     ux, uy, uz = unit
     travel = min(max(desired_travel, 0.0), budget)
     while travel >= 1.0:
-        nx = entity.x + ux * travel
-        ny = entity.y + uy * travel
-        nz = entity.z + uz * travel
+        # Rounded *before* the clearance check, so the point offered is the point
+        # checked (COORDINATE_DP).
+        nx = round(entity.x + ux * travel, COORDINATE_DP)
+        ny = round(entity.y + uy * travel, COORDINATE_DP)
+        nz = round(entity.z + uz * travel, COORDINATE_DP)
         if combat.is_destination_clear(entity, nx, ny, nz):
             return MoveOption(
                 option_id, label, description, nx, ny, nz, round(travel, 1)
@@ -449,7 +456,7 @@ def _sweep_bounds(
 def _frange(start: float, stop: float, step: float) -> List[float]:
     """Inclusive float range, quantised so the same bounds always give the same grid."""
     count = int(math.floor((stop - start) / step)) + 1
-    return [round(start + i * step, 3) for i in range(max(count, 1))]
+    return [round(start + i * step, COORDINATE_DP) for i in range(max(count, 1))]
 
 
 def aim_candidates(
