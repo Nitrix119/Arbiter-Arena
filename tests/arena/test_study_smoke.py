@@ -56,3 +56,43 @@ def test_every_cell_runs_offline_and_replays(tmp_path):
 
     second = run_grid(grid, tmp_path, echo=lambda _: None)
     assert (second.done, second.skipped) == (0, 16)
+
+
+def test_a_hostile_model_cannot_stop_the_grid(tmp_path):
+    """Every cell again, with the mock sending what real models and hosts send.
+
+    The ordinary smoke's mock only ever writes well-formed output, which is why the
+    crashes found in the 2026-09-24 review passed it: unparseable tool arguments and
+    wrongly-typed values stopped the runner as "harness bugs". Here every other
+    decision is hostile; the grid must finish, exclude nothing, and replay at 100%.
+    """
+    grid = parse_grid(
+        {
+            **GRID,
+            "models": [
+                {
+                    "id": "mock-hostile",
+                    "provider": "mock",
+                    "stumble_on": list(range(0, 40, 2)),
+                    "stumble_style": "hostile",
+                }
+            ],
+        }
+    )
+
+    summary = run_grid(grid, tmp_path, echo=lambda _: None)
+
+    assert summary.done == 16
+    assert not summary.failed and summary.excluded_attempts == 0
+    bundle = _bundle(tmp_path)
+    report = verify_bundle(
+        bundle, lambda records: SCENARIOS[records[0]["scenario"]].build
+    )
+    assert report, report.failures
+    codes = {
+        record["result"]["code"]
+        for records in bundle.values()
+        for record in records
+        if record["kind"] == "action" and not record["result"]["ok"]
+    }
+    assert codes == {"malformed_output"}

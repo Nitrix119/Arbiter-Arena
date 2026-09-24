@@ -14,7 +14,8 @@ condition it is running, which is how four conditions share one agent path.
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.arena.agent import NoToolCallError, ProviderError
+from src.arena.agent import NoToolCallError, ProviderError, RejectedResponse
+from src.arena.error_codes import MALFORMED_OUTPUT
 from src.arena.interfaces import SHARED_PROMPT, ActionInterface, describe_tool_call
 from src.arena.telemetry import DecisionTelemetry, RequestRecord
 from src.arena.tools import TOOL_END_TURN, ToolCall
@@ -55,6 +56,37 @@ def augment_tools_with_notes(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]
             }
         augmented.append(tool)
     return augmented
+
+
+def decode_arguments(name: str, arguments: Any, record: RequestRecord) -> Dict:
+    """A tool call's arguments as a dict, or refuse them as ``malformed_output``.
+
+    An empty string is ``{}``: some hosts send it for a tool with no arguments, a
+    transport convention rather than a model choice. Anything that is not a JSON
+    object is the model's formatting failure — refused with a code and counted like
+    any other refusal, never an exception that stops the study grid as a bug.
+
+    Provider-neutral, so every adapter (and the mock model) decodes the same way.
+    """
+    if arguments is None or (isinstance(arguments, str) and not arguments.strip()):
+        return {}
+    if isinstance(arguments, dict):
+        return dict(arguments)
+    try:
+        decoded = json.loads(arguments) if isinstance(arguments, str) else arguments
+    except ValueError:
+        decoded = None
+        problem = "are not valid JSON"
+    else:
+        problem = "are not a JSON object"
+    if isinstance(decoded, dict):
+        return decoded
+    raise RejectedResponse(
+        MALFORMED_OUTPUT,
+        f"The {name} call's arguments {problem}; send an object of named fields.",
+        ToolCall(name, {"raw_arguments": arguments}),
+        record=record,
+    )
 
 
 def render_observation(
@@ -116,11 +148,13 @@ def _record_request(
 
     A :class:`~src.arena.agent.ProviderError` carries its own record, so a broken
     envelope is accounted for and then re-raised unchanged — the turn driver still
-    needs the type to tag it as infrastructure rather than model behaviour.
+    needs the type to tag it as infrastructure rather than model behaviour. So does a
+    :class:`~src.arena.agent.RejectedResponse` raised inside the request (arguments
+    the adapter could not decode): refused, but not free.
     """
     try:
         call, record = request_fn(messages, api_tools)
-    except ProviderError as exc:
+    except (ProviderError, RejectedResponse) as exc:
         if exc.record is not None:
             telemetry.requests.append(exc.record)
         raise

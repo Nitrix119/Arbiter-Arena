@@ -347,6 +347,26 @@ the failure budget, and is fed back, with no free correction. Only a response co
 no action at all takes the one correction re-prompt and, failing that, `no_tool_call`.
 Before this date a C3 invented id was logged as `no_tool_call` after an uncounted retry.
 
+**Argument shape and type, coded the same way in every tool condition (2026-09-24, before
+any data).** Found by the Phase 1 review, which fed real-world malformed output through
+the harness. Each of these used to stop the study runner as a "harness bug" or land in
+`engine_error`:
+- Tool arguments that are not a JSON object (unparseable, `null`, a list) are
+  `malformed_output`, with the raw text kept. An empty string is `{}`: a host's transport
+  convention for a no-argument tool, not a model choice.
+- `null` for an optional argument means "not given". `null` for a required one, or a
+  value of the wrong type (a name that is not a string, a coordinate that is not a finite
+  number, a fractional slot level), is `malformed_output`.
+- A coordinate or slot level may be written as number text with an optional `ft`/`feet`
+  unit. These are exactly the forms C1's grammar reads, so C2 gets no less tolerance than
+  C1.
+- In C2 and C2+M, a `move` naming a menu `option_id` is `malformed_output`. The executor
+  still resolves option ids for the deterministic baselines, and C2+M's menu shows them,
+  so without this a model could move by id: C3's format inside a raw-parameter condition.
+- In C3, a `choose` with no `action_id` (or a non-string one) is `malformed_output`, as
+  a missing argument is in C2. `unknown_target` is kept for an id that was written but is
+  not on the list.
+
 A C1 refusal is logged as a call named `(unread_text)` carrying the line the model wrote,
 with the parser's code (`malformed_output`, or `unknown_action` for a line that does not
 start with a known verb) and the reason it was given. C1 text containing no action line

@@ -290,6 +290,25 @@ leave a brief note here.
 - **Rule going forward:** the concrete, testable rule.
 ```
 
+### 2026-09-24 — A mock that only speaks well-formed output proves nothing about real models
+- **Context:** The Phase 1 review, before the first live pilot. The offline smoke ran every
+  condition x scenario through the real runner with a mock model, and was green.
+- **What went wrong:** the mock only ever wrote well-formed calls (plus one tidy "stumble"
+  per condition). Fed the shapes real models and hosts actually send, the harness broke:
+  - `""` or `"{bad json"` as tool arguments raised `JSONDecodeError` in the adapter.
+  - `null` for an optional argument raised `TypeError` in the executor.
+  - Both escaped as "harness bugs", which the study runner, by design, stops the whole
+    grid on.
+  - A move by menu `option_id` was accepted in C2+M. The schema no longer offered it, but
+    the executor still honoured it, and hosts do not enforce schemas.
+
+  Every test passed, because no test spoke like a real model.
+- **Rule going forward:** a boundary that accepts model output must be tested with
+  **realistic malformed payloads**, not only with the happy path and one designed slip.
+  Test through the real path, and let a hostile mock run in the offline smoke. A guard
+  expressed only in a schema or a prompt is a request, not a guarantee: enforce it where
+  the value is consumed.
+
 ### 2026-09-24 — A check piped through `tail` cannot fail
 - **Context:** Committing slice 3 of the interface study, chaining
   `black --check && flake8 && mypy src/ | tail -1 && pytest | tail -1 && git commit`.

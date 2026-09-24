@@ -307,6 +307,15 @@ names where it should be addressed. Append; strike through and date an item when
   (`nvidia/nemotron-nano-9b-v2:free` 404s). The study never uses it, because grids name their
   models, but the example scripts default to it. → final cleanup: drop the default, or point it
   at a live model and say so.
+- **A14. ~~Real-world malformed output crashed the harness.~~ Fixed 2026-09-24** (Phase 1
+  review). Unparseable or non-object tool arguments (`json.loads` unguarded in the
+  OpenRouter adapter), `null`/wrongly-typed argument values (`TypeError` uncaught in
+  `ToolExecutor.apply`), and a move by `option_id` in C2/C2+M (a dual path the schema had
+  closed but the executor still honoured). The first two stopped the grid as "harness
+  bugs"; the third was a between-condition confound. Coded as `malformed_output`
+  (prereg §6); `mock_model`'s `hostile` stumble style and a hostile offline smoke keep
+  them covered. The review's other findings (per-request provider retry, fresh-decision
+  H1, paired decision rules, out-of-range area aim, pilot readiness) are the next slices.
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 

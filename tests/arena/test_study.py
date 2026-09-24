@@ -98,6 +98,26 @@ def test_stumbles_are_for_the_mock_only():
     assert mock.models[0].stumble_on == (0, 3)
 
 
+def test_stumble_style_is_for_the_mock_and_names_its_options():
+    with pytest.raises(GridError, match="mock only"):
+        _grid(
+            models=[
+                {
+                    "id": "b",
+                    "provider": "baseline",
+                    "policy": "scripted",
+                    "stumble_style": "hostile",
+                }
+            ]
+        )
+    with pytest.raises(GridError, match="hostile"):
+        _grid(models=[{"id": "mock", "provider": "mock", "stumble_style": "rude"}])
+    hostile = _grid(
+        models=[{"id": "mock", "provider": "mock", "stumble_style": "hostile"}]
+    )
+    assert hostile.models[0].stumble_style == "hostile"
+
+
 def test_direct_anthropic_routing_is_refused():
     """Prereg §5: every live model goes through OpenRouter — no mixed routing."""
     with pytest.raises(GridError, match="OpenRouter"):

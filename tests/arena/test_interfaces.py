@@ -291,6 +291,32 @@ def test_move_requires_the_ground_plane():
     assert set(move["input_schema"]["required"]) == {"x", "z"}
 
 
+@pytest.mark.parametrize("name", RAW)
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"option_id": "retreat:raider-1"},
+        {"option_id": "retreat:raider-1", "x": 0, "z": 0},
+    ],
+    ids=["id-only", "id-and-coordinates"],
+)
+def test_a_raw_param_move_by_menu_id_is_refused_at_run_time(name, arguments):
+    """The schema no longer offers option_id, but a host need not enforce a schema.
+
+    The executor still honours option_id for the baselines, and C2+M's menu *shows*
+    every move's option_id. So a model that sends one anyway would get C3's format
+    inside a raw-parameter condition. The guard has to be behavioural, not only a
+    schema and a prompt that never mention it (review 2026-09-24, C-3).
+    """
+    with pytest.raises(RejectedResponse) as refused:
+        get_interface(name).interpret(
+            ToolCall("move", arguments), RequestRecord(), _obs()
+        )
+
+    assert refused.value.code == "malformed_output"
+    assert "option_id" not in str(refused.value)  # never advertise the other path
+
+
 def test_the_raw_param_action_section_never_mentions_an_option_id():
     for name in RAW:
         section = get_interface(name).action_prompt().lower()
@@ -511,3 +537,20 @@ def test_menu_length_is_counted_only_where_a_menu_is_shown(name, shown):
         assert length == len(observation["enumerated_actions"]) > 1
     else:
         assert length is None
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [{}, {"action_id": None}, {"action_id": 3}, {"action_id": ["end_turn"]}],
+)
+def test_a_c3_choice_naming_no_id_is_malformed_not_unknown(arguments):
+    """No id at all is a missing argument — C2's analogue is ``malformed_output`` too.
+
+    ``unknown_target`` is for an id that *was* written but is not on the list; counting
+    an absent one there would inflate the very category H2 is stated in terms of.
+    """
+    with pytest.raises(RejectedResponse) as refused:
+        get_interface(C3).interpret(
+            ToolCall("choose", arguments), RequestRecord(), _menu_obs()
+        )
+    assert refused.value.code == "malformed_output"

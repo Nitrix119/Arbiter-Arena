@@ -28,9 +28,10 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
 from src.arena.agent import RejectedResponse
+from src.arena.error_codes import MALFORMED_OUTPUT
 from src.arena.free_text import UNREAD_TEXT, read_response, render_command
 from src.arena.telemetry import RequestRecord
-from src.arena.tools import TOOL_END_TURN, TOOLS, ToolCall
+from src.arena.tools import TOOL_END_TURN, TOOL_MOVE, TOOLS, ToolCall
 from src.errors import UNKNOWN_ACTION, UNKNOWN_TARGET
 
 #: Condition names, used in the manifest, transcripts and the batch grid.
@@ -229,6 +230,24 @@ class RawParamsInterface(ActionInterface):
         record: RequestRecord,
         observation: Dict[str, Any],
     ) -> Optional[ToolCall]:
+        """Pass the call through, refusing only a move by menu id.
+
+        The executor still resolves ``option_id`` for the deterministic baselines, and
+        C2+M's menu shows every move's id. A host need not enforce the tool schema, so
+        without this a model could move by id — C3's format inside a raw-parameter
+        condition, the dual path Phase 0 closed in the schema alone.
+        """
+        if (
+            call is not None
+            and call.name == TOOL_MOVE
+            and isinstance(call.arguments, dict)
+            and "option_id" in call.arguments
+        ):
+            raise RejectedResponse(
+                MALFORMED_OUTPUT,
+                "move takes a destination as x and z, in feet.",
+                call,
+            )
         return call
 
 
@@ -402,6 +421,14 @@ class MenuInterface(ActionInterface):
                 call,
             )
         chosen = call.arguments.get("action_id")
+        if not isinstance(chosen, str):
+            # Nothing was named, so nothing can be unknown: a missing argument, coded
+            # as C2's missing arguments are.
+            raise RejectedResponse(
+                MALFORMED_OUTPUT,
+                "choose requires an action_id, copied from the list.",
+                call,
+            )
         for action in observation.get("enumerated_actions", []):
             if action.action_id == chosen:
                 # A fresh ToolCall: the enumeration is rebuilt each decision and its

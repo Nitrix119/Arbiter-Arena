@@ -46,6 +46,7 @@ from src.arena.error_codes import PROVIDER_ERROR
 from src.arena.interfaces import C1, C2, REGISTRY, ActionInterface, get_interface
 from src.arena.manifest import Manifest, git_dirty, interface_fingerprint
 from src.arena.match import DEFAULT_ROUND_CAP, run_match
+from src.arena.mock_model import STUMBLE_STYLES
 from src.arena.scenarios import SCENARIOS
 from src.arena.transcript import Transcript
 from src.combat.combat_system import CombatSystem
@@ -98,6 +99,9 @@ class ModelSpec:
     #: Mock only: decision indices at which the mock answers malformed, so an offline
     #: grid exercises the refusal paths and the report's taxonomy.
     stumble_on: Tuple[int, ...] = ()
+    #: Mock only: ``malformed`` (each condition's typical slip) or ``hostile`` (the
+    #: shapes real models and hosts send), for the decisions in ``stumble_on``.
+    stumble_style: str = "malformed"
     #: OpenRouter only: the upstream hosts allowed to serve this model, in order, with
     #: fallbacks off. One model id can otherwise be served by different hosts (and
     #: quantisations) from cell to cell — an uncontrolled variable.
@@ -255,6 +259,14 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
             for i in stumble_on
         ):
             raise GridError(f"{what}: stumble_on must be a list of decision indices")
+        stumble_style = entry.get("stumble_style", "malformed")
+        if "stumble_style" in entry and provider != PROVIDER_MOCK:
+            raise GridError(f"{what} ({model_id}): stumble_style is for the mock only")
+        if stumble_style not in STUMBLE_STYLES:
+            raise GridError(
+                f"{what}: unknown stumble_style {stumble_style!r}; expected one of "
+                f"{list(STUMBLE_STYLES)}"
+            )
         hosts = entry.get("hosts", [])
         if hosts and provider != PROVIDER_OPENROUTER:
             raise GridError(f"{what} ({model_id}): hosts is for OpenRouter models only")
@@ -270,6 +282,7 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
                 usd_per_m_input=_number(entry, "usd_per_m_input", 0.0, what),
                 usd_per_m_output=_number(entry, "usd_per_m_output", 0.0, what),
                 stumble_on=tuple(stumble_on),
+                stumble_style=stumble_style,
                 hosts=tuple(hosts),
                 policy=policy,
             )
@@ -397,7 +410,11 @@ def _mock_agent(seat: Seat) -> Agent:
 
     assert seat.interface is not None
     return MockModelAgent(
-        seat.name, seat.team, seat.interface, stumble_on=seat.spec.stumble_on
+        seat.name,
+        seat.team,
+        seat.interface,
+        stumble_on=seat.spec.stumble_on,
+        stumble_style=seat.spec.stumble_style,
     )
 
 

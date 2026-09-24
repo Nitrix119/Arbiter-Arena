@@ -6,6 +6,8 @@
 #
 # The "mock" model is the scripted policy writing its decisions in each condition's
 # format, stumbling on purpose at decisions 0 and 6 so the refusal paths have data.
+# "mock-hostile" stumbles the way real models and hosts do (unparseable tool
+# arguments, nulls, numbers as words, a move by menu id) on every third decision.
 # Every condition, every scenario, plus the three registered baselines.
 
 [study]
@@ -19,6 +21,12 @@ opponent = "scripted"
 id = "mock"
 provider = "mock"
 stumble_on = [0, 6]
+
+[[models]]
+id = "mock-hostile"
+provider = "mock"
+stumble_on = [0, 3, 6, 9, 12, 15, 18, 21]
+stumble_style = "hostile"
 
 [[models]]
 id = "baseline-scripted"

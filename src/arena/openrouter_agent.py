@@ -15,7 +15,6 @@ Note: not every free model supports function/tool calling. Pick a tool-capable o
 exactly how a flaw surfaces.
 """
 
-import json
 import time
 from types import ModuleType
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -23,7 +22,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from src.arena.agent import Agent, ProviderError
 from src.arena.credentials import resolve_credential
 from src.arena.interfaces import C2_MENU, ActionInterface, get_interface
-from src.arena.llm_common import decide_one_action
+from src.arena.llm_common import decide_one_action, decode_arguments
 from src.arena.telemetry import RequestRecord
 from src.arena.tools import ToolCall
 
@@ -210,10 +209,6 @@ class OpenRouterAgent(Agent):
             fn = tc.function
             arguments = fn.arguments
             record.tool_call = {"name": fn.name, "arguments": arguments}
-            args = (
-                json.loads(arguments)
-                if isinstance(arguments, str)
-                else dict(arguments or {})
-            )
+            args = decode_arguments(fn.name, arguments, record)
             return ToolCall(fn.name, args, call_id=getattr(tc, "id", None)), record
         return None, record

@@ -21,6 +21,8 @@ spell **save DC is the actor's own** stat and is always shown; the target's resu
 is never in the result (the next observation carries it, gated by ``reveal_enemy_hp``).
 """
 
+import math
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -196,13 +198,88 @@ def _require(args: Dict[str, Any], key: str, tool: str) -> Any:
 
     A missing required argument is the *model's* formatting failure, not a rule the
     engine declined — it belongs in a different taxonomy bucket, and it must not
-    surface as a bare ``KeyError``.
+    surface as a bare ``KeyError``. ``null`` counts as missing: it is how an
+    OpenAI-style call says "not given".
     """
-    if key not in args:
+    if args.get(key) is None:
         raise RuleViolation(
             MALFORMED_OUTPUT, f"{tool} requires a {key!r} argument; none was given."
         )
     return args[key]
+
+
+# Model-written arguments arrive as whatever JSON the model produced. These readers
+# are the one place their *types* are checked, so a wrong type is a coded
+# malformed_output rather than a TypeError that would stop the study grid as a harness
+# bug (review 2026-09-24, C-2). A ``null`` optional argument is treated as absent — the
+# OpenAI-style convention — never as an error.
+
+#: A number as text, with an optional unit: the same forms C1's grammar reads
+#: (``NUMBER`` then an optional ``ft``/``feet``), so C2 is allowed exactly what C1 is.
+_NUMBER_TEXT = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*(?:ft|feet)?\s*$", re.IGNORECASE)
+
+
+def _malformed(message: str) -> RuleViolation:
+    return RuleViolation(MALFORMED_OUTPUT, message)
+
+
+def _text(args: Dict[str, Any], key: str, tool: str) -> str:
+    """A required name argument, which must be a string."""
+    value = _require(args, key, tool)
+    if not isinstance(value, str):
+        raise _malformed(f"{tool}'s {key!r} must be a name (a string); got {value!r}.")
+    return value
+
+
+def _coordinate(value: Any, what: str) -> float:
+    """A finite distance in feet, given as a number or as number text."""
+    number: Optional[float] = None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        number = float(value)
+    elif isinstance(value, str):
+        match = _NUMBER_TEXT.match(value)
+        number = float(match.group(1)) if match else None
+    if number is None or not math.isfinite(number):
+        raise _malformed(f"{what} must be a number of feet; got {value!r}.")
+    return number
+
+
+def _point(args: Dict[str, Any], what: str) -> Point3D:
+    """A point from ``x``/``z`` (required) and ``y`` (optional, default 0)."""
+    missing = [axis for axis in ("x", "z") if args.get(axis) is None]
+    if missing:
+        raise _malformed(
+            f"{what} requires both 'x' and 'z' (ground feet); missing "
+            + " and ".join(repr(axis) for axis in missing)
+            + "."
+        )
+    y = args.get("y")
+    return Point3D(
+        _coordinate(args["x"], f"{what} x"),
+        0.0 if y is None else _coordinate(y, f"{what} y"),
+        _coordinate(args["z"], f"{what} z"),
+    )
+
+
+def _target_ids(value: Any) -> List[str]:
+    """Entity ids to target: a list of names, or one bare name (as C1 may write)."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list) and all(isinstance(v, str) for v in value):
+        return list(value)
+    raise _malformed(f"cast_spell's 'target_ids' must be a list of ids; got {value!r}.")
+
+
+def _slot_level(value: Any) -> Optional[int]:
+    """A whole-number slot level, given as a number or as number text."""
+    if value is None:
+        return None
+    level = _coordinate(value, "cast_spell's 'slot_level'")
+    if not level.is_integer():
+        raise _malformed(f"cast_spell's 'slot_level' must be whole; got {value!r}.")
+    return int(level)
 
 
 def _gate_roll(
@@ -273,13 +350,21 @@ class ToolExecutor:
         handler = handlers.get(call.name)
         if handler is None:
             return _error(UNKNOWN_ACTION, f"Unknown tool: {call.name!r}")
+        if not isinstance(call.arguments, dict):
+            return _error(
+                MALFORMED_OUTPUT,
+                f"{call.name}'s arguments must be an object of named fields.",
+            )
         try:
             return handler(actor, call.arguments, policy)
         except RuleViolation as exc:
             return _error(exc.code, str(exc))
         except KeyError as exc:
             return _error(MALFORMED_OUTPUT, f"Missing or unknown key: {exc}")
-        except (ValueError, RuntimeError) as exc:
+        except (ValueError, RuntimeError, TypeError) as exc:
+            # TypeError is a backstop: the argument readers above should leave none,
+            # and one reaching here is counted where it can be seen rather than
+            # stopping the study grid.
             # An untyped refusal — the engine declining something it cannot model
             # (an unsupported AoE shape) or a path that still needs a code. Counted
             # under its own bucket so a non-zero rate is visible, not silently
@@ -316,8 +401,8 @@ class ToolExecutor:
     def _attack(
         self, actor: Entity, args: Dict[str, Any], policy: InformationPolicy
     ) -> Dict[str, Any]:
-        action_name = _require(args, "action_name", TOOL_ATTACK)
-        defender = self._lookup(_require(args, "defender_id", TOOL_ATTACK))
+        action_name = _text(args, "action_name", TOOL_ATTACK)
+        defender = self._lookup(_text(args, "defender_id", TOOL_ATTACK))
         attacks = [
             a
             for a in actor.stat_block.actions + actor.granted_actions
@@ -352,7 +437,7 @@ class ToolExecutor:
         # exact-match check stays strict and the arena alone owns the tolerance. A
         # name that spells no known spell passes through unchanged, so the refusal is
         # the engine's own (unknown_action, "does not know the spell").
-        written = _require(args, "spell_name", TOOL_CAST_SPELL)
+        written = _text(args, "spell_name", TOOL_CAST_SPELL)
         known = resolve(written, [[(n, n) for n in actor.stat_block.known_spells]])
         if len(known) > 1:
             raise RuleViolation(
@@ -362,26 +447,25 @@ class ToolExecutor:
         spell_name = known[0] if known else written
         spell_action = self._combat.get_spell_for_entity(actor, spell_name)
 
-        defenders = [self._lookup(tid) for tid in args.get("target_ids", [])]
+        defenders = [self._lookup(tid) for tid in _target_ids(args.get("target_ids"))]
 
         target_point: Optional[Point3D] = None
         tp = args.get("target_point")
         if tp is not None:
             # x/z are the ground plane and are required; y (vertical) defaults to 0.
-            # Routed through _require so a missing coordinate is a clean
-            # malformed_output rather than a bare KeyError caught by the backstop.
-            target_point = Point3D(
-                float(_require(tp, "x", "cast_spell target_point")),
-                float(tp.get("y", 0.0)),
-                float(_require(tp, "z", "cast_spell target_point")),
-            )
+            if not isinstance(tp, dict):
+                raise _malformed(
+                    "cast_spell's 'target_point' must be an object with x and z; "
+                    f"got {tp!r}."
+                )
+            target_point = _point(tp, "cast_spell target_point")
 
         results = self._combat.resolve_spell(
             actor,
             defenders,
             spell_action,
             target=target_point,
-            slot_level=args.get("slot_level"),
+            slot_level=_slot_level(args.get("slot_level")),
         )
         per_target = []
         for entity, hit, damage, roll_detail, healing, healed in results:
@@ -428,15 +512,11 @@ class ToolExecutor:
                     "choose a listed option_id or give raw x/z.",
                 )
             x, y, z = option.x, option.y, option.z
-        elif "x" in args and "z" in args:
-            x = float(args["x"])
-            z = float(args["z"])
-            y = float(args.get("y", 0.0))
         else:
-            raise RuleViolation(
-                MALFORMED_OUTPUT,
-                "move requires either an option_id or both x and z.",
-            )
+            # The refusal names only x and z: option_id is the baselines' path, and
+            # advertising it to a model would reopen the one it must not have.
+            destination = _point(args, "move")
+            x, y, z = destination.x, destination.y, destination.z
         self._combat.move_entity(actor, x, y, z)
         return _ok(
             action=TOOL_MOVE,

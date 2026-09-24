@@ -193,7 +193,11 @@ def test_move_without_option_or_coords_is_structured_error(make_entity, make_com
 
     result = ToolExecutor(combat).apply(fighter, ToolCall("move", {}))
     assert result["ok"] is False
-    assert "option_id" in result["error"]
+    assert result["code"] == "malformed_output"
+    # Names what a model condition may send, and never advertises the baselines'
+    # option_id path to a model (review 2026-09-24, C-3).
+    assert "x" in result["error"] and "z" in result["error"]
+    assert "option_id" not in result["error"]
 
 
 # -- end_turn ----------------------------------------------------------------
@@ -529,3 +533,140 @@ def test_an_ambiguous_name_is_refused_not_guessed(make_entity, make_combat):
     )
     assert result["code"] == "unknown_target"
     assert "ambiguous" in result["error"].lower()
+
+
+# -- wrongly-typed arguments (review 2026-09-24, C-2) --------------------------
+#
+# A model's arguments arrive as whatever JSON it wrote. Every shape below used to either
+# crash the executor with a TypeError (which stops the study grid as a harness bug) or
+# land in engine_error, the bucket that must stay at zero. A null optional argument is
+# the OpenAI-style convention for "not given"; anything else of the wrong type is the
+# model's formatting failure.
+
+
+def _fireball_call(**args):
+    return ToolCall("cast_spell", {"spell_name": "Fireball", **args})
+
+
+_AIM = {"x": 0, "z": 40}
+
+
+@pytest.mark.parametrize(
+    "call, code",
+    [
+        (_fireball_call(target_point=_AIM, target_ids=None), None),
+        (_fireball_call(target_point=_AIM, slot_level=None), None),
+        (_fireball_call(target_point={"x": 0, "y": None, "z": 40}), None),
+        (_fireball_call(target_point={"x": "0", "z": "40 ft"}), None),
+        (_fireball_call(target_point=_AIM, slot_level="3"), None),
+        (_fireball_call(target_point=_AIM, slot_level=3.0), None),
+        (_fireball_call(target_point="x=0 z=40"), "malformed_output"),
+        (_fireball_call(target_point=[0, 0, 40]), "malformed_output"),
+        (_fireball_call(target_point={"x": "far", "z": 40}), "malformed_output"),
+        (_fireball_call(target_point={"x": True, "z": 40}), "malformed_output"),
+        (_fireball_call(target_point={"x": float("nan"), "z": 40}), "malformed_output"),
+        (_fireball_call(target_point=_AIM, slot_level="three"), "malformed_output"),
+        (_fireball_call(target_point=_AIM, slot_level=3.5), "malformed_output"),
+        (_fireball_call(target_point=_AIM, target_ids=5), "malformed_output"),
+        (_fireball_call(target_point=_AIM, target_ids=[5]), "malformed_output"),
+        (ToolCall("cast_spell", {"spell_name": None}), "malformed_output"),
+        (ToolCall("cast_spell", {"spell_name": ["Fireball"]}), "malformed_output"),
+    ],
+    ids=[
+        "null-target-ids",
+        "null-slot",
+        "null-y",
+        "numeric-strings",
+        "slot-string",
+        "slot-float",
+        "point-as-string",
+        "point-as-list",
+        "coordinate-word",
+        "coordinate-bool",
+        "coordinate-nan",
+        "slot-word",
+        "slot-fraction",
+        "target-ids-number",
+        "target-ids-of-numbers",
+        "null-spell",
+        "spell-as-list",
+    ],
+)
+def test_cast_arguments_of_the_wrong_type_are_coded_never_a_crash(
+    make_entity, make_combat, registry_with, call, code
+):
+    combat, wizard, _, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(wizard, call)
+
+    if code is None:
+        assert result["ok"] is True, result
+    else:
+        assert result["ok"] is False
+        assert result["code"] == code, result
+
+
+@pytest.mark.parametrize(
+    "args, code",
+    [
+        ({"x": "10 ft", "z": "0"}, None),
+        ({"x": 10, "y": None, "z": 0}, None),
+        ({"x": None, "z": 0}, "malformed_output"),
+        ({"x": "five", "z": 0}, "malformed_output"),
+        ({"x": float("nan"), "z": 0}, "malformed_output"),
+        ({"x": float("inf"), "z": 0}, "malformed_output"),
+        ({"x": {"feet": 10}, "z": 0}, "malformed_output"),
+    ],
+    ids=["strings-with-unit", "null-y", "null-x", "word", "nan", "inf", "object"],
+)
+def test_move_arguments_of_the_wrong_type_are_coded_never_a_crash(
+    make_entity, make_combat, args, code
+):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0))
+    goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    result = ToolExecutor(combat).apply(fighter, ToolCall("move", args))
+
+    if code is None:
+        assert result["ok"] is True, result
+        assert (fighter.x, fighter.z) == (10, 0)
+    else:
+        assert result["ok"] is False
+        assert result["code"] == code, result
+        assert (fighter.x, fighter.z) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"action_name": "Longsword", "defender_id": None},
+        {"action_name": None, "defender_id": "goblin"},
+        {"action_name": "Longsword", "defender_id": ["goblin"]},
+        {"action_name": 7, "defender_id": "goblin"},
+    ],
+    ids=["null-defender", "null-attack", "defender-as-list", "attack-as-number"],
+)
+def test_attack_arguments_of_the_wrong_type_are_malformed(
+    make_entity, make_combat, args
+):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0), hp=30)
+    combat = _started(make_combat, [fighter, goblin], fighter)
+    args = {k: (goblin.entity_id if v == "goblin" else v) for k, v in args.items()}
+
+    result = ToolExecutor(combat).apply(fighter, ToolCall("attack", args))
+
+    assert result["ok"] is False
+    assert result["code"] == "malformed_output", result
+
+
+def test_arguments_that_are_not_an_object_are_malformed(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0))
+    goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    result = ToolExecutor(combat).apply(fighter, ToolCall("move", [10, 0]))  # type: ignore[arg-type]
+
+    assert result["ok"] is False
+    assert result["code"] == "malformed_output"

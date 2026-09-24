@@ -72,12 +72,23 @@ class RejectedResponse(NoToolCallError):
     that was attempted.
 
     Subclasses :class:`NoToolCallError` so every existing handler still contains it.
+
+    Carries the request's :class:`~src.arena.telemetry.RequestRecord` when it is raised
+    from inside a request (an adapter refusing arguments it cannot decode), so a
+    refused response is still costed.
     """
 
-    def __init__(self, code: str, message: str, call: Optional[ToolCall]) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        call: Optional[ToolCall],
+        record: Optional[Any] = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.call = call
+        self.record = record
 
 
 class Agent(ABC):

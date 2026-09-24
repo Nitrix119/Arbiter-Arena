@@ -6,8 +6,8 @@ import pytest
 
 from src.arena import credentials
 from src.arena import openrouter_agent as ora
-from src.arena.agent import NoToolCallError, ProviderError
-from src.arena.error_codes import PROVIDER_ERROR
+from src.arena.agent import NoToolCallError, ProviderError, RejectedResponse
+from src.arena.error_codes import MALFORMED_OUTPUT, PROVIDER_ERROR
 from src.arena.interfaces import SHARED_PROMPT
 from src.arena.openrouter_agent import DEFAULT_MODEL, OpenRouterAgent, _to_openai_tools
 from src.arena.tools import TOOLS
@@ -292,3 +292,64 @@ def test_without_hosts_routing_is_left_alone_but_still_recorded():
     agent.decide(_obs())
     assert "extra_body" not in client.calls[0] and "seed" not in client.calls[0]
     assert agent.telemetry.requests[0].served_provider == "Together"
+
+
+# -- malformed tool-call arguments (review 2026-09-24, C-1) --------------------
+
+
+@pytest.mark.parametrize("empty", ["", "   "], ids=["empty", "whitespace"])
+def test_empty_arguments_are_an_empty_object(empty):
+    """Some hosts send ``""`` for a tool with no arguments — a transport convention."""
+    agent = OpenRouterAgent(
+        "O", "a", client=FakeClient([response(fn_call("end_turn", empty))])
+    )
+
+    assert agent.decide(_obs()).arguments == {}
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    ["{bad json", '{"x": 1', "null", "[1, 2]", '"a string"', "42"],
+    ids=["unparseable", "truncated", "null", "list", "string", "number"],
+)
+def test_unusable_arguments_are_malformed_output_not_a_crash(arguments):
+    """Arguments that are not a JSON object are the model's formatting failure.
+
+    They used to escape as ``JSONDecodeError``/``TypeError``, which the study runner
+    treats as a harness bug and stops the whole grid on. They are a coded refusal,
+    counted like any other, and the attempted text is kept.
+    """
+    agent = OpenRouterAgent(
+        "O", "a", client=FakeClient([response(fn_call("move", arguments))])
+    )
+
+    with pytest.raises(RejectedResponse) as exc:
+        agent.decide(_obs())
+
+    assert exc.value.code == MALFORMED_OUTPUT
+    assert exc.value.call.name == "move"
+    assert exc.value.call.arguments == {"raw_arguments": arguments}
+    # The request still cost something, and a refusal must not hide that.
+    assert agent.last_telemetry().request_count == 1
+
+
+def test_unusable_arguments_cost_a_failure_but_not_the_match(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0), hp=30)
+    combat = make_combat([fighter, goblin])
+    combat.start_combat()
+    force_turn(combat, fighter)
+
+    transcript = Transcript()
+    client = FakeClient(
+        [response(fn_call("attack", "{bad")), response(fn_call("end_turn", "{}"))]
+    )
+    outcome = run_turn(
+        combat, fighter, OpenRouterAgent("O", "a", client=client), transcript=transcript
+    )
+
+    assert outcome.failures == 1
+    assert outcome.forced_end is False
+    failed = [r for r in transcript.records_of("action") if not r["result"]["ok"]]
+    assert [r["result"]["code"] for r in failed] == [MALFORMED_OUTPUT]
+    assert failed[0]["telemetry"]["request_count"] == 1
