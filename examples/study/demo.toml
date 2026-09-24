@@ -7,8 +7,10 @@
 # The "mock" model is the scripted policy writing its decisions in each condition's
 # format, stumbling on purpose at decisions 0 and 6 so the refusal paths have data.
 # "mock-hostile" stumbles the way real models and hosts do (unparseable tool
-# arguments, nulls, numbers as words, a move by menu id) on every third decision.
-# Every condition, every scenario, plus the three registered baselines.
+# arguments, nulls, numbers as words, a move by menu id, two different actions at
+# once) on every third decision. "mock-caster" writes the random policy's decisions
+# instead, so area spells are aimed in every condition. Every condition, every
+# scenario, plus the three registered baselines.
 
 [study]
 name = "demo"
@@ -27,6 +29,11 @@ id = "mock-hostile"
 provider = "mock"
 stumble_on = [0, 3, 6, 9, 12, 15, 18, 21]
 stumble_style = "hostile"
+
+[[models]]
+id = "mock-caster"
+provider = "mock"
+policy = "random"
 
 [[models]]
 id = "baseline-scripted"

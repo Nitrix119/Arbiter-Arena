@@ -65,6 +65,9 @@ PROVIDERS = (PROVIDER_OPENROUTER, PROVIDER_MOCK, PROVIDER_BASELINE)
 #: (amendment 2026-09-24, before any data).
 NATIVE = "native"
 BASELINE_CONDITIONS = {"scripted": "C3", "random": "C3", "heuristic": NATIVE}
+#: Policies the mock can write in a condition's format. Not the heuristic: it plays
+#: natively, with moves no menu lists, so it cannot be written as a condition's answer.
+MOCK_POLICIES = ("scripted", "random")
 
 OPPONENT_SCRIPTED = "scripted"
 OPPONENT_HEURISTIC = "heuristic"
@@ -105,7 +108,9 @@ class ModelSpec:
     #: fallbacks off. One model id can otherwise be served by different hosts (and
     #: quantisations) from cell to cell — an uncontrolled variable.
     hosts: Tuple[str, ...] = ()
-    #: Baseline only: which policy plays (see ``BASELINE_CONDITIONS``).
+    #: Which policy decides: required for a baseline (``BASELINE_CONDITIONS``);
+    #: optional for the mock (``MOCK_POLICIES``, scripted by default), whose answers
+    #: are that policy's decisions written in each condition's format.
     policy: Optional[str] = None
     #: The output-token limit sent with every request, and recorded.
     max_tokens: int = DEFAULT_MAX_TOKENS
@@ -233,15 +238,22 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
         if not isinstance(model_id, str) or not model_id:
             raise GridError(f"{what}: id must be a non-empty string")
         policy = entry.get("policy")
-        if (provider == PROVIDER_BASELINE) != (policy is not None):
+        if provider == PROVIDER_BASELINE and policy is None:
+            raise GridError(f"{what} ({model_id}): policy is required for a baseline")
+        if policy is not None and provider not in (PROVIDER_BASELINE, PROVIDER_MOCK):
             raise GridError(
-                f"{what} ({model_id}): policy is required for a baseline, and only "
-                "for a baseline"
+                f"{what} ({model_id}): policy is only for a baseline or the mock"
             )
-        if policy is not None and policy not in BASELINE_CONDITIONS:
+        if provider == PROVIDER_BASELINE and policy not in BASELINE_CONDITIONS:
             raise GridError(
                 f"{what}: unknown baseline policy {policy!r}; expected one of "
                 f"{sorted(BASELINE_CONDITIONS)}"
+            )
+        if provider == PROVIDER_MOCK and policy not in (None, *MOCK_POLICIES):
+            raise GridError(
+                f"{what}: a mock's policy must be one of {list(MOCK_POLICIES)}, not "
+                f"{policy!r} (the heuristic plays natively, so no condition can "
+                "write its answers)"
             )
         if provider == PROVIDER_OPENROUTER and not (
             "usd_per_m_input" in entry and "usd_per_m_output" in entry
@@ -445,28 +457,36 @@ def _mock_agent(seat: Seat) -> Agent:
         seat.interface,
         stumble_on=seat.spec.stumble_on,
         stumble_style=seat.spec.stumble_style,
+        policy=_written_policy(seat),
     )
+
+
+def _written_policy(seat: Seat) -> Agent:
+    """The policy whose decisions a mock (or a menu baseline) writes as answers."""
+    from src.arena.mock_model import RandomMenuPolicy
+
+    policies: Dict[str, Callable[[], Agent]] = {
+        "scripted": lambda: ScriptedAgent(seat.name, seat.team),
+        "random": lambda: RandomMenuPolicy(seat.name, seat.team),
+    }
+    return policies[seat.spec.policy or "scripted"]()
 
 
 def _baseline_agent(seat: Seat) -> Agent:
     """A registered baseline, seated in its own condition (``BASELINE_CONDITIONS``)."""
     from src.arena.heuristic.agent import HeuristicAgent
-    from src.arena.mock_model import MockModelAgent, RandomMenuPolicy
+    from src.arena.mock_model import MockModelAgent
 
     if seat.spec.policy == "heuristic":
         if seat.combat is None:
             raise ValueError("the heuristic baseline must be bound to its combat")
         return HeuristicAgent(seat.name, seat.team, seat.combat)
     assert seat.interface is not None
-    policies: Dict[str, Callable[[], Agent]] = {
-        "scripted": lambda: ScriptedAgent(seat.name, seat.team),
-        "random": lambda: RandomMenuPolicy(seat.name, seat.team),
-    }
     return MockModelAgent(
         seat.name,
         seat.team,
         seat.interface,
-        policy=policies[seat.spec.policy or ""](),
+        policy=_written_policy(seat),
         record_telemetry=False,
     )
 

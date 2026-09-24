@@ -588,6 +588,34 @@ def test_h1_contrasts_are_paired_and_directional():
     assert "§7 C1 rule" in tie.note
 
 
+@pytest.mark.parametrize(
+    "c1_valid, expected", [(3, "supported"), (6, "not supported")], ids=["all", "one"]
+)
+def test_the_full_h1_ordering_needs_every_contrast(c1_valid, expected):
+    """Prereg §7: the ordering is supported only if all three contrasts are."""
+    from src.arena.study_report import registered_verdicts
+
+    matches = [
+        _match(cond, sc, seed, valid=v + (seed % 2))
+        for cond, v in (("C3", 10 - 1), ("C2+M", 8), ("C2", 6), ("C1", c1_valid))
+        for sc, seed in PAIRS
+    ]
+
+    full = _verdict(registered_verdicts(matches), "H1", "full ordering")
+
+    assert full.verdict == expected
+    assert full.pairs == len(PAIRS)
+    assert "§7 C1 rule" in full.note
+
+
+def test_the_full_h1_ordering_lacks_data_if_any_contrast_does():
+    from src.arena.study_report import registered_verdicts
+
+    matches = [_match(c, "kiting", 1, valid=5) for c in ("C3", "C2", "C1")]
+    full = _verdict(registered_verdicts(matches), "H1", "full ordering")
+    assert full.verdict == "insufficient data"
+
+
 def test_h2_is_the_spatial_deficit_against_the_menu_beyond_the_non_spatial_one():
     from src.arena.study_report import registered_verdicts
 

@@ -96,3 +96,44 @@ def test_a_hostile_model_cannot_stop_the_grid(tmp_path):
         if record["kind"] == "action" and not record["result"]["ok"]
     }
     assert codes == {"malformed_output"}
+
+
+def test_a_casting_mock_aims_in_every_condition_and_the_bounds_build(tmp_path):
+    """The scripted mock never casts, so area aiming through C1, C2 and C2+M, the
+    H4b table and the re-scorer's aim probe were covered by unit tests alone. The
+    random policy casts; this runs those paths end to end, and the null control
+    still holds: identical decisions give identical outcomes in every condition."""
+    from src.arena.metrics import area_hits
+    from src.arena.study_report import build_report
+
+    grid = parse_grid(
+        {
+            "study": {
+                "name": "casting",
+                "seeds": [1, 2, 3],
+                "scenarios": ["aoe_placement"],
+                "conditions": sorted(REGISTRY),
+            },
+            "models": [{"id": "mock-caster", "provider": "mock", "policy": "random"}],
+        }
+    )
+
+    summary = run_grid(grid, tmp_path, echo=lambda _: None)
+
+    assert summary.done == 12 and not summary.failed
+    bundle = _bundle(tmp_path)
+    assert verify_bundle(bundle, lambda records: SCENARIOS["aoe_placement"].build)
+    casts = {condition: 0 for condition in REGISTRY}
+    endings = {}
+    for records in bundle.values():
+        start, end = records[0], records[-1]
+        casts[start["condition"]] += len(area_hits(records))
+        endings.setdefault(start["seed"], set()).add(
+            (end["winner"], end["reason"], end["rounds"])
+        )
+    assert all(n > 0 for n in casts.values()), casts
+    assert all(len(outcomes) == 1 for outcomes in endings.values())
+
+    summary_md = build_report(tmp_path)[3]
+    assert "Not re-scored" not in summary_md
+    assert "## C1 under three parsers" in summary_md

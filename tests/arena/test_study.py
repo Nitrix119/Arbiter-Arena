@@ -510,10 +510,22 @@ def _baselines(*policies, **study):
 def test_a_baseline_needs_a_known_policy_and_nothing_else_takes_one():
     with pytest.raises(GridError, match="policy is required"):
         _grid(models=[{"id": "b", "provider": "baseline"}])
-    with pytest.raises(GridError, match="only for a baseline"):
-        _grid(models=[{"id": "m", "provider": "mock", "policy": "scripted"}])
     with pytest.raises(GridError, match="grandmaster"):
         _grid(models=[{"id": "b", "provider": "baseline", "policy": "grandmaster"}])
+    live = {"id": "o", "provider": "openrouter", "usd_per_m_input": 1.0}
+    live["usd_per_m_output"] = 1.0
+    with pytest.raises(GridError, match="policy"):
+        _grid(models=[{**live, "policy": "random"}], spend_cap_usd=1.0)
+
+
+def test_a_mock_may_choose_its_policy_but_not_the_heuristic():
+    """The mock writes a policy's decisions in each condition's format. The random
+    policy casts, so the offline grid exercises area aiming in every condition; the
+    heuristic plays natively and cannot be written as a condition's answer."""
+    grid = _grid(models=[{"id": "m", "provider": "mock", "policy": "random"}])
+    assert grid.models[0].policy == "random"
+    with pytest.raises(GridError, match="heuristic"):
+        _grid(models=[{"id": "m", "provider": "mock", "policy": "heuristic"}])
 
 
 def test_baselines_play_once_per_scenario_and_seed_in_their_own_condition():

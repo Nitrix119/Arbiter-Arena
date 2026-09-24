@@ -914,6 +914,27 @@ def _verdicts_for(model: str, cells: _Cells) -> List[Verdict]:
             )
         )
 
+    # H1's full ordering: supported only if every adjacent contrast is (prereg §7).
+    legs = out[-len(H1_CONTRASTS) :]
+    if any(v.verdict == "insufficient data" for v in legs):
+        ordering = "insufficient data"
+    elif all(v.verdict == "supported" for v in legs):
+        ordering = "supported"
+    else:
+        ordering = "not supported"
+    out.append(
+        Verdict(
+            model,
+            "H1",
+            "full ordering",
+            min(v.pairs for v in legs),
+            None,
+            ordering,
+            "supported only if all three contrasts are; the C2 − C1 leg is also "
+            "subject to the §7 C1 rule",
+        )
+    )
+
     # H2 — the deficit against the menu is larger on spatial decisions than on
     # non-spatial ones: (C3 − X)_spatial − (C3 − X)_non-spatial > 0.
     for condition in H2_CONDITIONS:

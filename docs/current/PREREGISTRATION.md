@@ -72,6 +72,12 @@ cell to build, being close to the existing production path.
 - Menu length is capped, deterministically ordered, and **recorded per decision** as a
   cost covariate.
 - Every listed `action_id` must execute successfully (enforced by a property test).
+- **Offered coordinates are held to three decimal places (2026-09-24, before any
+  data).** Geometry left float noise in move destinations, such as `x = 4.4e-16` for a
+  point on an axis. C1's grammar cannot read exponent notation, so the same choice was
+  valid in C3 and unsayable in C1. A property test now requires every listed action to
+  read back at C1 layer 0 on every state a match reaches, not only at the opening. A
+  thousandth of a foot changes no outcome, and the coverage figures are unchanged.
 
 **Important:** menu discretisation is an *interface* affordance only. The engine
 remains continuous underneath — SRD 5.1 measures in feet and has no grid rules (the
@@ -525,7 +531,14 @@ pilot frequencies rather than in advance.
     first-attempt validity over fresh decisions: C3 − C2+M, C2+M − C2 and C2 − C1. Each
     one is reported separately.
     - C2 − C1 must *also* pass the C1 rule below (primary, lenient and audited bounds).
-    - The full ordering is supported only if all three contrasts are.
+    - The full ordering is supported only if all three contrasts are. The report prints
+      it as its own `H1 | full ordering` row.
+  - **No multiplicity correction (registered 2026-09-24, before any data).** Each model
+    has seven directional contrasts: three for H1, two for H2 and two for H3. Each is
+    judged at its own 95% interval, with no family-wise correction. They are distinct
+    registered predictions, not a search across many tests. The combined verdicts (the H1
+    ordering, and H3 on both of its measures) are conjunctions, so they are stricter than
+    any single contrast. This is declared as a limitation in §9.
   - **H2.** For X in {C1, C2}, "the deficit concentrates in spatial actions" means:
     - (C3 − X) in spatial first-attempt validity, minus (C3 − X) in non-spatial
       first-attempt validity, is greater than zero.
@@ -620,6 +633,9 @@ Also declared (2026-09-24):
 - **Menu order.** It carries no quality signal: ids are sorted lexicographically, so
   attacks come first and moves last. A list still has primacy effects, so where an
   option sits may influence C3 and C2+M choices.
+- **No multiplicity correction.** The seven contrasts per model are each judged at 95%
+  (§7). Across that many, one spurious "supported" is not unlikely, so a verdict that
+  stands alone should be read with that in mind.
 - **Output limit.** A response cut off at the output-token limit is the harness, not the
   model, deciding the outcome. The limit and any thinking model's reasoning setting are
   therefore fixed per model in the grid and recorded in every manifest. Responses cut at
