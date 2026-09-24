@@ -505,6 +505,32 @@ to start from a working tree with uncommitted changes to tracked files, unless e
 overridden, and the manifest records `git_dirty` either way. The manifest also records the
 opponent.
 
+**Infrastructure failures are retried per request, not per match (2026-09-24, before any
+data).** Excluding a whole match for one failed request would bias the sample that is
+kept:
+- The chance a match is excluded grows with its number of requests. At a 1% per-request
+  failure rate, a 35-request match is excluded about 30% of the time, and a 70-request
+  match about 50%.
+- The conditions that fail most make the most requests, so the matches kept in exactly
+  those conditions would be skewed toward the ones with fewer failures.
+
+So a request that fails for infrastructure reasons is retried unchanged, with the same
+messages:
+- It is attempted up to **3 times in all**, pausing 2 s and then 8 s. This is on top of
+  the provider SDK's own transport retries.
+- Infrastructure means an empty or broken response envelope, a network or timeout error,
+  or an exception from a provider SDK.
+- Each failed attempt is recorded as billed cost (`provider_failures`). The model never
+  saw it, so it is **not** counted as a request: `request_count`, and so first-attempt
+  validity, are unaffected.
+- A match is excluded only when one request fails all 3 attempts.
+- A refusal of the model's own output is never retried; that includes tool arguments an
+  adapter cannot decode.
+- The report gives excluded attempts, provider retries and exclusion reasons **per model ×
+  condition**, never only as a total. Some hosts answer a model's malformed output with an
+  HTTP error, which would make exclusions track the condition. That would be model
+  behaviour misfiled as infrastructure, and it must be visible if it happens.
+
 ---
 
 ## 9. Threats to validity

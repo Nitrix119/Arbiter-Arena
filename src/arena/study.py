@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple
 
-from src.arena.agent import Agent, ScriptedAgent
+from src.arena.agent import Agent, ScriptedAgent, is_infrastructure_error
 from src.arena.error_codes import PROVIDER_ERROR
 from src.arena.interfaces import C1, C2, REGISTRY, ActionInterface, get_interface
 from src.arena.manifest import Manifest, git_dirty, interface_fingerprint
@@ -75,9 +75,6 @@ GRID_COPY = "grid.toml"
 
 #: Rough calls per match, for ``--dry-run`` estimates only (2026-09-15 diagnostic).
 CALLS_PER_MATCH_ESTIMATE = 35
-
-#: SDK packages whose exceptions are infrastructure, not model behaviour or our bugs.
-_INFRA_MODULES = ("openai", "anthropic", "httpx", "httpcore")
 
 
 class GridError(ValueError):
@@ -457,13 +454,6 @@ def _opponent(kind: str, combat: CombatSystem, team: Optional[str]) -> Agent:
 
 
 # -- running one cell -------------------------------------------------------------
-
-
-def is_infrastructure_error(exc: BaseException) -> bool:
-    """True for a provider, network or timeout failure — never for our own bug."""
-    if isinstance(exc, (ConnectionError, TimeoutError)):
-        return True
-    return type(exc).__module__.split(".")[0] in _INFRA_MODULES
 
 
 def provider_errors(records: Sequence[Dict[str, Any]]) -> int:

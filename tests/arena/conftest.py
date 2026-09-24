@@ -29,6 +29,14 @@ _SPELLS_DIR = Path(__file__).resolve().parents[2] / "examples" / "spells"
 
 
 @pytest.fixture(autouse=True)
+def _no_retry_pauses(monkeypatch):
+    """Provider retries pause between attempts; a test never needs to wait for one."""
+    from src.arena import llm_common
+
+    monkeypatch.setattr(llm_common, "retry_sleep", lambda seconds: None)
+
+
+@pytest.fixture(autouse=True)
 def _seed_rng():
     """Seed the shared RNG so any dice rolled in a test are reproducible."""
     dice.seed_rng(1234)

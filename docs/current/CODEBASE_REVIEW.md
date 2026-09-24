@@ -316,6 +316,13 @@ names where it should be addressed. Append; strike through and date an item when
   (prereg §6); `mock_model`'s `hostile` stumble style and a hostile offline smoke keep
   them covered. The review's other findings (per-request provider retry, fresh-decision
   H1, paired decision rules, out-of-range area aim, pilot readiness) are the next slices.
+- **A15. ~~Match-level exclusion biased the kept sample.~~ Fixed 2026-09-24** (Phase 1
+  review, H-2). One flaky request excluded a whole match, so matches with more requests
+  (more failures) were excluded more often. Infrastructure failures are now retried per
+  request in `llm_common._record_request` (3 attempts, recorded in
+  `DecisionTelemetry.provider_failures`, outside `request_count`), and the report breaks
+  exclusions and retries down per model x condition. `is_infrastructure_error` moved to
+  `agent.py` so the retry and the exclusion rule share one definition. Prereg §8.
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 

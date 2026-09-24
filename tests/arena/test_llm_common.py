@@ -2,7 +2,8 @@
 
 import pytest
 
-from src.arena.agent import RejectedResponse
+from src.arena import llm_common
+from src.arena.agent import ProviderError, RejectedResponse
 from src.arena.interfaces import C1, C2, C2_MENU, C3, get_interface
 from src.arena.llm_common import (
     augment_tools_with_notes,
@@ -256,3 +257,136 @@ def test_the_decision_records_how_long_a_menu_it_was_shown():
         get_interface(C2),
     )
     assert agent.telemetry.menu_length is None
+
+
+# -- infrastructure failures are retried per request (review 2026-09-24, H-2) ---------
+#
+# Excluding a whole match for one flaky request biases the kept sample: a match's
+# chance of exclusion grows with its request count, and the conditions that fail most
+# make the most requests. So a failed request is retried, and only a request that
+# keeps failing escapes to exclude the match.
+
+
+class _ConnectionDrop(ConnectionError):
+    """An infrastructure exception, as the network layer raises it."""
+
+
+def _flaky_then(outcomes):
+    """A request_fn returning (or raising) each outcome in turn."""
+    queue = list(outcomes)
+    sent = []
+
+    def request(messages, tools):
+        sent.append([dict(m) for m in messages])
+        outcome = queue.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome
+
+    return request, sent
+
+
+@pytest.fixture
+def waits(monkeypatch):
+    slept = []
+    monkeypatch.setattr(llm_common, "retry_sleep", slept.append)
+    return slept
+
+
+def _ok():
+    return ToolCall("end_turn", {}), RequestRecord(latency_ms=1.0, input_tokens=7)
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        ProviderError("no choices", record=RequestRecord(latency_ms=3.0, error="x")),
+        _ConnectionDrop("reset by peer"),
+    ],
+    ids=["empty-envelope", "network"],
+)
+def test_a_failed_request_is_retried_with_the_same_messages(waits, failure):
+    agent = _StubAgent()
+    request, sent = _flaky_then([failure, _ok()])
+
+    call = decide_one_action(request, agent, {}, get_interface(C2))
+
+    assert call.name == "end_turn"
+    assert sent[0] == sent[1]  # the model is asked the same thing, not corrected
+    assert len(waits) == 1
+
+
+def test_a_retried_request_is_cost_but_never_a_model_attempt(waits):
+    """Failed provider attempts are billed, but the model never saw them.
+
+    They go to ``provider_failures``, not ``requests``, so ``request_count`` — which
+    first-attempt validity reads — is unchanged by the provider's bad day.
+    """
+    agent = _StubAgent()
+    failed = RequestRecord(latency_ms=3.0, input_tokens=11, error="upstream 502")
+    request, _ = _flaky_then([ProviderError("502", record=failed), _ok()])
+
+    decide_one_action(request, agent, {}, get_interface(C2))
+    telemetry = agent.telemetry
+
+    assert telemetry.request_count == 1
+    assert [r.error for r in telemetry.provider_failures] == ["upstream 502"]
+    assert telemetry.input_tokens == 7 + 11  # cost includes the failed attempt
+    assert telemetry.to_dict()["provider_failures"][0]["error"] == "upstream 502"
+
+
+def test_a_network_failure_is_recorded_even_without_a_provider_record(waits):
+    agent = _StubAgent()
+    request, _ = _flaky_then([_ConnectionDrop("reset by peer"), _ok()])
+
+    decide_one_action(request, agent, {}, get_interface(C2))
+
+    (failure,) = agent.telemetry.provider_failures
+    assert "reset by peer" in failure.error
+
+
+def test_a_request_that_keeps_failing_escapes_after_the_registered_attempts(waits):
+    agent = _StubAgent()
+    request, sent = _flaky_then(
+        [ProviderError("no choices") for _ in range(llm_common.PROVIDER_ATTEMPTS)]
+    )
+
+    with pytest.raises(ProviderError):
+        decide_one_action(request, agent, {}, get_interface(C2))
+
+    assert len(sent) == llm_common.PROVIDER_ATTEMPTS
+    assert len(waits) == llm_common.PROVIDER_ATTEMPTS - 1
+    assert len(agent.telemetry.provider_failures) == llm_common.PROVIDER_ATTEMPTS
+
+
+def test_a_network_failure_that_persists_escapes_as_itself(waits):
+    """The runner still sees the original exception and excludes the match (§8)."""
+    agent = _StubAgent()
+    request, _ = _flaky_then(
+        [_ConnectionDrop("down") for _ in range(llm_common.PROVIDER_ATTEMPTS)]
+    )
+
+    with pytest.raises(_ConnectionDrop):
+        decide_one_action(request, agent, {}, get_interface(C2))
+
+
+def test_a_bug_in_the_request_is_never_retried(waits):
+    agent = _StubAgent()
+    request, sent = _flaky_then([KeyError("oops"), _ok()])
+
+    with pytest.raises(KeyError):
+        decide_one_action(request, agent, {}, get_interface(C2))
+    assert len(sent) == 1 and waits == []
+
+
+def test_a_model_refusal_raised_inside_a_request_is_never_retried(waits):
+    """Undecodable arguments are the model's answer, not the provider's failure."""
+    agent = _StubAgent()
+    refusal = RejectedResponse(
+        "malformed_output", "bad args", ToolCall("move", {}), record=RequestRecord()
+    )
+    request, sent = _flaky_then([refusal, _ok()])
+
+    with pytest.raises(RejectedResponse):
+        decide_one_action(request, agent, {}, get_interface(C2))
+    assert len(sent) == 1 and waits == []

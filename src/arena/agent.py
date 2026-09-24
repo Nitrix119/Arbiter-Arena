@@ -60,6 +60,22 @@ class ProviderError(NoToolCallError):
         self.record = record
 
 
+#: SDK packages whose exceptions are infrastructure, not model behaviour or our bugs.
+_INFRA_MODULES = ("openai", "anthropic", "httpx", "httpcore")
+
+
+def is_infrastructure_error(exc: BaseException) -> bool:
+    """True for a provider, network or timeout failure — never for our own bug.
+
+    One definition for both places that act on it: the per-request retry in
+    :mod:`src.arena.llm_common`, and the study runner's match exclusion (prereg §8).
+    A :class:`ProviderError` is infrastructure by construction.
+    """
+    if isinstance(exc, (ProviderError, ConnectionError, TimeoutError)):
+        return True
+    return type(exc).__module__.split(".")[0] in _INFRA_MODULES
+
+
 class RejectedResponse(NoToolCallError):
     """The model answered, but its study condition refused the answer, with a code.
 

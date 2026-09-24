@@ -111,6 +111,11 @@ class DecisionTelemetry:
     """
 
     requests: List[RequestRecord] = field(default_factory=list)
+    #: Requests the *provider* failed (an empty envelope, a dropped connection) and
+    #: that were retried unchanged. Billed, so counted in the token sums; never seen
+    #: by the model, so never in ``requests`` or ``request_count``, which is what
+    #: first-attempt validity reads (review 2026-09-24, H-2).
+    provider_failures: List[RequestRecord] = field(default_factory=list)
     #: How many legal options the model was shown (menu conditions only) — a cost
     #: covariate the study records per decision (prereg §2).
     menu_length: Optional[int] = None
@@ -121,11 +126,15 @@ class DecisionTelemetry:
 
     @property
     def input_tokens(self) -> Optional[int]:
-        return _sum_or_none(r.input_tokens for r in self.requests)
+        """Every input token billed for this decision, failed attempts included."""
+        return _sum_or_none(r.input_tokens for r in self._billed())
 
     @property
     def output_tokens(self) -> Optional[int]:
-        return _sum_or_none(r.output_tokens for r in self.requests)
+        return _sum_or_none(r.output_tokens for r in self._billed())
+
+    def _billed(self) -> List[RequestRecord]:
+        return [*self.requests, *self.provider_failures]
 
     @property
     def latency_ms(self) -> float:
@@ -143,6 +152,7 @@ class DecisionTelemetry:
         """A JSON-safe record for the transcript: the sums, plus each request."""
         return {
             "requests": [r.to_dict() for r in self.requests],
+            "provider_failures": [r.to_dict() for r in self.provider_failures],
             "request_count": self.request_count,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,

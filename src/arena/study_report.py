@@ -137,6 +137,95 @@ def excluded_attempts(bundle: Path) -> int:
     return len(list(root.rglob("*.jsonl"))) if root.exists() else 0
 
 
+#: Cell key: (model, condition).
+Cell = Tuple[str, str]
+
+
+def excluded_by_cell(bundle: Path) -> Dict[Cell, int]:
+    """Excluded attempts per model x condition, read from each attempt's own record."""
+    counts: Counter = Counter()
+    root = bundle / _EXCLUDED_DIR
+    for path in sorted(root.rglob("*.jsonl")) if root.exists() else []:
+        start = next((r for r in _read(path) if r.get("kind") == "match_start"), None)
+        if start is not None:
+            counts[
+                (str(start.get("model", "?")), str(start.get("condition", "?")))
+            ] += 1
+    return dict(counts)
+
+
+def _reason_kind(reason: str) -> str:
+    """A runner's exclusion reason reduced to its kind: the exception type, or
+    ``provider_error`` for a transcript that recorded one."""
+    if "provider_error" in reason:
+        return "provider_error"
+    return reason.split(":", 1)[0].strip() or "unknown"
+
+
+def exclusion_reasons(bundle: Path) -> Dict[Cell, Counter]:
+    """Why each model x condition's attempts were excluded, from the run log."""
+    reasons: Dict[Cell, Counter] = defaultdict(Counter)
+    log = bundle / "run_log.jsonl"
+    if not log.exists():
+        return {}
+    for event in _read(log):
+        if event.get("event") != "cell_excluded":
+            continue
+        parts = [p.strip() for p in str(event.get("cell", "")).split("|")]
+        if len(parts) >= 2:
+            reasons[(parts[0], parts[1])][
+                _reason_kind(str(event.get("reason", "")))
+            ] += 1
+    return dict(reasons)
+
+
+def _infrastructure_section(
+    decisions: List["Decision"],
+    matches: List["Match"],
+    excluded: Dict[Cell, int],
+    reasons: Dict[Cell, Counter],
+) -> List[str]:
+    """Exclusions and provider retries per model x condition (prereg §8).
+
+    Exclusion is for infrastructure only, but a host that fails on a model's own
+    malformed output would make exclusions track the condition, and a condition-
+    correlated exclusion rate biases every comparison. Shown per cell, never as one
+    total, so that pattern is visible.
+    """
+    retries: Counter = Counter()
+    for d in decisions:
+        retries[(d.model, d.condition)] += d.provider_retries
+    keys = sorted(
+        {(m.model, m.condition) for m in matches} | set(excluded),
+        key=lambda k: (k[0], _CONDITION_ORDER.get(k[1], 99)),
+    )
+    if not keys:
+        return []
+
+    def why(key: Cell) -> str:
+        counted = reasons.get(key)
+        if not counted:
+            return "—"
+        return ", ".join(f"{kind} x{n}" for kind, n in sorted(counted.items()))
+
+    return [
+        "",
+        "## Infrastructure (prereg §8)",
+        "",
+        "Excluded attempts were re-run and are not analysed. Provider retries are "
+        "failed requests repeated unchanged inside a kept match: billed, never counted "
+        "as a model attempt. Either one rising with the condition is a warning sign.",
+        "",
+        _table(
+            ["model", "condition", "excluded attempts", "provider retries", "reasons"],
+            [
+                [m, c, str(excluded.get((m, c), 0)), str(retries[(m, c)]), why((m, c))]
+                for m, c in keys
+            ],
+        ),
+    ]
+
+
 def _prices(bundle: Path) -> Dict[str, Tuple[float, float]]:
     """model id → (usd per M input, usd per M output), from the bundle's grid copy."""
     grid_file = bundle / "grid.toml"
@@ -179,6 +268,9 @@ class Decision:
     menu_length: Optional[int]
     c1_layer: Optional[int]
     served_provider: Optional[str] = None
+    #: Requests the provider failed and that were retried unchanged (prereg §8).
+    #: Cost, never a model attempt — ``request_count`` excludes them.
+    provider_retries: int = 0
 
 
 def _attempted_verb(text: str) -> str:
@@ -260,6 +352,7 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
                 menu_length=telemetry.get("menu_length"),
                 c1_layer=layer,
                 served_provider=host,
+                provider_retries=len(telemetry.get("provider_failures") or []),
             )
         )
     return out
@@ -409,6 +502,8 @@ def summarise(
     decisions: List[Decision],
     matches: List[Match],
     excluded: int,
+    excluded_cells: Optional[Dict[Cell, int]] = None,
+    reasons: Optional[Dict[Cell, Counter]] = None,
 ) -> str:
     groups: Dict[Tuple[str, str], List[Match]] = defaultdict(list)
     decision_groups: Dict[Tuple[str, str], List[Decision]] = defaultdict(list)
@@ -586,6 +681,9 @@ def summarise(
     parts += _tactics_sections(matches)
     parts += _layer_section(decisions)
     parts += _hosts_section(decisions)
+    parts += _infrastructure_section(
+        decisions, matches, excluded_cells or {}, reasons or {}
+    )
     return "\n".join(parts) + "\n"
 
 
@@ -825,7 +923,14 @@ def build_report(bundle: Path) -> Tuple[str, str, str, str]:
         bounded = _bounds_of(relative, records, problems)
         if bounded is not None:
             bounds.append(bounded)
-    summary = summarise(bundle.name, decisions, matches, excluded_attempts(bundle))
+    summary = summarise(
+        bundle.name,
+        decisions,
+        matches,
+        excluded_attempts(bundle),
+        excluded_by_cell(bundle),
+        exclusion_reasons(bundle),
+    )
     summary = summary.rstrip("\n") + "\n" + "\n".join(_bounds_section(bounds, problems))
     bound_rows = [
         {"model": b.model, "match": b.match, **asdict(d)}

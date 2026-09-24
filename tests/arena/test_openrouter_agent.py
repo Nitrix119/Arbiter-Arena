@@ -9,6 +9,7 @@ from src.arena import openrouter_agent as ora
 from src.arena.agent import NoToolCallError, ProviderError, RejectedResponse
 from src.arena.error_codes import MALFORMED_OUTPUT, PROVIDER_ERROR
 from src.arena.interfaces import SHARED_PROMPT
+from src.arena.llm_common import PROVIDER_ATTEMPTS
 from src.arena.openrouter_agent import DEFAULT_MODEL, OpenRouterAgent, _to_openai_tools
 from src.arena.tools import TOOLS
 from src.arena.transcript import Transcript
@@ -187,9 +188,10 @@ def test_broken_envelope_is_a_provider_error_not_a_crash(envelope):
     """A malformed payload must not abort the match with a TypeError.
 
     `response.choices[0]` on any of these raised and killed a whole match; a four-day
-    background grid cannot die on one flaky response.
+    background grid cannot die on one flaky response. It is retried, and only an
+    envelope that stays broken on every attempt surfaces as a ProviderError.
     """
-    agent = OpenRouterAgent("O", "a", client=FakeClient([envelope, envelope]))
+    agent = OpenRouterAgent("O", "a", client=FakeClient([envelope] * PROVIDER_ATTEMPTS))
 
     with pytest.raises(ProviderError):
         agent.decide(_obs())
@@ -208,7 +210,9 @@ def test_provider_error_is_distinguishable_from_a_model_with_nothing_to_say():
         chatty.decide(_obs())
     assert not isinstance(chatty_exc.value, ProviderError)
 
-    broken = OpenRouterAgent("O", "a", client=FakeClient([_broken(choices=None)] * 2))
+    broken = OpenRouterAgent(
+        "O", "a", client=FakeClient([_broken(choices=None)] * PROVIDER_ATTEMPTS)
+    )
     with pytest.raises(ProviderError):
         broken.decide(_obs())
 
@@ -218,18 +222,22 @@ def test_provider_error_reports_the_error_body_and_the_model():
         "O",
         "a",
         model="vendor/flaky:free",
-        client=FakeClient([_broken(error={"message": "upstream 502"})] * 2),
+        client=FakeClient(
+            [_broken(error={"message": "upstream 502"})] * PROVIDER_ATTEMPTS
+        ),
     )
     with pytest.raises(ProviderError, match="vendor/flaky:free") as exc:
         agent.decide(_obs())
     assert "upstream 502" in str(exc.value)
 
 
-def test_a_flaky_response_costs_a_failure_but_not_the_match(make_entity, make_combat):
-    """The turn survives, the failure is recorded, and it is tagged as the provider's.
+def test_a_flaky_response_is_retried_and_costs_the_model_nothing(
+    make_entity, make_combat
+):
+    """One broken envelope is retried with the same request, invisibly to the model.
 
-    This is the end-to-end assertion behind A1: the match goes on, and the metrics can
-    later tell this turn's failure from a model that chose badly.
+    The turn goes on with no failure charged, and the failed attempt is kept as cost
+    in ``provider_failures`` — the end-to-end assertion behind A1 and review H-2.
     """
     fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
     goblin = make_entity("Goblin", team="b", pos=(5, 0, 0), hp=30)
@@ -238,15 +246,36 @@ def test_a_flaky_response_costs_a_failure_but_not_the_match(make_entity, make_co
     force_turn(combat, fighter)
 
     transcript = Transcript()
-    # A broken envelope is not re-prompted the way a tool-free reply is: there is
-    # nothing to correct, so it surfaces at once and the driver asks again next loop.
     client = FakeClient([_broken(choices=None), response(fn_call("end_turn", "{}"))])
     agent = OpenRouterAgent("O", "a", client=client)
 
     outcome = run_turn(combat, fighter, agent, transcript=transcript)
 
+    assert outcome.failures == 0
+    assert outcome.forced_end is False
+    (action,) = transcript.records_of("action")
+    assert action["result"]["ok"] is True
+    assert action["telemetry"]["request_count"] == 1
+    assert len(action["telemetry"]["provider_failures"]) == 1
+
+
+def test_a_response_that_stays_broken_is_a_provider_error(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0), hp=30)
+    combat = make_combat([fighter, goblin])
+    combat.start_combat()
+    force_turn(combat, fighter)
+
+    transcript = Transcript()
+    client = FakeClient(
+        [_broken(choices=None)] * PROVIDER_ATTEMPTS
+        + [response(fn_call("end_turn", "{}"))]
+    )
+    outcome = run_turn(
+        combat, fighter, OpenRouterAgent("O", "a", client=client), transcript=transcript
+    )
+
     assert outcome.failures == 1
-    assert outcome.forced_end is False  # the agent still ended its own turn
     failed = [r for r in transcript.records_of("action") if r["result"]["ok"] is False]
     assert [r["result"]["code"] for r in failed] == [PROVIDER_ERROR]
 

@@ -350,3 +350,61 @@ def test_baselines_are_reported_beside_the_models(tmp_path):
     assert "| baseline-scripted | C3 |" in summary
     assert "| baseline-heuristic | native |" in summary
     assert "| mock | C2 |" in summary
+
+
+# -- infrastructure, per condition (review 2026-09-24, H-2) -------------------------------
+
+
+def test_exclusions_and_provider_retries_are_reported_per_condition(tmp_path):
+    """A condition-correlated exclusion pattern is a validity problem — so show it.
+
+    Excluding is for infrastructure only, but a host that fails on a model's own
+    malformed output would make exclusions track the condition. Only a per-condition
+    breakdown can reveal that, so the report gives one, with the reasons.
+    """
+    import json
+
+    grid = parse_grid(
+        {
+            "study": {
+                "seeds": [1],
+                "scenarios": ["kiting"],
+                "conditions": ["C2", "C3"],
+            },
+            "models": [{"id": "mock", "provider": "mock"}],
+        }
+    )
+    run_grid(grid, tmp_path, echo=lambda _: None)
+    (c2,) = (tmp_path / "mock" / "C2").rglob("seed1.jsonl")
+    records = [json.loads(line) for line in c2.read_text(encoding="utf-8").splitlines()]
+
+    # One excluded attempt for the C2 cell, as the runner files it and logs it.
+    excluded = (
+        tmp_path / "_excluded" / "mock" / "C2" / "kiting" / "seed1.attempt1.jsonl"
+    )
+    excluded.parent.mkdir(parents=True)
+    excluded.write_text(json.dumps(records[0]) + "\n", encoding="utf-8")
+    with open(tmp_path / "run_log.jsonl", "a", encoding="utf-8") as log:
+        log.write(
+            json.dumps(
+                {
+                    "event": "cell_excluded",
+                    "cell": "mock | C2 | kiting | seed 1",
+                    "attempt": 1,
+                    "reason": "RateLimitError: 429 slow down",
+                }
+            )
+            + "\n"
+        )
+    # And one retried provider failure inside the completed C2 match.
+    first = next(r for r in records if r["kind"] == "action" and "telemetry" in r)
+    first["telemetry"]["provider_failures"] = [{"error": "no choices"}]
+    c2.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+
+    decisions_csv, _, _, summary = build_report(tmp_path)
+
+    assert "## Infrastructure" in summary
+    assert "| mock | C2 | 1 | 1 | RateLimitError x1 |" in summary
+    assert "| mock | C3 | 0 | 0 | — |" in summary
+    retries = [int(row["provider_retries"]) for row in _rows(decisions_csv)]
+    assert sum(retries) == 1

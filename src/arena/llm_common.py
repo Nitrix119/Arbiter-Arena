@@ -12,9 +12,10 @@ condition it is running, which is how four conditions share one agent path.
 """
 
 import json
+import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.arena.agent import NoToolCallError, ProviderError, RejectedResponse
+from src.arena.agent import NoToolCallError, RejectedResponse, is_infrastructure_error
 from src.arena.error_codes import MALFORMED_OUTPUT
 from src.arena.interfaces import SHARED_PROMPT, ActionInterface, describe_tool_call
 from src.arena.telemetry import DecisionTelemetry, RequestRecord
@@ -28,6 +29,16 @@ RequestFn = Callable[
     [List[Dict[str, Any]], List[Dict[str, Any]]],
     Tuple[Optional[ToolCall], RequestRecord],
 ]
+
+#: How many times one request is attempted when the *provider* fails it, and the
+#: pause before each retry. Registered in PREREGISTRATION §8: excluding a whole match
+#: for one flaky request would bias the kept sample toward matches with fewer requests
+#: — the ones with fewer failures — so a failed request is retried unchanged, and only
+#: one that fails every attempt escapes to exclude the match.
+PROVIDER_ATTEMPTS = 3
+PROVIDER_BACKOFF_SECONDS = (2.0, 8.0)
+#: The pause itself; a module hook so tests need not wait.
+retry_sleep: Callable[[float], None] = time.sleep
 
 #: Back-compat alias. The prompt is now assembled per condition — the shared world
 #: model lives in :data:`~src.arena.interfaces.SHARED_PROMPT` and each condition adds
@@ -146,20 +157,49 @@ def _record_request(
 ) -> Tuple[Optional[ToolCall], RequestRecord]:
     """Make one request, recording what it cost whether or not it succeeded.
 
-    A :class:`~src.arena.agent.ProviderError` carries its own record, so a broken
-    envelope is accounted for and then re-raised unchanged — the turn driver still
-    needs the type to tag it as infrastructure rather than model behaviour. So does a
-    :class:`~src.arena.agent.RejectedResponse` raised inside the request (arguments
-    the adapter could not decode): refused, but not free.
+    An **infrastructure** failure (:func:`~src.arena.agent.is_infrastructure_error`:
+    an empty envelope, a dropped connection, an SDK error) is retried with the *same*
+    messages, up to :data:`PROVIDER_ATTEMPTS` in all. Each failed attempt goes to
+    ``telemetry.provider_failures``, billed but never counted as something the model
+    did. Once the attempts run out the last failure is re-raised unchanged: a
+    :class:`~src.arena.agent.ProviderError` is logged as ``provider_error`` by the turn
+    driver, anything else escapes the match, and either way the runner excludes it.
+
+    A :class:`~src.arena.agent.RejectedResponse` raised inside the request (arguments
+    the adapter could not decode) is the model's answer, not the provider's failure: it
+    is recorded as a request and re-raised at once, never retried. So is any other
+    exception — a bug is not the weather.
     """
-    try:
-        call, record = request_fn(messages, api_tools)
-    except (ProviderError, RejectedResponse) as exc:
-        if exc.record is not None:
-            telemetry.requests.append(exc.record)
-        raise
-    telemetry.requests.append(record)
-    return call, record
+    for attempt in range(1, PROVIDER_ATTEMPTS + 1):
+        started = time.perf_counter()
+        try:
+            call, record = request_fn(messages, api_tools)
+        except RejectedResponse as exc:
+            if exc.record is not None:
+                telemetry.requests.append(exc.record)
+            raise
+        except Exception as exc:
+            if not is_infrastructure_error(exc):
+                raise
+            telemetry.provider_failures.append(_failure_record(exc, started))
+            if attempt == PROVIDER_ATTEMPTS:
+                raise
+            retry_sleep(PROVIDER_BACKOFF_SECONDS[attempt - 1])
+            continue
+        telemetry.requests.append(record)
+        return call, record
+    raise AssertionError("unreachable: the last attempt returns or raises")
+
+
+def _failure_record(exc: BaseException, started: float) -> RequestRecord:
+    """The record of a failed request: the adapter's own, or one built here."""
+    record = getattr(exc, "record", None)
+    if isinstance(record, RequestRecord):
+        return record
+    return RequestRecord(
+        latency_ms=(time.perf_counter() - started) * 1000.0,
+        error=f"{type(exc).__name__}: {exc}",
+    )
 
 
 def decide_one_action(

@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.arena.agent import ProviderError, ScriptedAgent
+from src.arena.llm_common import PROVIDER_ATTEMPTS
 from src.arena.openrouter_agent import OpenRouterAgent
 from src.arena.telemetry import (
     REDACTED,
@@ -139,15 +140,18 @@ def test_a_retried_decision_records_both_requests():
 
 def test_a_provider_failure_still_records_its_request():
     broken = SimpleNamespace(choices=None, error={"message": "rate limited"})
-    agent = OpenRouterAgent("O", "a", client=FakeClient([broken]))
+    agent = OpenRouterAgent("O", "a", client=FakeClient([broken] * PROVIDER_ATTEMPTS))
 
     with pytest.raises(ProviderError):
         agent.decide(_obs())
 
     telemetry = agent.last_telemetry()
-    assert telemetry.request_count == 1
-    assert "rate limited" in telemetry.requests[0].error
-    assert telemetry.requests[0].latency_ms > 0
+    # The model never answered, so it made no request; the provider's failed
+    # attempts are all kept, each with its latency.
+    assert telemetry.request_count == 0
+    assert len(telemetry.provider_failures) == PROVIDER_ATTEMPTS
+    assert "rate limited" in telemetry.provider_failures[0].error
+    assert telemetry.provider_failures[0].latency_ms > 0
 
 
 def test_a_response_without_usage_degrades_rather_than_raising():
@@ -234,13 +238,15 @@ def test_a_deterministic_agent_logs_no_telemetry_key(make_entity, make_combat):
 def test_a_failed_decision_is_recorded_with_its_cost(make_entity, make_combat):
     """The turn driver reads telemetry on the exception path too."""
     client = FakeClient(
-        [SimpleNamespace(choices=None), _response(fn_call("end_turn", "{}"))]
+        [SimpleNamespace(choices=None)] * PROVIDER_ATTEMPTS
+        + [_response(fn_call("end_turn", "{}"))]
     )
     transcript = _turn_with(client, make_entity, make_combat)
 
     failed = [r for r in transcript.records_of("action") if not r["result"]["ok"]]
     assert len(failed) == 1
-    assert failed[0]["telemetry"]["request_count"] == 1
+    assert failed[0]["telemetry"]["request_count"] == 0
+    assert len(failed[0]["telemetry"]["provider_failures"]) == PROVIDER_ATTEMPTS
     assert failed[0]["result"]["code"] == "provider_error"
 
 
