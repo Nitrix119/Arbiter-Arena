@@ -13,7 +13,7 @@ condition it is running, which is how four conditions share one agent path.
 
 import json
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from src.arena.agent import NoToolCallError, RejectedResponse, is_infrastructure_error
 from src.arena.error_codes import MALFORMED_OUTPUT
@@ -67,6 +67,33 @@ def augment_tools_with_notes(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]
             }
         augmented.append(tool)
     return augmented
+
+
+def _call_key(name: Any, arguments: Any) -> Tuple[str, str]:
+    """A call as comparable text: decoded where possible, else its raw text."""
+    value = arguments
+    if isinstance(arguments, str):
+        if not arguments.strip():
+            value = {}
+        else:
+            try:
+                value = json.loads(arguments)
+            except ValueError:
+                return str(name), "raw:" + arguments
+    if value is None:
+        value = {}
+    return str(name), json.dumps(value, sort_keys=True, default=str)
+
+
+def distinct_call_count(calls: Iterable[Tuple[Any, Any]]) -> int:
+    """How many *different* ``(name, arguments)`` calls one response made.
+
+    Arguments are compared by meaning — a JSON string and the dict it encodes are
+    the same call, and ``""``/``null`` are the empty object, as
+    :func:`decode_arguments` reads them. Text that is not JSON compares as itself.
+    Provider-neutral, so every adapter and the mock count the same way.
+    """
+    return len({_call_key(name, arguments) for name, arguments in calls})
 
 
 def decode_arguments(name: str, arguments: Any, record: RequestRecord) -> Dict:

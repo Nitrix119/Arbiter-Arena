@@ -287,6 +287,9 @@ class Decision:
     menu_truncated: Optional[bool] = None
     #: The model the provider says served the decision's last request.
     served_model: Optional[str] = None
+    #: Requests whose response held more than one tool call (refused if they
+    #: differed, prereg §6) — visible per cell even when refused.
+    multi_call_responses: int = 0
 
 
 def _attempted_verb(text: str) -> str:
@@ -383,6 +386,9 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
                     1 for r in requests if r.get("finish_reason") == "length"
                 ),
                 menu_truncated=telemetry.get("menu_truncated"),
+                multi_call_responses=sum(
+                    1 for r in requests if (r.get("extra_tool_calls") or 0) > 0
+                ),
                 served_model=next(
                     (
                         r["served_model"]
@@ -1080,10 +1086,12 @@ def _hosts_section(decisions: List[Decision]) -> List[str]:
 
 
 def _integrity_section(decisions: List[Decision]) -> List[str]:
-    """Three silent ways a cell can be biased, counted per model x condition.
+    """Silent ways a cell can be biased, counted per model x condition.
 
     * a response cut off at the token limit — a harness setting deciding the outcome;
     * a menu cut by a length cap — real options removed (should never happen);
+    * a response holding several tool calls — a host ignoring
+      ``parallel_tool_calls``; refused when they differ (prereg §6), counted always;
     * a served model other than the one requested — a router changing the subject.
     """
     cells: Dict[Cell, List[Decision]] = defaultdict(list)
@@ -1124,6 +1132,7 @@ def _integrity_section(decisions: List[Decision]) -> List[str]:
                 "condition",
                 "responses cut at token limit",
                 "menus truncated",
+                "responses with several calls",
                 "served models",
             ],
             [
@@ -1132,6 +1141,7 @@ def _integrity_section(decisions: List[Decision]) -> List[str]:
                     condition,
                     str(sum(d.length_cutoffs for d in cells[(model, condition)])),
                     str(sum(bool(d.menu_truncated) for d in cells[(model, condition)])),
+                    str(sum(d.multi_call_responses for d in cells[(model, condition)])),
                     ", ".join(
                         sorted(
                             {

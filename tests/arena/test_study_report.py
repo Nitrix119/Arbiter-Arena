@@ -588,9 +588,26 @@ def test_truncation_and_model_substitution_are_surfaced_per_cell():
     assert [d.length_cutoffs for d in decisions] == [1, 0, 0]
     assert [d.menu_truncated for d in decisions] == [True, None, None]
     section = "\n".join(_integrity_section(decisions))
-    assert "| m | C2 | 1 | 1 | m, m-quantised |" in section
+    assert "| m | C2 | 1 | 1 | 0 | m, m-quantised |" in section
     assert "served a model other than the one requested" in section
     assert "m / C2" in section
+
+
+def test_responses_with_several_calls_are_counted_per_cell():
+    """Refused whenever they differ (prereg §6), but counted either way, so a host
+    that ignores ``parallel_tool_calls`` is visible in the cell it affects."""
+    from src.arena.study_report import _integrity_section
+
+    records = _records((False, 1, True), (True, 1, False))
+    actions = [r for r in records if r["kind"] == "action"]
+    actions[0]["telemetry"]["requests"] = [
+        {"served_model": "m", "extra_tool_calls": 1, "distinct_tool_calls": 2}
+    ]
+    decisions = decisions_of(Path("m.jsonl"), records)
+
+    assert [d.multi_call_responses for d in decisions] == [1, 0]
+    section = "\n".join(_integrity_section(decisions))
+    assert "| m | C2 | 0 | 0 | 1 | m |" in section
 
 
 def test_a_clean_bundle_has_no_integrity_warnings():

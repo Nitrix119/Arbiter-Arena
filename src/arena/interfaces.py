@@ -215,6 +215,24 @@ class ActionInterface(ABC):
             return None
         return bool(observation.get("menu_truncated", False))
 
+    @staticmethod
+    def _refuse_several(call: Optional[ToolCall], record: RequestRecord) -> None:
+        """Refuse a response that made more than one *different* tool call.
+
+        C1's parser refuses two different ACTION lines as ``malformed_output``, so a
+        tool condition must not quietly run the first of two different calls: the
+        same behaviour would then fail in C1 and succeed in C2, biasing H1's C2 − C1
+        contrast toward the ordering it predicts (prereg §6). Identical repeats are
+        one action in both. The first call is logged, as the attempt.
+        """
+        if call is not None and record.distinct_tool_calls > 1:
+            raise RejectedResponse(
+                MALFORMED_OUTPUT,
+                "The response makes more than one different tool call; make exactly "
+                "one.",
+                call,
+            )
+
     def format_rejected(self, action: Dict[str, Any]) -> str:
         """How a rejected action is described back to the model.
 
@@ -244,6 +262,7 @@ class RawParamsInterface(ActionInterface):
         without this a model could move by id — C3's format inside a raw-parameter
         condition, the dual path Phase 0 closed in the schema alone.
         """
+        self._refuse_several(call, record)
         if (
             call is not None
             and call.name == TOOL_MOVE
@@ -421,6 +440,7 @@ class MenuInterface(ActionInterface):
         """
         if call is None:
             return None
+        self._refuse_several(call, record)
         if call.name != CHOOSE_TOOL["name"]:
             raise RejectedResponse(
                 UNKNOWN_ACTION,

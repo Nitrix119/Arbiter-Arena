@@ -83,6 +83,10 @@ class RequestRecord:
     #: Tool calls the provider returned beyond the first, which the adapter does not
     #: act on (ledger A5). Recorded so a provider that emits several is visible.
     extra_tool_calls: int = 0
+    #: How many *different* calls the response made (identical repeats count once).
+    #: More than one is refused in every tool condition, as C1 refuses two different
+    #: ACTION lines (prereg §6).
+    distinct_tool_calls: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         """A JSON-safe record, scrubbed.

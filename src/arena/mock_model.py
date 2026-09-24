@@ -26,9 +26,19 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
 from src.arena.agent import Agent, ScriptedAgent
 from src.arena.free_text import render_command
 from src.arena.interfaces import C1, C2, C2_MENU, C3, ActionInterface
-from src.arena.llm_common import decide_one_action, decode_arguments
+from src.arena.llm_common import (
+    decide_one_action,
+    decode_arguments,
+    distinct_call_count,
+)
 from src.arena.telemetry import RequestRecord
-from src.arena.tools import TOOL_ATTACK, TOOL_CAST_SPELL, TOOL_MOVE, ToolCall
+from src.arena.tools import (
+    TOOL_ATTACK,
+    TOOL_CAST_SPELL,
+    TOOL_END_TURN,
+    TOOL_MOVE,
+    ToolCall,
+)
 from src.utils import dice
 
 #: What the mock reports as the model that served it.
@@ -47,8 +57,17 @@ class RawCall:
     arguments: str
 
 
+@dataclass(frozen=True)
+class MultiCall:
+    """Several tool calls in one response, as a host that ignores
+    ``parallel_tool_calls`` may send. The adapter acts on the first; the interface
+    refuses the response if they differ (prereg §6)."""
+
+    calls: Tuple[ToolCall, ...]
+
+
 #: One written answer: the tool call the "provider" returns (if any) and its text.
-Answer = Tuple[Optional[Union[ToolCall, RawCall]], Optional[str]]
+Answer = Tuple[Optional[Union[ToolCall, RawCall, MultiCall]], Optional[str]]
 
 
 def as_coordinates(call: ToolCall, observation: Dict[str, Any]) -> ToolCall:
@@ -107,7 +126,8 @@ def _stumble_choice(observation: Dict[str, Any]) -> Answer:
 #: What real models and hosts send that a well-behaved mock never would. Each list is
 #: cycled through in order, one entry per stumble; every entry must be refused as
 #: ``malformed_output`` — never crash the grid, never land in ``engine_error``.
-_HOSTILE_CALLS: List[Union[ToolCall, RawCall]] = [
+_HOSTILE_CALLS: List[Union[ToolCall, RawCall, MultiCall]] = [
+    MultiCall((ToolCall(TOOL_END_TURN, {}), ToolCall(TOOL_MOVE, {"x": 0, "z": 5}))),
     RawCall(TOOL_ATTACK, "{bad json"),
     ToolCall(TOOL_MOVE, {"x": None, "z": 0}),
     ToolCall(TOOL_MOVE, {"option_id": "retreat:raider-1"}),
@@ -116,12 +136,19 @@ _HOSTILE_CALLS: List[Union[ToolCall, RawCall]] = [
     ToolCall(TOOL_MOVE, {"x": "five", "z": 0}),
     RawCall(TOOL_MOVE, "[10, 0]"),
 ]
-_HOSTILE_CHOICES: List[Union[ToolCall, RawCall]] = [
+_HOSTILE_CHOICES: List[Union[ToolCall, RawCall, MultiCall]] = [
+    MultiCall(
+        (
+            ToolCall("choose", {"action_id": "end_turn"}),
+            ToolCall("choose", {"action_id": "attack:nothing:nobody"}),
+        )
+    ),
     RawCall("choose", ""),
     ToolCall("choose", {"action_id": None}),
     RawCall("choose", "[1]"),
 ]
 _HOSTILE_TEXTS = [
+    "ACTION: end turn\nACTION: move to x=0 z=5",
     "ACTION: move to x=five z=0",
     "ACTION:",
     "ACTION: attack raider-1 or raider-2 with Greatsword",
@@ -245,12 +272,19 @@ class MockModelAgent(Agent):
             messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]
         ) -> Tuple[Optional[ToolCall], RequestRecord]:
             prompt = "".join(str(m.get("content", "")) for m in messages)
+            # Every call the "provider" returns; the adapter acts on the first.
+            sent: Tuple[Union[ToolCall, RawCall], ...] = (
+                call.calls
+                if isinstance(call, MultiCall)
+                else (call,) if call is not None else ()
+            )
+            first = sent[0] if sent else None
             # Every written answer is text (C1) or a call (the tool conditions).
             answer = text if text is not None else ""
-            if isinstance(call, RawCall):
-                answer = answer or call.arguments
-            elif call is not None:
-                answer = answer or json.dumps(call.arguments)
+            if isinstance(first, RawCall):
+                answer = answer or first.arguments
+            elif first is not None:
+                answer = answer or json.dumps(first.arguments)
             record = RequestRecord(
                 latency_ms=0.0,
                 input_tokens=_synthetic_tokens(prompt),
@@ -258,15 +292,19 @@ class MockModelAgent(Agent):
                 served_model=MOCK_MODEL,
                 finish_reason="mock",
                 raw_output=text,
+                extra_tool_calls=max(0, len(sent) - 1),
+                distinct_tool_calls=distinct_call_count(
+                    (c.name, c.arguments) for c in sent
+                ),
             )
-            if call is not None:
-                record.tool_call = {"name": call.name, "arguments": call.arguments}
-            if isinstance(call, RawCall):
-                args = decode_arguments(call.name, call.arguments, record)
-                return ToolCall(call.name, args), record
-            if call is not None:
+            if first is not None:
+                record.tool_call = {"name": first.name, "arguments": first.arguments}
+            if isinstance(first, RawCall):
+                args = decode_arguments(first.name, first.arguments, record)
+                return ToolCall(first.name, args), record
+            if first is not None:
                 # A fresh copy each request: the loop pops `note` off what it returns.
-                return ToolCall(call.name, dict(call.arguments)), record
+                return ToolCall(first.name, dict(first.arguments)), record
             return None, record
 
         action = decide_one_action(request, self, observation, self.interface)

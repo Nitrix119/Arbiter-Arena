@@ -9,6 +9,7 @@ from src.arena.llm_common import (
     augment_tools_with_notes,
     capture_notes,
     decide_one_action,
+    distinct_call_count,
     render_observation,
 )
 from src.arena.telemetry import RequestRecord
@@ -390,3 +391,41 @@ def test_a_model_refusal_raised_inside_a_request_is_never_retried(waits):
     with pytest.raises(RejectedResponse):
         decide_one_action(request, agent, {}, get_interface(C2))
     assert len(sent) == 1 and waits == []
+
+
+# -- several calls in one response (review 2026-09-24, prereg §6) -----------------
+
+
+@pytest.mark.parametrize(
+    "calls, expected",
+    [
+        ([], 0),
+        ([("end_turn", "{}")], 1),
+        ([("end_turn", "{}"), ("end_turn", "")], 1),  # "" is the no-argument form
+        ([("end_turn", None), ("end_turn", {})], 1),
+        (
+            [
+                ("attack", '{"action_name": "Bite", "defender_id": "g1"}'),
+                ("attack", {"defender_id": "g1", "action_name": "Bite"}),
+            ],
+            1,
+        ),
+        ([("end_turn", "{}"), ("attack", "{}")], 2),
+        ([("move", '{"x": 0, "z": 5}'), ("move", '{"x": 0, "z": 10}')], 2),
+        ([("attack", "{bad json"), ("attack", "{bad json")], 1),
+        ([("attack", "{bad json"), ("attack", "{bad")], 2),
+    ],
+    ids=[
+        "none",
+        "one",
+        "empty-string-is-empty-object",
+        "null-is-empty-object",
+        "same-arguments-any-encoding",
+        "different-tools",
+        "same-tool-different-arguments",
+        "same-undecodable-text",
+        "different-undecodable-text",
+    ],
+)
+def test_distinct_call_count_compares_calls_by_meaning(calls, expected):
+    assert distinct_call_count(calls) == expected

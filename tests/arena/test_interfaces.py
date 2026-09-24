@@ -554,3 +554,49 @@ def test_a_c3_choice_naming_no_id_is_malformed_not_unknown(arguments):
             ToolCall("choose", arguments), RequestRecord(), _menu_obs()
         )
     assert refused.value.code == "malformed_output"
+
+
+# -- several different calls in one response (review 2026-09-24, prereg §6) --------
+
+
+def _several(distinct):
+    record = RequestRecord()
+    record.distinct_tool_calls = distinct
+    record.extra_tool_calls = 1
+    return record
+
+
+@pytest.mark.parametrize("name", RAW)
+def test_a_raw_param_response_with_two_different_calls_is_refused(name):
+    """C1 refuses two different ACTION lines; a tool condition must not run the first.
+
+    Otherwise the same behaviour is a failure in C1 and a success in C2, a bias in
+    H1's C2 − C1 contrast toward the very ordering it predicts.
+    """
+    call = ToolCall("attack", {"action_name": "Dagger", "defender_id": "raider-1"})
+    with pytest.raises(RejectedResponse) as refused:
+        get_interface(name).interpret(call, _several(2), _obs())
+
+    assert refused.value.code == "malformed_output"
+    assert refused.value.call is call  # logged as what it first attempted
+
+
+def test_a_c3_response_choosing_two_different_ids_is_refused():
+    call = ToolCall("choose", {"action_id": "end_turn"})
+    with pytest.raises(RejectedResponse) as refused:
+        get_interface(C3).interpret(call, _several(2), _menu_obs())
+
+    assert refused.value.code == "malformed_output"
+
+
+@pytest.mark.parametrize("name", RAW)
+def test_an_identical_repeat_is_one_action(name):
+    """As in C1, where a repeated identical ACTION line is read once."""
+    call = ToolCall("attack", {"action_name": "Dagger", "defender_id": "raider-1"})
+    assert get_interface(name).interpret(call, _several(1), _obs()) is call
+
+
+def test_a_c3_identical_repeat_is_one_action():
+    call = ToolCall("choose", {"action_id": "end_turn"})
+    resolved = get_interface(C3).interpret(call, _several(1), _menu_obs())
+    assert resolved.name == "end_turn"

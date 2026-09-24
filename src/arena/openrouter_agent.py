@@ -22,7 +22,11 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from src.arena.agent import Agent, ProviderError
 from src.arena.credentials import resolve_credential
 from src.arena.interfaces import C2_MENU, ActionInterface, get_interface
-from src.arena.llm_common import decide_one_action, decode_arguments
+from src.arena.llm_common import (
+    decide_one_action,
+    decode_arguments,
+    distinct_call_count,
+)
 from src.arena.telemetry import RequestRecord
 from src.arena.tools import ToolCall
 
@@ -176,7 +180,14 @@ class OpenRouterAgent(Agent):
         # without `tools` — so both are omitted rather than sent empty.
         tool_fields: Dict[str, Any] = {}
         if api_tools:
-            tool_fields = {"tools": _to_openai_tools(api_tools), "tool_choice": "auto"}
+            # One action per response, as every condition's prompt asks. Hosts that
+            # honour this return one call; any that still send several different
+            # ones are refused by the interface, exactly as C1 refuses two lines.
+            tool_fields = {
+                "tools": _to_openai_tools(api_tools),
+                "tool_choice": "auto",
+                "parallel_tool_calls": False,
+            }
         extra_body: Dict[str, Any] = {}
         if self.hosts:
             extra_body["provider"] = {
@@ -216,6 +227,9 @@ class OpenRouterAgent(Agent):
 
         tool_calls = getattr(message, "tool_calls", None) or []
         record.extra_tool_calls = max(0, len(tool_calls) - 1)
+        record.distinct_tool_calls = distinct_call_count(
+            (tc.function.name, tc.function.arguments) for tc in tool_calls
+        )
         for tc in tool_calls:
             fn = tc.function
             arguments = fn.arguments

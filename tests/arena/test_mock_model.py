@@ -113,6 +113,28 @@ def test_a_hostile_mock_is_coded_never_a_crash_and_still_replays(condition):
     assert verify(transcript.records, build).ok
 
 
+@pytest.mark.parametrize("condition", [C1, C2, C2_MENU, C3])
+def test_two_different_actions_in_one_response_are_refused_in_every_condition(
+    condition,
+):
+    """Prereg §6: C1 refuses two different ACTION lines, so every tool condition must
+    refuse two different calls too, rather than quietly running the first."""
+    transcript = Transcript()
+    model = MockModelAgent(
+        "mock", "a", get_interface(condition), stumble_on=[0], stumble_style="hostile"
+    )
+    run_match(
+        SCENARIOS["alpha_strike"].build(),
+        {"a": model, "b": ScriptedAgent("Opponent", "b")},
+        seed=4,
+        transcript=transcript,
+    )
+
+    first = next(r for r in transcript.records_of("action") if "telemetry" in r)
+    assert first["result"]["code"] == "malformed_output"
+    assert "more than one different" in first["result"]["error"]
+
+
 def test_an_unknown_stumble_style_is_refused_naming_the_options():
     with pytest.raises(ValueError, match="hostile"):
         MockModelAgent("mock", "a", get_interface(C2), stumble_style="rude")

@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.arena import llm_agent as llm_mod
+from src.arena.agent import RejectedResponse
 from src.arena.interfaces import SHARED_PROMPT
 from src.arena.llm_agent import DEFAULT_MODEL, LLMAgent
 from src.arena.tools import TOOLS
@@ -189,6 +190,8 @@ def test_extra_tool_calls_are_counted():
         [response(tool_use("end_turn", {}), tool_use("attack", {}, block_id="t2"))]
     )
     agent = LLMAgent("A", "a", client=client)
-    call = agent.decide(_obs())
-    assert call.name == "end_turn"
+    with pytest.raises(RejectedResponse) as refused:  # two different calls (§6)
+        agent.decide(_obs())
+    assert refused.value.code == "malformed_output"
     assert agent.telemetry.requests[0].extra_tool_calls == 1
+    assert agent.telemetry.requests[0].distinct_tool_calls == 2

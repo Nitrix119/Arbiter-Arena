@@ -291,6 +291,7 @@ def test_a_text_condition_sends_no_tool_fields():
     kwargs = client.calls[0]
     assert "tools" not in kwargs
     assert "tool_choice" not in kwargs
+    assert "parallel_tool_calls" not in kwargs
     assert call is None
     assert record.raw_output == "ACTION: end turn"
 
@@ -414,3 +415,52 @@ def test_no_reasoning_setting_sends_none():
     client = FakeClient([response(fn_call("end_turn", "{}"))])
     OpenRouterAgent("O", "a", client=client).decide(_obs())
     assert "extra_body" not in client.calls[0]
+
+
+# -- several calls in one response (review 2026-09-24, prereg §6) -----------------
+
+
+def test_two_different_calls_are_malformed_output_not_the_first_one_run():
+    """C1 refuses two different actions; C2 must not quietly run the first."""
+    client = FakeClient(
+        [
+            response(
+                fn_call("end_turn", "{}"),
+                fn_call("attack", '{"action_name": "Bite", "defender_id": "g1"}', "t2"),
+            )
+        ]
+    )
+    agent = OpenRouterAgent("O", "a", client=client)
+
+    with pytest.raises(RejectedResponse) as refused:
+        agent.decide(_obs())
+
+    assert refused.value.code == MALFORMED_OUTPUT
+    assert refused.value.call.name == "end_turn"
+    assert len(client.calls) == 1  # a coded refusal, not the correction re-prompt
+    record = agent.telemetry.requests[0]
+    assert (record.distinct_tool_calls, record.extra_tool_calls) == (2, 1)
+
+
+def test_an_identical_repeated_call_is_one_action():
+    client = FakeClient(
+        [
+            response(
+                fn_call("attack", '{"action_name": "Bite", "defender_id": "g1"}'),
+                fn_call("attack", '{"defender_id": "g1", "action_name": "Bite"}', "t2"),
+            )
+        ]
+    )
+    agent = OpenRouterAgent("O", "a", client=client)
+
+    call = agent.decide(_obs())
+
+    assert call.name == "attack"
+    record = agent.telemetry.requests[0]
+    assert (record.distinct_tool_calls, record.extra_tool_calls) == (1, 1)
+
+
+def test_parallel_tool_calls_are_asked_off_whenever_tools_are_sent():
+    client = FakeClient([response(fn_call("end_turn", "{}"))])
+    OpenRouterAgent("O", "a", client=client).decide(_obs())
+    assert client.calls[0]["parallel_tool_calls"] is False

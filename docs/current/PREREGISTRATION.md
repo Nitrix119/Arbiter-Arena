@@ -367,6 +367,20 @@ the harness. Each of these used to stop the study runner as a "harness bug" or l
   a missing argument is in C2. `unknown_target` is kept for an id that was written but is
   not on the list.
 
+**Several different actions in one response are `malformed_output` in every condition
+(2026-09-24, before any data).** C1's parser already refused two different ACTION lines,
+but the tool adapters silently ran the first of several tool calls and counted the
+decision valid. The same behaviour therefore failed in C1 and succeeded in C2, which
+biased H1's C2 − C1 contrast toward the ordering it predicts.
+- A response making more than one *different* tool call is refused, logged as its first
+  call. Calls are compared by meaning: a JSON string and the object it encodes are one
+  call.
+- An identical repeat is one action, as a repeated identical ACTION line is in C1.
+- Tool requests send `parallel_tool_calls: false`, so hosts that honour it return one
+  call.
+- Responses holding several calls are counted per model x condition in the report's
+  integrity section, whether or not they were refused.
+
 A C1 refusal is logged as a call named `(unread_text)` carrying the line the model wrote,
 with the parser's code (`malformed_output`, or `unknown_action` for a line that does not
 start with a known verb) and the reason it was given. C1 text containing no action line

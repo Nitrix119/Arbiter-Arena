@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.arena.agent import ProviderError, ScriptedAgent
+from src.arena.agent import ProviderError, RejectedResponse, ScriptedAgent
 from src.arena.llm_common import PROVIDER_ATTEMPTS
 from src.arena.openrouter_agent import OpenRouterAgent
 from src.arena.telemetry import (
@@ -354,10 +354,13 @@ def test_the_raw_tool_call_is_scrubbed():
 
 
 def test_extra_tool_calls_are_counted_not_silently_dropped():
-    """Ledger A5: the adapter acts on the first call; the rest are evidence."""
+    """Ledger A5: extra calls are evidence. Two *different* calls are also refused
+    (prereg §6), and the refused request is still counted."""
     client = FakeClient(
         [_response(fn_call("end_turn", "{}"), fn_call("attack", "{}", call_id="t2"))]
     )
     agent = OpenRouterAgent("O", "a", client=client)
-    agent.decide(_obs())
+    with pytest.raises(RejectedResponse):
+        agent.decide(_obs())
     assert agent.telemetry.requests[0].extra_tool_calls == 1
+    assert agent.telemetry.requests[0].distinct_tool_calls == 2
