@@ -376,6 +376,59 @@ def test_hosts_are_for_openrouter_models_only():
 # -- robustness and a self-describing manifest (Phase 1 review F7-F9) -----------------
 
 
+class _DiesAfter(Agent):
+    """Plays a few real (costed) mock decisions, then the provider fails for good."""
+
+    def __init__(self, seat, decisions=2):
+        super().__init__(seat.name, seat.team)
+        self._inner = MockModelAgent(seat.name, seat.team, seat.interface)
+        self._left = decisions
+
+    def decide(self, observation):
+        if self._left == 0:
+            raise RateLimitError("429 for good")
+        self._left -= 1
+        return self._inner.decide(observation)
+
+    def last_telemetry(self):
+        return self._inner.last_telemetry()
+
+
+def test_a_resume_never_overwrites_an_excluded_attempt(tmp_path):
+    """Prereg §8 reports every exclusion, and the spend cap counts every attempt.
+
+    The attempt number used to restart at 1 on each run, so a resumed cell that failed
+    again overwrote the last run's excluded transcripts: the exclusion count fell and
+    their cost vanished from the cap.
+    """
+    from src.arena.study_report import excluded_attempts
+
+    grid = _grid(
+        max_attempts=2,
+        models=[
+            {
+                "id": "mock",
+                "provider": "mock",
+                "usd_per_m_input": 1.0,
+                "usd_per_m_output": 1.0,
+            }
+        ],
+    )
+    dying = {**MODEL_FACTORIES, PROVIDER_MOCK: _DiesAfter}
+    quiet = {"sleep": lambda _: None, "echo": lambda _: None}
+
+    first = run_grid(grid, tmp_path, factories=dying, **quiet)
+    spent_once = spent_usd(tmp_path, grid)
+    second = run_grid(grid, tmp_path, factories=dying, **quiet)
+
+    assert first.excluded_attempts == second.excluded_attempts == 2
+    names = sorted(p.name for p in (tmp_path / EXCLUDED_DIR).rglob("*.jsonl"))
+    assert names == [f"seed1.attempt{n}.jsonl" for n in (1, 2, 3, 4)]
+    assert excluded_attempts(tmp_path) == 4
+    assert spent_once > 0
+    assert spent_usd(tmp_path, grid) == pytest.approx(2 * spent_once)
+
+
 def test_a_run_stops_at_the_first_cell_that_exhausts_its_retries(tmp_path):
     """A quota or outage must not fail, and bill, every remaining cell in turn."""
     attempts = []

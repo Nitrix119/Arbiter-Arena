@@ -587,6 +587,23 @@ def _write_atomically(path: Path, records: Sequence[Dict[str, Any]]) -> None:
     os.replace(temporary, path)
 
 
+def _next_excluded_path(out: Path, cell_path: Path) -> Path:
+    """Where the next excluded attempt at a cell goes: the first unused number.
+
+    Numbered from what is on disk, not from the run's retry counter, which restarts
+    at 1 on a resume. Reusing a number would overwrite an earlier run's attempt,
+    dropping it from the exclusion count prereg §8 reports and its cost from the
+    spend cap.
+    """
+    relative = cell_path.relative_to(out)
+    n = 1
+    while True:
+        candidate = out / EXCLUDED_DIR / relative.with_suffix(f".attempt{n}.jsonl")
+        if not candidate.exists():
+            return candidate
+        n += 1
+
+
 def _read(path: Path) -> List[Dict[str, Any]]:
     return [
         json.loads(line)
@@ -743,10 +760,7 @@ def run_grid(
                 echo(f"done      {cell.label()}")
                 break
             summary.excluded_attempts += 1
-            relative = path.relative_to(out)
-            excluded = (
-                out / EXCLUDED_DIR / relative.with_suffix(f".attempt{attempt}.jsonl")
-            )
+            excluded = _next_excluded_path(out, path)
             _write_atomically(excluded, result.records)
             log(
                 "cell_excluded",
