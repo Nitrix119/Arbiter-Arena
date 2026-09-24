@@ -149,14 +149,14 @@ model capability.
 | Factor | Value |
 |---|---|
 | Scenarios | `kiting`, `alpha_strike`, `protect_squishy`, **+ one new AoE scenario** (§4.1) |
-| Opponent | A single fixed non-LLM agent, **TBD (Scripted vs Heuristic), chosen in the pilot** and identical across all cells thereafter |
+| Opponent | A single fixed non-LLM agent, identical across all cells. It is chosen in the pilot by the rule in §4.4. |
 | LLM side | The scenario's `llm_team` |
 | Information policy | One fixed policy: the current default (all enemy info revealed, `hp_display="exact"`). Information sensitivity is a different study. |
 | Temperature | 0 (or provider minimum), recorded. Still not deterministic — stated as a limitation. |
 | Failure budget | Existing: 3 consecutive **or** 5 total failed calls per turn → turn forced to end. Rejection feedback returned to the agent. |
 | Round cap | 20 (`DEFAULT_ROUND_CAP`) |
 | Match end | The moment one team has no one standing, at the killing blow. Added 2026-09-24, before any data. Combat used to end only when a single *creature* was left, so a 2v2 won with two survivors played on to the round cap. The winners then acted against nobody, which wasted paid calls and padded H1 with trivial decisions in exactly the matches a model won. Winners are unchanged, since the match result was already decided by team. A turn ended this way is recorded as `end_cause: over` and is neither forced nor forfeited. |
-| Seeds | 10 per cell, **paired** across conditions |
+| Seeds | 10 per cell, **paired** across conditions: **101–110** for the final run. These are disjoint from the pilot's seeds (1, 2), registered 2026-09-24 before any data. |
 | Engine | Pinned commit, recorded in every match manifest |
 | Combatant ids | Readable and roster-derived (`archer`, `fighter-a1`) — a control, §4.2 |
 
@@ -286,6 +286,25 @@ condition: an affordance the study does not vary, charged unevenly, of the same 
 the entity ids in §4.2. A cross-condition test now requires a note channel in every
 condition.
 
+### 4.4 The pilot is not data (registered 2026-09-24, before any data)
+
+The pilot tests the method; it does not contribute results.
+- **No pilot match enters any confirmatory analysis.** That covers the H1–H3 verdicts, the
+  C1 bounds and the parser audit's sample. The final run uses seeds 101–110, which
+  share no seed with the pilot, so pilot and final matches cannot pair.
+- **What the pilot may change** is limited to correctness and method defects (V1_PLAN
+  §4 Phase 2), the settings §11 lists, and the two choices below. Each change is recorded
+  before the freeze.
+- **The opponent rule.** The default is the Scripted agent. Switch to the Heuristic only
+  if Scripted puts the model at a ceiling, meaning its win rate is 0.95 or higher in at
+  least two of the four scenarios.
+  - The win rate is pooled over *all four conditions together*.
+  - Between-condition differences are **never** looked at for this choice. Choosing an
+    opponent after seeing which condition it favours would be a researcher degree of
+    freedom.
+- **The `invalid_target_relation` split** (§6) is decided from code frequencies pooled
+  over all conditions, never by condition.
+
 ---
 
 ## 5. Models
@@ -368,8 +387,14 @@ the harness. Each of these used to stop the study runner as a "harness bug" or l
   unit. These are exactly the forms C1's grammar reads, so C2 gets no less tolerance than
   C1.
 - In C2 and C2+M, a `move` naming a menu `option_id` is `malformed_output`. The executor
-  still resolves option ids for the deterministic baselines, and C2+M's menu shows them,
-  so without this a model could move by id: C3's format inside a raw-parameter condition.
+  still resolves option ids for the deterministic baselines, so without this a model
+  could move by id: C3's format inside a raw-parameter condition.
+- **C2+M is not shown ids it may not act by (2026-09-24, before any data).** Its menu
+  used to display an `option_id` on every move and aim point, while acting by one was
+  refused. That was a trap only C2+M could fall into, biasing C2+M down: it inflated
+  C3 − C2+M and shrank C2+M − C2, the split the condition exists for. The ids are now
+  removed from C2+M's view. The labels, coordinates, costs and who an aim would catch
+  remain.
 - In C3, a `choose` with no `action_id` (or a non-string one) is `malformed_output`, as
   a missing argument is in C2. `unknown_target` is kept for an id that was written but is
   not on the list.
@@ -552,6 +577,31 @@ pilot frequencies rather than in advance.
       H3 is supported only if both hold.
     - The tactical gap is taken in absolute value, so a constraint that made play
       *worse* cannot count in H3's favour.
+- **H3 is uninformative on saturated outcomes (registered 2026-09-24, before any
+  data).** If both C3 and C1 are at a floor or a ceiling on a measure, the tactical gap
+  there is zero by construction, and H3 would "pass" for no reason.
+  - A scenario is **saturated** on a measure when the mean over its shared pairs is
+    0.95 or higher in both conditions, or 0.05 or lower in both.
+  - Saturation is judged once on the point means, before the bootstrap. A saturated
+    scenario is left out of that measure's H3 contrast and is named in the verdict.
+  - If every scenario is saturated on a measure, that measure's verdict is
+    **uninformative (outcomes saturated)**. H3 is then uninformative unless it has
+    already failed on the other measure.
+- **The action mix, as sensitivity (registered 2026-09-24, before any data).**
+  First-attempt validity is a rate over the actions a model *chose* to attempt. A
+  condition that leads it to attempt easier ones, such as more turn-endings, would look
+  more valid without being so. The report therefore shows:
+  - fresh decisions of each *intended* kind per condition, with their validity. The
+    intended kind is move, area cast, targeted cast, attack, end turn or no action,
+    read from the attempt the same way in every condition;
+  - H1 **without end-turn decisions**;
+  - H1 **at a common mix**: each kind's validity in a condition, weighted by that kind's
+    share across all of the model's conditions. It is undefined when a condition never
+    attempted a kind the others did.
+
+  These are **descriptive and not verdicts**. If either figure reverses the direction of
+  an H1 contrast that the verdict supports, the verdict is reported alongside the
+  reversal, never on its own.
 - **Baselines** (Random, Scripted, Heuristic) run through the **C3 path** using the
   same executor, to anchor tactical metrics. They cost no API calls.
   *Amended 2026-09-24, before any data:* Random (uniform over the enumerated actions) and
@@ -687,7 +737,7 @@ against the incorrect figure.
       strict/lenient re-scoring design and a parser audit rule. **Decided 2026-09-24:**
       C1 runs; all recommendations accepted. **Built 2026-09-24** (C1 slice 2); this
       item closes when the parser is frozen with the rest at `study-freeze`.
-- [ ] Opponent: Scripted vs Heuristic, decided in the pilot
+- [ ] Opponent: Scripted vs Heuristic, decided in the pilot by the §4.4 rule
 - [ ] Whether `invalid_target_relation` splits, from pilot frequencies (§6)
 
 **Routine — values to fill in:**

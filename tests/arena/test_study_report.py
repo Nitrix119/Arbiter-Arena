@@ -737,3 +737,152 @@ def test_a_clean_bundle_has_no_integrity_warnings():
     ]
     section = "\n".join(_integrity_section(decisions_of(Path("m.jsonl"), records)))
     assert "Warning" not in section
+
+
+# -- the action mix (review 2026-09-24): descriptive and sensitivity, not verdicts ----
+
+
+@pytest.mark.parametrize(
+    "call, intent",
+    [
+        ({"name": "move", "arguments": {"x": 1, "z": 2}}, "move"),
+        ({"name": "attack", "arguments": {}}, "attack"),
+        ({"name": "end_turn", "arguments": {}}, "end_turn"),
+        (
+            {"name": "cast_spell", "arguments": {"target_point": {"x": 1, "z": 2}}},
+            "cast_area",
+        ),
+        (
+            {
+                "name": "cast_spell",
+                "arguments": {"spell_name": "Fireball", "target_ids": ["a"]},
+            },
+            "cast_area",
+        ),
+        (
+            {
+                "name": "cast_spell",
+                "arguments": {"spell_name": "Fire Bolt", "target_ids": ["a"]},
+            },
+            "cast_target",
+        ),
+        ({"name": UNREAD_TEXT, "arguments": {"text": "shoot raider 1"}}, "attack"),
+        ({"name": UNREAD_TEXT, "arguments": {"text": "walk to the tree"}}, "move"),
+        (
+            {"name": UNREAD_TEXT, "arguments": {"text": "cast fireball at a"}},
+            "cast_area",
+        ),
+        ({"name": UNREAD_TEXT, "arguments": {"text": "cast Bolt at a"}}, "cast_target"),
+        ({"name": UNREAD_TEXT, "arguments": {"text": "pass"}}, "end_turn"),
+        ({"name": UNREAD_TEXT, "arguments": {"text": "I ponder"}}, None),
+        ({"name": "choose", "arguments": {"action_id": "attack:x:y"}}, "attack"),
+        ({"name": "choose", "arguments": {"action_id": "cast:f:aim:a"}}, "cast_area"),
+        ({"name": "choose", "arguments": {"action_id": "cast:f:a"}}, "cast_target"),
+        ({"name": "choose", "arguments": {"action_id": "move:retreat:a"}}, "move"),
+        ({"name": "choose", "arguments": {"action_id": "end_turn"}}, "end_turn"),
+        ({"name": "choose", "arguments": {"action_id": "banana"}}, None),
+        ({"name": "choose", "arguments": {}}, None),
+        ({"name": "(no_tool_call)", "arguments": {}}, None),
+    ],
+)
+def test_the_intended_action_is_read_the_same_way_in_every_condition(call, intent):
+    """A refused C1 line and a refused C3 choice are logged in their own shapes, so
+    the kind of action attempted is read from what each condition's attempt names."""
+    from src.arena.study_report import intended_kind
+
+    assert intended_kind(call, FIREBALL) == intent
+
+
+def _decision(condition, intent, valid, match):
+    return Decision(
+        model="m", condition=condition, scenario="kiting", seed=1, match=match,
+        round=1, turn=1, actor="archer", index=0, kind=intent or "none",
+        spatial=None, ok=valid, code="" if valid else "out_of_range",
+        first_attempt_valid=valid, request_count=1, input_tokens=0,
+        output_tokens=0, latency_ms=0.0, menu_length=None, c1_layer=None,
+        intent=intent,
+    )  # fmt: skip
+
+
+def test_a_difference_made_only_by_the_action_mix_is_exposed():
+    """First-attempt validity is a rate over the actions a model *chose* to attempt.
+
+    Here both conditions are exactly as good at each kind of action — every end-turn
+    valid, half the attacks — and differ only in how often they end their turn. The
+    headline rate differs (0.75 against 0.55); both sensitivity figures show it is
+    the mix, not the interface.
+    """
+    from src.arena.study_report import _mix_section
+
+    decisions = []
+    for condition, ends, attacks in (("C3", 10, 10), ("C2", 2, 18)):
+        for i in range(ends):
+            decisions.append(_decision(condition, "end_turn", True, f"{condition}/{i}"))
+        for i in range(attacks):
+            valid = i % 2 == 0
+            decisions.append(_decision(condition, "attack", valid, f"{condition}/{i}"))
+
+    section = "\n".join(_mix_section(decisions))
+
+    assert "| m | C3 | 10 (1.000) | 10 (0.500) |" in section
+    assert "| m | C2 | 2 (1.000) | 18 (0.500) |" in section
+    rows = {
+        line.split("|")[2].strip(): [cell.strip() for cell in line.split("|")[1:-1]]
+        for line in section.splitlines()
+        if line.startswith("| m |")
+    }
+    for condition in ("C3", "C2"):
+        *_, without_end_turn, common_mix = rows[condition]
+        assert without_end_turn.startswith("0.500 [")
+        assert common_mix == "0.650"
+
+
+def test_a_kind_a_condition_never_attempted_leaves_the_common_mix_undefined():
+    from src.arena.study_report import _mix_section
+
+    decisions = [
+        _decision("C3", "move", True, "a"),
+        _decision("C3", "attack", True, "a"),
+        _decision("C2", "attack", False, "b"),
+    ]
+    section = "\n".join(_mix_section(decisions))
+    c2 = next(line for line in section.splitlines() if "| C2 |" in line)
+    assert c2.rstrip().endswith("| — |")  # C2 never moved, so no common-mix rate
+
+
+# -- H3 cannot pass on saturated outcomes (review 2026-09-24, prereg §7) --------------
+
+
+def _h3(matches):
+    from src.arena.study_report import registered_verdicts
+
+    return _verdict(registered_verdicts(matches), "H3", "C3 − C1")
+
+
+def test_h3_is_uninformative_when_every_scenario_is_saturated():
+    """Winning every match in both conditions makes the tactical gap zero by
+    construction; that must not read as "constraint bought legality, not skill"."""
+    matches = [
+        _match(cond, sc, seed, valid=v, won=True)
+        for cond, v in (("C3", 9), ("C1", 3))
+        for sc, seed in PAIRS
+    ]
+
+    verdict = _h3(matches)
+
+    assert verdict.verdict == "uninformative (outcomes saturated)"
+    assert "alpha_strike" in verdict.note and "kiting" in verdict.note
+
+
+def test_a_saturated_scenario_drops_out_of_h3_and_is_named():
+    matches = []
+    for cond, v in (("C3", 9), ("C1", 3)):
+        for sc, seed in PAIRS:
+            won = True if sc == "kiting" else seed % 2 == 0
+            matches.append(_match(cond, sc, seed, valid=v, won=won))
+
+    verdict = _h3(matches)
+
+    assert verdict.verdict == "supported"
+    assert verdict.pairs == len(PAIRS)
+    assert "win rate saturated in: kiting" in verdict.note

@@ -407,6 +407,19 @@ names where it should be addressed. Append; strike through and date an item when
   - Fix options: end combat when at most one team has living members, in the engine
     (`TurnManager`) or in the arena loop (`run_match`). Also decide whether a turn stops
     mid-turn at the killing blow.
+- **A25. ~~Four quiet validity threats.~~ Fixed 2026-09-25** (the second validity pass).
+  - **C2+M was shown ids it may not use.** Its menu displayed an `option_id` on every
+    move and aim point, while acting by one was refused. That biased C2+M down, both
+    against C3 and against C2. The ids are now removed from C2+M's view.
+  - **Pilot and final data were not separated.** Prereg §4.4 now separates them: the
+    final run uses seeds 101–110, pilot matches enter no confirmatory analysis, and the
+    opponent is chosen by a rule on outcomes pooled over conditions.
+  - **H3 could pass on saturated outcomes.** A scenario at a floor or ceiling in both
+    conditions is now left out of that measure. If every scenario is, the verdict is
+    "uninformative (outcomes saturated)".
+  - **The action mix could move H1.** The report now shows validity by intended action
+    kind, H1 without end-turns, and H1 at a common mix. These are descriptive
+    sensitivity figures, prereg §7.
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 

@@ -65,6 +65,9 @@ _Z = 1.959963984540054  # two-sided 95% normal quantile, for Wilson
 _EXCLUDED_DIR = "_excluded"
 _NO_CALL = "(no_tool_call)"
 _MOVE_VERBS = {"move", "go", "walk", "run", "step"}
+#: C1's other verbs, as its grammar reads them (``free_text.GRAMMAR``).
+_ATTACK_VERBS = {"attack", "hit", "strike", "shoot", "stab"}
+_END_WORDS = {"end", "pass", "done"}
 _FILLERS = re.compile(r"^(?:i\s+will|i'll|i|will)\s+", re.IGNORECASE)
 _COORDINATES = re.compile(r"\b[xyz]\s*[=:]|\(", re.IGNORECASE)
 
@@ -294,6 +297,9 @@ class Decision:
     #: Requests whose response held more than one tool call (refused if they
     #: differed, prereg §6) — visible per cell even when refused.
     multi_call_responses: int = 0
+    #: What kind of action was attempted (:func:`intended_kind`), read the same way
+    #: in every condition; ``None`` when the attempt named no action.
+    intent: Optional[str] = None
 
 
 def _attempted_verb(text: str) -> str:
@@ -372,6 +378,55 @@ def classify(
     return "unknown_tool", None
 
 
+def intended_kind(
+    call: Dict[str, Any], area_spells: FrozenSet[str] = frozenset()
+) -> Optional[str]:
+    """The kind of action a recorded attempt was — accepted or refused, any condition.
+
+    One of ``move``, ``cast_area``, ``cast_target``, ``attack``, ``end_turn``, or
+    ``None`` for an attempt that names no action. Needed because a refusal is logged
+    in its condition's own shape — a C1 line as ``(unread_text)``, a C3 pick as
+    ``choose`` — so comparing *which* actions each condition attempted means reading
+    each attempt for what it names. Descriptive only (prereg §7): the action mix a
+    condition induces, not a registered verdict.
+    """
+    name = call.get("name", "")
+    args = call.get("arguments", {}) or {}
+    if name in ("move", "attack", "end_turn"):
+        return str(name)
+    if name == "cast_spell":
+        area = "target_point" in args or _names_area_spell(
+            args.get("spell_name"), area_spells
+        )
+        return "cast_area" if area else "cast_target"
+    if name == UNREAD_TEXT:
+        text = str(args.get("text", ""))
+        verb = _attempted_verb(text)
+        if verb in _MOVE_VERBS:
+            return "move"
+        if verb in _ATTACK_VERBS:
+            return "attack"
+        if verb in _END_WORDS:
+            return "end_turn"
+        if verb == "cast":
+            _, spatial = classify(call, area_spells)
+            return "cast_area" if spatial else "cast_target"
+        return None
+    if name == "choose":
+        action_id = args.get("action_id")
+        if not isinstance(action_id, str):
+            return None
+        if action_id == "end_turn":
+            return "end_turn"
+        if action_id.startswith("move:"):
+            return "move"
+        if action_id.startswith("attack:"):
+            return "attack"
+        if action_id.startswith("cast:"):
+            return "cast_area" if ":aim:" in action_id else "cast_target"
+    return None
+
+
 def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
     start = next(r for r in records if r["kind"] == "match_start")
     team = model_team(start, records)
@@ -436,6 +491,7 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
                 multi_call_responses=sum(
                     1 for r in requests if (r.get("extra_tool_calls") or 0) > 0
                 ),
+                intent=intended_kind(record["call"], area_spells),
                 served_model=next(
                     (
                         r["served_model"]
@@ -596,6 +652,94 @@ def _table(header: Sequence[str], rows: Iterable[Sequence[str]]) -> str:
     return "\n".join(lines)
 
 
+#: The intended kinds, non-spatial first, then "no action" (:func:`intended_kind`).
+_INTENTS: Tuple[Optional[str], ...] = (
+    "end_turn",
+    "attack",
+    "cast_target",
+    "cast_area",
+    "move",
+    None,
+)
+
+
+def _mix_section(decisions: List[Decision]) -> List[str]:
+    """What each condition attempted, and H1 with the action mix held still.
+
+    First-attempt validity is a rate over the actions a model *chose* to attempt. A
+    condition that led it to attempt easier things — more turn-endings, which are
+    almost always valid — would look more valid without being so. Two sensitivity
+    figures, registered in prereg §7 as descriptive and never as verdicts:
+
+    * **without end_turn** — H1 over fresh decisions that were not an end-turn;
+    * **at a common mix** — each kind's first-attempt validity in this condition,
+      weighted by that kind's share of the model's fresh decisions across all its
+      conditions. Undefined ("—") when the condition never attempted a kind the
+      others did, since its validity there is unknown rather than zero.
+    """
+    fresh = [d for d in decisions if d.fresh]
+    if not fresh:
+        return []
+    kinds = [k for k in _INTENTS if any(d.intent == k for d in fresh)]
+    cells: Dict[Cell, List[Decision]] = defaultdict(list)
+    by_model: Dict[str, List[Decision]] = defaultdict(list)
+    for d in fresh:
+        cells[(d.model, d.condition)].append(d)
+        by_model[d.model].append(d)
+
+    def valid_rate(group: List[Decision]) -> Optional[float]:
+        return sum(d.first_attempt_valid for d in group) / len(group) if group else None
+
+    rows = []
+    for model, condition in sorted(cells, key=lambda k: (k[0], _cell_key_of(k[1]))):
+        group = cells[(model, condition)]
+        counts = []
+        common: Optional[float] = 0.0
+        pool = by_model[model]
+        for kind in kinds:
+            of_kind = [d for d in group if d.intent == kind]
+            rate = valid_rate(of_kind)
+            counts.append(f"{len(of_kind)} ({_fmt(rate)})" if of_kind else "0")
+            weight = sum(d.intent == kind for d in pool) / len(pool)
+            if weight and rate is None:
+                common = None
+            elif common is not None and rate is not None:
+                common += weight * rate
+        clusters: Dict[str, List[Decision]] = defaultdict(list)
+        for d in group:
+            if d.intent != "end_turn":
+                clusters[d.match].append(d)
+        without_end = cluster_ratio(
+            [
+                (sum(d.first_attempt_valid for d in ds), len(ds))
+                for ds in clusters.values()
+            ]
+        )
+        rows.append([model, condition, *counts, _fmt_ci(without_end), _fmt(common)])
+
+    return [
+        "",
+        "## Validity by intended action (descriptive, prereg §7)",
+        "",
+        "Fresh decisions of each kind, with their first-attempt validity in brackets. "
+        "The last two columns are sensitivity figures, not verdicts: H1 without "
+        "end-turn decisions, and H1 with each kind weighted by its share across all of "
+        "the model's conditions, so a condition cannot look more valid by attempting "
+        "easier actions.",
+        "",
+        _table(
+            [
+                "model",
+                "condition",
+                *[k if k is not None else "no action" for k in kinds],
+                "H1 without end_turn",
+                "H1 at a common mix",
+            ],
+            rows,
+        ),
+    ]
+
+
 def summarise(
     name: str,
     decisions: List[Decision],
@@ -698,6 +842,7 @@ def summarise(
                 for (model, condition), group in groups.items()
             ],
         ),
+        *_mix_section(decisions),
         "",
         "## Rejected decisions by code",
         "",
@@ -887,6 +1032,41 @@ def _shared(cells: _Cells, *conditions: str) -> List[Pair]:
     return sorted(common)
 
 
+#: H3 verdict when every scenario's outcome is saturated on a measure (prereg §7).
+UNINFORMATIVE = "uninformative (outcomes saturated)"
+#: An outcome mean at or beyond these, in *both* conditions of a contrast, is
+#: saturated: a floor or ceiling that makes the tactical gap zero by construction.
+SATURATED_HIGH = 0.95
+SATURATED_LOW = 0.05
+
+
+def _unsaturated(
+    cells: _Cells, pairs: Sequence[Pair], measure: str
+) -> Tuple[List[Pair], List[str]]:
+    """H3's pairs minus those from scenarios saturated on *measure*, and their names.
+
+    Judged per scenario on the point means over its shared pairs, once — not inside
+    the bootstrap — so the set of scenarios is fixed before the interval is drawn.
+    """
+    by_scenario: Dict[str, List[Pair]] = defaultdict(list)
+    for pair in pairs:
+        by_scenario[pair[0]].append(pair)
+    kept: List[Pair] = []
+    saturated: List[str] = []
+    for scenario, group in sorted(by_scenario.items()):
+        a = _mean([cells["C3"][p] for p in group], measure)
+        b = _mean([cells["C1"][p] for p in group], measure)
+        if (
+            a is not None
+            and b is not None
+            and (min(a, b) >= SATURATED_HIGH or max(a, b) <= SATURATED_LOW)
+        ):
+            saturated.append(scenario)
+        else:
+            kept += group
+    return kept, saturated
+
+
 def _verdicts_for(model: str, cells: _Cells) -> List[Verdict]:
     out: List[Verdict] = []
 
@@ -967,12 +1147,15 @@ def _verdicts_for(model: str, cells: _Cells) -> List[Verdict]:
 
     # H3 — the C3 − C1 validity gap exceeds the tactical gap, on both registered
     # tactical measures (percentage points). The tactical gap is taken in absolute
-    # value, so a constraint that made play *worse* cannot count in H3's favour.
+    # value, so a constraint that made play *worse* cannot count in H3's favour. A
+    # scenario whose outcome is saturated in both conditions is left out of that
+    # measure: its tactical gap is zero by construction, not by evidence.
     pairs = _shared(cells, "C3", "C1")
     validity = _difference(cells, "C3", "C1", "first_attempt_valid", "fresh_decisions")
     judged: List[str] = []
     estimates: List[Optional[Estimate]] = []
-    for measure in ("model_won", "model_hp_fraction"):
+    notes: List[str] = []
+    for measure, label in (("model_won", "win rate"), ("model_hp_fraction", "HP")):
 
         def h3(sample: Sequence[Pair], measure: str = measure) -> Optional[float]:
             gap = validity(sample)
@@ -982,15 +1165,24 @@ def _verdicts_for(model: str, cells: _Cells) -> List[Verdict]:
                 return None
             return gap - abs(a - b)
 
-        estimate = paired_bootstrap(pairs, h3)
+        informative, saturated = _unsaturated(cells, pairs, measure)
+        if saturated:
+            notes.append(f"{label} saturated in: {', '.join(saturated)}")
+        if pairs and not informative:
+            estimates.append(None)
+            judged.append(UNINFORMATIVE)
+            continue
+        estimate = paired_bootstrap(informative, h3)
         estimates.append(estimate)
         judged.append(_judge(estimate))
     if "insufficient data" in judged:
         overall = "insufficient data"
-    elif all(j == "supported" for j in judged):
-        overall = "supported"
-    else:
+    elif "not supported" in judged:
         overall = "not supported"
+    elif UNINFORMATIVE in judged:
+        overall = UNINFORMATIVE
+    else:
+        overall = "supported"
     out.append(
         Verdict(
             model,
@@ -1001,7 +1193,8 @@ def _verdicts_for(model: str, cells: _Cells) -> List[Verdict]:
             overall,
             "validity gap minus abs(win-rate gap); HP-fraction variant: "
             + _fmt_ci(estimates[1])
-            + f" ({judged[1]})",
+            + f" ({judged[1]})"
+            + "".join(f"; {n}" for n in notes),
         )
     )
     return out

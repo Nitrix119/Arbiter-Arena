@@ -5,6 +5,9 @@
 #   python -m src.arena.study run examples/study/pilot.toml --out results/pilot
 #
 # Live runs cost money: never start one without an explicit go-ahead.
+#
+# The pilot is not data (prereg §4.4): its matches never enter the confirmatory
+# analysis, and the final run uses seeds 101-110, disjoint from these.
 
 [study]
 name = "pilot"
