@@ -589,6 +589,15 @@ Declared in advance: a single environment; few models; the format/affordance con
 temperature 0; underpowered tactical comparisons; the neutral-prompt choice; and the
 fact that the same author wrote both the engine and the interfaces under test.
 
+Also declared (2026-09-24):
+- **Menu order.** It carries no quality signal: ids are sorted lexicographically, so
+  attacks come first and moves last. A list still has primacy effects, so where an
+  option sits may influence C3 and C2+M choices.
+- **Output limit.** A response cut off at the output-token limit is the harness, not the
+  model, deciding the outcome. The limit and any thinking model's reasoning setting are
+  therefore fixed per model in the grid and recorded in every manifest. Responses cut at
+  the limit are counted per cell in the report.
+
 ---
 
 ## 10. Deviations from this pre-registration

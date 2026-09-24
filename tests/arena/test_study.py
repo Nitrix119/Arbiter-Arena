@@ -550,3 +550,85 @@ def test_show_reads_a_match_decision_by_decision(tmp_path, capsys):
     assert main(["show", str(path), "--refused"]) == 0
     refused = capsys.readouterr().out
     assert refused.count("REFUSED") == 1 and ": ok" not in refused
+
+
+# -- verify: the bundle replays (V1_PLAN §5) ----------------------------------------
+
+
+def test_verify_replays_every_completed_cell(tmp_path, capsys):
+    run_grid(_grid(conditions=[C1, C2]), tmp_path, echo=lambda _: None)
+
+    assert main(["verify", str(tmp_path)]) == 0
+    assert "2/2 transcripts replay (100.0%)" in capsys.readouterr().out
+
+
+def test_verify_fails_loudly_on_a_transcript_that_does_not_replay(tmp_path, capsys):
+    import json
+
+    run_grid(_grid(), tmp_path, echo=lambda _: None)
+    (path,) = tmp_path.rglob("seed1.jsonl")
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+    turn_end = next(r for r in records if r["kind"] == "turn_end")
+    turn_end["state_hash"] = "0" * 64  # a tampered record
+    path.write_text("".join(json.dumps(r) + "\n" for r in records))
+
+    assert main(["verify", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "0/1 transcripts replay" in out
+    assert "seed1.jsonl" in out
+
+
+def test_verify_ignores_excluded_attempts_and_refuses_an_empty_bundle(tmp_path):
+    (tmp_path / "_excluded").mkdir()
+    (tmp_path / "_excluded" / "seed1.attempt1.jsonl").write_text("{}\n")
+    assert main(["verify", str(tmp_path)]) == 1  # nothing verified is not a pass
+
+
+# -- sampling settings are grid fields, recorded (review 2026-09-24, M-1 / M-3) --------
+
+
+def _live_model(**extra):
+    return {
+        "id": "vendor/model",
+        "provider": "openrouter",
+        "usd_per_m_input": 0.1,
+        "usd_per_m_output": 0.1,
+        **extra,
+    }
+
+
+def test_max_tokens_and_reasoning_are_validated_grid_fields():
+    grid = _grid(
+        models=[_live_model(max_tokens=2048, reasoning={"effort": "low"})],
+        spend_cap_usd=1.0,
+    )
+    assert grid.models[0].max_tokens == 2048
+    assert grid.models[0].reasoning_config() == {"effort": "low"}
+
+    with pytest.raises(GridError, match="max_tokens"):
+        _grid(models=[_live_model(max_tokens=0)], spend_cap_usd=1.0)
+    with pytest.raises(GridError, match="reasoning"):
+        _grid(models=[_live_model(reasoning="low")], spend_cap_usd=1.0)
+    with pytest.raises(GridError, match="OpenRouter"):
+        _grid(
+            models=[{"id": "mock", "provider": "mock", "reasoning": {"effort": "low"}}]
+        )
+
+
+def test_the_manifest_records_the_settings_that_ran(tmp_path):
+    run_grid(_grid(), tmp_path, echo=lambda _: None)
+    (path,) = tmp_path.rglob("seed1.jsonl")
+    start = json.loads(path.read_text().splitlines()[0])
+
+    assert start["max_tokens"] == 4096
+    assert set(start["versions"]) >= {"python", "lark"}
+    assert "hosts" not in start and "reasoning" not in start  # none were set
+
+
+def test_the_committed_opponent_grid_is_free_and_uses_the_heuristic():
+    """pilot_opponent.toml informs the opponent choice at no API cost (review M-5)."""
+    from src.arena.study import load_grid
+
+    grid = load_grid(Path("examples/study/pilot_opponent.toml"))
+    assert grid.opponent == "heuristic"
+    assert {m.provider for m in grid.models} == {"baseline"}

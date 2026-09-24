@@ -11,7 +11,8 @@ name = "pilot"
 seeds = [1, 2]
 scenarios = ["kiting", "alpha_strike", "protect_squishy", "aoe_placement"]
 conditions = ["C1", "C2", "C2+M", "C3"]
-opponent = "scripted"          # the pilot decides Scripted vs Heuristic (prereg §4)
+opponent = "scripted"          # the pilot decides Scripted vs Heuristic (prereg §4);
+                               # see pilot_opponent.toml for the free comparison
 spend_cap_usd = 2.0            # a hard stop, recomputed from disk on every resume
 max_attempts = 3
 backoff_seconds = 30
@@ -23,6 +24,11 @@ temperature = 0.0
 usd_per_m_input = 0.0          # TODO: set from the model's OpenRouter page
 usd_per_m_output = 0.0         # TODO: set from the model's OpenRouter page
 hosts = ["TODO: the upstream host to pin (prereg §5)"]
+max_tokens = 4096              # recorded; a response cut at this limit is flagged
+# For a thinking model, pin its reasoning budget rather than leave it to host
+# defaults, which can differ (recorded in every manifest). Delete for a model
+# without reasoning:
+reasoning = { effort = "TODO: low, medium or high; or use enabled = false" }
 
 [[models]]
 id = "baseline-scripted"

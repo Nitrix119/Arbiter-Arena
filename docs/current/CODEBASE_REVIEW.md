@@ -334,6 +334,19 @@ names where it should be addressed. Append; strike through and date an item when
     the engine clamp it.
   - A C3 `choose` naming no id is now excluded from the H2 split.
   - All recorded in prereg §6–§7 before any data.
+- **A17. ~~Pilot readiness gaps.~~ Fixed 2026-09-24** (Phase 1 review, M-1 to M-6).
+  - `study verify <bundle>` replays a bundle.
+  - A response-integrity report flags responses cut at the token limit, truncated menus
+    and served-model substitution.
+  - `max_tokens` and `reasoning` are grid fields, sent with every request and recorded.
+    The manifest also records hosts and package versions.
+  - `menu_truncated` is recorded per decision, and the cap test runs on sampled match
+    states.
+  - `turn_end` records `end_cause`, and metrics import the driver's constants.
+  - `pilot_opponent.toml` covers the opponent choice.
+  - **Still open, low:** pin `lark` exactly at `study-freeze` (a range today; the version
+    is recorded per match). The menu lists attacks first, a primacy effect to declare in
+    prereg §9. A7, A12 and A13 are unchanged.
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 

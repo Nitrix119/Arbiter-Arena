@@ -1,0 +1,34 @@
+# Free companion to pilot.toml: the registered baselines against the *heuristic*
+# opponent, to inform the pilot's Scripted-vs-Heuristic choice (prereg §4, §11).
+# pilot.toml runs the same baselines against the scripted opponent, so the two
+# bundles together give each opponent's floor (Random), its mirror (Scripted) and
+# a strong ceiling (Heuristic) — at no API cost. The V1_PLAN rule applies: if the
+# heuristic opponent floors the model's win rate at 0%, use Scripted.
+#
+#   python -m src.arena.study run examples/study/pilot_opponent.toml --out results/pilot-opponent
+#   python -m src.arena.study report results/pilot-opponent
+#
+# To see where the model itself lands against the heuristic, copy pilot.toml's
+# [[models]] entry here (it costs money: only with an explicit go-ahead).
+
+[study]
+name = "pilot-opponent"
+seeds = [1, 2]
+scenarios = ["kiting", "alpha_strike", "protect_squishy", "aoe_placement"]
+conditions = ["C3"]
+opponent = "heuristic"
+
+[[models]]
+id = "baseline-scripted"
+provider = "baseline"
+policy = "scripted"
+
+[[models]]
+id = "baseline-random"
+provider = "baseline"
+policy = "random"
+
+[[models]]
+id = "baseline-heuristic"
+provider = "baseline"
+policy = "heuristic"

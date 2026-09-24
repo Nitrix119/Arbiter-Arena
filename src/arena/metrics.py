@@ -24,6 +24,12 @@ import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+from src.arena.turn_driver import (
+    MAX_ACTIONS_PER_TURN,
+    MAX_CONSECUTIVE_FAILURES,
+    MAX_TOTAL_FAILURES,
+)
+
 # ---------------------------------------------------------------------------
 # Loading & indexing
 # ---------------------------------------------------------------------------
@@ -98,16 +104,12 @@ class Turn:
         return self.end_cause != "agent"
 
 
-# Mirror of the turn driver's guards (src/arena/turn_driver.py) so we can reconstruct
-# *why* a turn ended from the logged action stream — the transcript does not record it
-# directly.
-_MAX_CONSECUTIVE_FAILURES = 3
-_MAX_TOTAL_FAILURES = 5
-_MAX_ACTIONS_PER_TURN = 20
-
-
 def _end_cause(actions: List[dict]) -> str:
-    """Replay the failure-budget logic over a turn's actions to classify how it ended.
+    """Reconstruct how a turn ended, for transcripts that predate ``end_cause``.
+
+    Current transcripts record the cause on each ``turn_end`` and it is read from
+    there (:func:`group_turns`). This replays the turn driver's own guards — imported,
+    not copied, so the two cannot drift — over a turn's actions.
 
     ``agent`` — the agent ended its own turn (a successful ``end_turn``). ``budget`` —
     the driver force-ended after 3 consecutive or 5 total failed calls. ``cap`` — the
@@ -126,14 +128,14 @@ def _end_cause(actions: List[dict]) -> str:
             consecutive += 1
             failures += 1
             if (
-                consecutive >= _MAX_CONSECUTIVE_FAILURES
-                or failures >= _MAX_TOTAL_FAILURES
+                consecutive >= MAX_CONSECUTIVE_FAILURES
+                or failures >= MAX_TOTAL_FAILURES
             ):
                 return "budget"
         else:
             consecutive = 0
             acted += 1
-            if acted >= _MAX_ACTIONS_PER_TURN:
+            if acted >= MAX_ACTIONS_PER_TURN:
                 return "cap"
     return "agent"  # completed without tripping a guard (e.g. a truncated tail)
 
@@ -157,7 +159,8 @@ def group_turns(records: List[dict]) -> List[Turn]:
             cur_actions.append(r)
         elif kind == "turn_end":
             entity_id = cur_id if cur_id is not None else r["entity_id"]
-            turns.append(Turn(entity_id, cur_actions, _end_cause(cur_actions)))
+            cause = r.get("end_cause") or _end_cause(cur_actions)
+            turns.append(Turn(entity_id, cur_actions, cause))
             cur_id = None
             cur_actions = []
     return turns

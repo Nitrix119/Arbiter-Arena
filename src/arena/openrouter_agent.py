@@ -131,6 +131,7 @@ class OpenRouterAgent(Agent):
         client: Any = None,
         hosts: Sequence[str] = (),
         seed: Optional[int] = None,
+        reasoning: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__(name, team)
         if client is None:
@@ -148,6 +149,10 @@ class OpenRouterAgent(Agent):
         self.hosts = tuple(hosts)
         #: Sampling seed, forwarded to hosts that honour it (the match's seed).
         self.seed = seed
+        #: OpenRouter's ``reasoning`` setting for a thinking model (e.g.
+        #: ``{"effort": "low"}``). Pinned by the grid rather than left to host
+        #: defaults, which can differ; ``None`` sends nothing.
+        self.reasoning = dict(reasoning) if reasoning is not None else None
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -172,10 +177,16 @@ class OpenRouterAgent(Agent):
         tool_fields: Dict[str, Any] = {}
         if api_tools:
             tool_fields = {"tools": _to_openai_tools(api_tools), "tool_choice": "auto"}
+        extra_body: Dict[str, Any] = {}
         if self.hosts:
-            tool_fields["extra_body"] = {
-                "provider": {"order": list(self.hosts), "allow_fallbacks": False}
+            extra_body["provider"] = {
+                "order": list(self.hosts),
+                "allow_fallbacks": False,
             }
+        if self.reasoning is not None:
+            extra_body["reasoning"] = dict(self.reasoning)
+        if extra_body:
+            tool_fields["extra_body"] = extra_body
         if self.seed is not None:
             tool_fields["seed"] = self.seed
         started = time.perf_counter()

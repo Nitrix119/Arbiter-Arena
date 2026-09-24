@@ -2,6 +2,7 @@
 
     python -m src.arena.study run GRID.toml --out results/<name> [--dry-run]
     python -m src.arena.study report results/<name>
+    python -m src.arena.study verify results/<name>
     python -m src.arena.study show results/<name>/<model>/<cond>/<scenario>/seedN.jsonl
 
 A **cell** is one match: model × condition × scenario × seed. The runner plays each
@@ -47,6 +48,7 @@ from src.arena.interfaces import C1, C2, REGISTRY, ActionInterface, get_interfac
 from src.arena.manifest import Manifest, git_dirty, interface_fingerprint
 from src.arena.match import DEFAULT_ROUND_CAP, run_match
 from src.arena.mock_model import STUMBLE_STYLES
+from src.arena.openrouter_agent import DEFAULT_MAX_TOKENS
 from src.arena.scenarios import SCENARIOS
 from src.arena.transcript import Transcript
 from src.combat.combat_system import CombatSystem
@@ -105,6 +107,14 @@ class ModelSpec:
     hosts: Tuple[str, ...] = ()
     #: Baseline only: which policy plays (see ``BASELINE_CONDITIONS``).
     policy: Optional[str] = None
+    #: The output-token limit sent with every request, and recorded.
+    max_tokens: int = DEFAULT_MAX_TOKENS
+    #: OpenRouter only: the ``reasoning`` setting for a thinking model, as sorted
+    #: items so the spec stays hashable; see :meth:`reasoning_config`.
+    reasoning: Tuple[Tuple[str, Any], ...] = ()
+
+    def reasoning_config(self) -> Optional[Dict[str, Any]]:
+        return dict(self.reasoning) if self.reasoning else None
 
     def cost_usd(self, input_tokens: int, output_tokens: int) -> float:
         return (
@@ -256,6 +266,25 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
             for i in stumble_on
         ):
             raise GridError(f"{what}: stumble_on must be a list of decision indices")
+        max_tokens = entry.get("max_tokens", DEFAULT_MAX_TOKENS)
+        if (
+            isinstance(max_tokens, bool)
+            or not isinstance(max_tokens, int)
+            or max_tokens < 1
+        ):
+            raise GridError(
+                f"{what}: max_tokens must be a positive integer; got {max_tokens!r}"
+            )
+        reasoning = entry.get("reasoning")
+        if reasoning is not None and provider != PROVIDER_OPENROUTER:
+            raise GridError(
+                f"{what} ({model_id}): reasoning is for OpenRouter models only"
+            )
+        if reasoning is not None and not isinstance(reasoning, dict):
+            raise GridError(
+                f'{what}: reasoning must be a table (e.g. {{ effort = "low" }}); '
+                f"got {reasoning!r}"
+            )
         stumble_style = entry.get("stumble_style", "malformed")
         if "stumble_style" in entry and provider != PROVIDER_MOCK:
             raise GridError(f"{what} ({model_id}): stumble_style is for the mock only")
@@ -282,6 +311,8 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
                 stumble_style=stumble_style,
                 hosts=tuple(hosts),
                 policy=policy,
+                max_tokens=max_tokens,
+                reasoning=tuple(sorted((reasoning or {}).items())),
             )
         )
     if len({m.id for m in models}) != len(models):
@@ -399,6 +430,8 @@ def _openrouter_agent(seat: Seat) -> Agent:
         interface=seat.interface,
         hosts=seat.spec.hosts,
         seed=seat.seed,
+        max_tokens=seat.spec.max_tokens,
+        reasoning=seat.spec.reasoning_config(),
     )
 
 
@@ -519,6 +552,9 @@ def play_cell(
         temperature=cell.model.temperature,
         prompt_hash=None if interface is None else interface_fingerprint(interface),
         opponent=grid.opponent,
+        max_tokens=cell.model.max_tokens,
+        hosts=list(cell.model.hosts) or None,
+        reasoning=cell.model.reasoning_config(),
     )
     transcript = Transcript()
     try:
@@ -736,6 +772,39 @@ def run_grid(
     return summary
 
 
+# -- verify -----------------------------------------------------------------------
+
+
+def verify_results(bundle: Path, echo: Callable[[str], None] = print) -> bool:
+    """Replay every completed cell in *bundle* and report the rate (V1_PLAN §5).
+
+    A harness check, not a result: it must be 100%. Excluded attempts are not
+    analysed, so they are not verified either. An empty bundle is a failure, since
+    nothing was checked.
+    """
+    from src.arena.replay import verify_bundle
+    from src.arena.study_report import completed_transcripts
+
+    transcripts: Dict[str, Sequence[Dict[str, Any]]] = {
+        path.relative_to(bundle).as_posix(): records
+        for path, records in completed_transcripts(bundle)
+    }
+
+    def builder(records: Sequence[Dict[str, Any]]) -> Callable[[], CombatSystem]:
+        start = next((r for r in records if r.get("kind") == "match_start"), {})
+        scenario = SCENARIOS.get(str(start.get("scenario")))
+        if scenario is None:
+            raise GridError(f"unknown scenario {start.get('scenario')!r}")
+        return scenario.build
+
+    report = verify_bundle(transcripts, builder)
+    rate = 100.0 * report.rate
+    echo(f"{report.verified}/{report.total} transcripts replay ({rate:.1f}%)")
+    for failure in report.failures:
+        echo(f"  FAILED {failure}")
+    return bool(report)
+
+
 # -- CLI --------------------------------------------------------------------------
 
 
@@ -767,6 +836,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     report = commands.add_parser("report", help="summarise a result bundle")
     report.add_argument("bundle", type=Path)
+    verify = commands.add_parser(
+        "verify", help="replay every completed cell; must be 100%"
+    )
+    verify.add_argument("bundle", type=Path)
     show = commands.add_parser("show", help="read one match, decision by decision")
     show.add_argument("transcript", type=Path)
     show.add_argument(
@@ -779,6 +852,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         print(describe(_read(args.transcript), refused_only=args.refused), end="")
         return 0
+
+    if args.command == "verify":
+        return 0 if verify_results(args.bundle) else 1
 
     if args.command == "report":
         from src.arena.study_report import write_report

@@ -33,6 +33,13 @@ MAX_ACTIONS_PER_TURN = 20
 #: ``result["stage"]`` of a refusal made by the study condition, not the executor.
 INTERFACE_STAGE = "interface"
 
+#: Why a turn ended, recorded on its ``turn_end`` so metrics read it rather than
+#: reconstructing it from the action stream.
+END_AGENT = "agent"  # the agent ended its own turn
+END_BUDGET = "budget"  # the failure budget forced the end
+END_CAP = "cap"  # the per-turn action cap forced the end
+END_SKIP = "skip"  # a downed actor took no turn
+
 
 @dataclass
 class TurnOutcome:
@@ -62,7 +69,7 @@ def run_turn(
 
     if not actor.is_alive():  # a downed creature takes no turn
         combat.end_turn(actor.entity_id)
-        return _finish(transcript, combat, actor, 0, 0, forced=True)
+        return _finish(transcript, combat, actor, 0, 0, cause=END_SKIP)
 
     if transcript is not None:
         transcript.turn_start(actor.entity_id, combat.round, combat.turn)
@@ -127,19 +134,21 @@ def run_turn(
             ):
                 combat.end_turn(actor.entity_id)
                 return _finish(
-                    transcript, combat, actor, actions, failures, forced=True
+                    transcript, combat, actor, actions, failures, cause=END_BUDGET
                 )
             continue
 
         rejections.clear()
         consecutive = 0
         if result.get("ended_turn"):  # the agent ended its own turn (already advanced)
-            return _finish(transcript, combat, actor, actions, failures, forced=False)
+            return _finish(
+                transcript, combat, actor, actions, failures, cause=END_AGENT
+            )
 
         actions += 1
         if actions >= max_actions:
             combat.end_turn(actor.entity_id)
-            return _finish(transcript, combat, actor, actions, failures, forced=True)
+            return _finish(transcript, combat, actor, actions, failures, cause=END_CAP)
 
 
 def _finish(
@@ -149,8 +158,8 @@ def _finish(
     actions: int,
     failures: int,
     *,
-    forced: bool,
+    cause: str,
 ) -> TurnOutcome:
     if transcript is not None:
-        transcript.turn_end(actor.entity_id, snapshot_state(combat))
-    return TurnOutcome(actor.entity_id, actions, failures, forced)
+        transcript.turn_end(actor.entity_id, snapshot_state(combat), end_cause=cause)
+    return TurnOutcome(actor.entity_id, actions, failures, cause != END_AGENT)

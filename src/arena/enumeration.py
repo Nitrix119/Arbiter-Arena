@@ -115,7 +115,7 @@ def enumerate_legal_actions(
     combat: "CombatSystem",
     entity: Entity,
     *,
-    max_actions: int = DEFAULT_MAX_ACTIONS,
+    max_actions: Optional[int] = DEFAULT_MAX_ACTIONS,
 ) -> List[EnumeratedAction]:
     """Every legal action for *entity*, flattened into one choosable list.
 
@@ -205,4 +205,4 @@ def enumerate_legal_actions(
     )
 
     out.sort(key=lambda action: action.action_id)
-    return out[:max_actions]
+    return out if max_actions is None else out[:max_actions]

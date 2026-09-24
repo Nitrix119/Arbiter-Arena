@@ -177,7 +177,8 @@ focused Claude Code work block. Phase 3 overlaps Phase 2's background runs on pu
       OpenRouter**. Tool-support preflight remains a Phase 1 build item.)_
 - [x] Check whether any scenario exercises AoE, and decide whether to keep the expressivity question.
 - [x] Decide the licence (keep PolyForm NC and call it "source-available", or move to MIT/Apache-2.0).
-- [~] Decide the name (keep, or neutral name plus "SRD 5.1-compatible" and a non-affiliation note).
+- [x] Decide the name (keep, or neutral name plus "SRD 5.1-compatible" and a non-affiliation note).
+      _(Renamed to **Arbiter Arena**, PR #6. The non-affiliation note lands in Phase 3.)_
 - [x] Review, then merge `feat/agent-arena` and `feat/deterministic-rng` to `main`.
       Bump to `0.2.0` per the branch workflow.
 - [x] Add GitHub Actions: `pytest`, `black --check` (pinned **26.5.1**), `flake8`, **mypy**, on 3.11/3.13.
@@ -365,7 +366,8 @@ Runner and analysis:
       metrics, exclusions, seeds, prompts plus hashes, models, settings).
 - [ ] Launch the final grid in the background, outside Claude Code. Check once a day.
 - [ ] Baselines through the C3 path (free, fast).
-- [ ] 100% replay verification over the result bundle.
+- [ ] 100% replay verification over the result bundle
+      (`python -m src.arena.study verify results/<name>`).
 
 ### Phase 3 — V1 hygiene (parallel with Phase 2 runs; ≈3 sessions, use a cheaper model)
 - [ ] README rewrite: subtitle "a deterministic evaluation harness for tool-using LLM agents",
@@ -759,3 +761,50 @@ endings, `random` imports, and the dead default model.
 
 Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml`, dry-run it, and run it
 live only with the go-ahead.
+
+#### Phase 1 correctness review and fixes (2026-09-24)
+
+A second review, made before the pilot, fed the harness the output that real models and hosts
+actually send, and checked the study's definitions against its hypotheses. The build was
+complete. It found three defects that the well-formed mock could never reach, and four
+problems in the definitions. All are fixed, in four commits. 1,546 tests pass; flake8, mypy
+and Black are clean.
+
+**Would have stopped or confounded the pilot** (commit `86cd125`):
+- Tool arguments that are not a JSON object, and argument values of the wrong type, both
+  crashed the harness. The runner treats a crash as a harness bug and stops the grid, so the
+  first such output from a model would have ended the run. Both are now `malformed_output`.
+- C2+M could still move by a menu `option_id`. The schema had dropped it, but the executor
+  still accepted it. The C2 and C2+M interfaces now refuse it.
+- A `hostile` mock and a hostile offline smoke test keep all of this covered.
+
+**Validity, fixed before the freeze:**
+- Provider failures are retried per request, not handled by excluding the whole match.
+  Match-level exclusion biased the kept sample toward matches with fewer failures
+  (`3cfe26d`).
+- H1 is measured over fresh decisions. A retry after a rejection used to count as a second
+  first attempt.
+- Every hypothesis now has a registered decision rule: a paired cluster bootstrap over the
+  (scenario, seed) pairs, per model.
+- An area aim beyond range is refused as `out_of_range`. The engine used to clamp it
+  silently, which repaired the spatial errors H2 counts (`dfc8d5b`).
+
+**Pilot readiness** (Slice D):
+- A new command, `study verify`, replays a whole bundle.
+- The report gains a "Response integrity" section. It flags responses cut off at the token
+  limit, menus cut by a length cap, and a served model that differs from the one requested.
+- `max_tokens` and a thinking model's `reasoning` setting are now grid fields. They are
+  sent with every request and recorded in the manifest, along with the pinned hosts and the
+  Python, `lark` and `openai` versions.
+- Menu truncation is flagged per decision. It is also checked on every state a scripted
+  match passes through, not only at the opening, and no cap bites anywhere.
+- Each turn now records why it ended, so the metrics no longer copy the turn driver's
+  constants to reconstruct it.
+- A new grid, `pilot_opponent.toml`, runs the baselines against the heuristic opponent for
+  free. The Scripted-vs-Heuristic choice then has data behind it.
+
+All the changes to measured behaviour are registered in PREREGISTRATION §6–§8 before any
+data exists. Ledger entries A14–A17 record them.
+
+Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml` (model id, host, prices,
+reasoning), dry-run it, and run it live only with the go-ahead.

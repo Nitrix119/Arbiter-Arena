@@ -243,3 +243,54 @@ def test_an_interface_refusal_is_recorded_with_its_code(make_entity, make_combat
     fed_back = agent.observations[1]["rejected_actions"][0]
     assert fed_back["code"] == UNKNOWN_TARGET
     assert fed_back["action"]["name"] == "choose"
+
+
+# -- why a turn ended is recorded, not reconstructed (review 2026-09-24, M-6) --------
+
+
+def _cause_of(combat, actor, agent, **kwargs):
+    transcript = Transcript()
+    run_turn(combat, actor, agent, transcript=transcript, **kwargs)
+    (turn_end,) = transcript.records_of("turn_end")
+    return turn_end["end_cause"]
+
+
+def test_each_way_a_turn_ends_is_recorded(make_entity, make_combat):
+    def fight():
+        fighter = make_entity(
+            "Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()]
+        )
+        goblin = make_entity("Goblin", team="b", pos=(60, 0, 0), hp=30)
+        return _started(make_combat, [fighter, goblin], fighter), fighter
+
+    combat, fighter = fight()
+    assert _cause_of(combat, fighter, _SequenceAgent([ToolCall("end_turn")])) == "agent"
+
+    combat, fighter = fight()
+    bad = ToolCall("attack", {"action_name": "Longsword", "defender_id": "nobody"})
+    assert _cause_of(combat, fighter, _SequenceAgent([bad])) == "budget"
+
+    combat, fighter = fight()
+    step = ToolCall("move", {"x": 0, "z": 1})  # always legal, never ends the turn
+    agent = _SequenceAgent([step, ToolCall("move", {"x": 0, "z": 0})] * 5)
+    assert _cause_of(combat, fighter, agent, max_actions=3) == "cap"
+
+    combat, fighter = fight()
+    fighter.current_hp = 0
+    assert _cause_of(combat, fighter, _SequenceAgent([ToolCall("end_turn")])) == "skip"
+
+
+def test_metrics_read_the_recorded_cause_and_only_reconstruct_old_transcripts():
+    from src.arena.metrics import group_turns
+
+    action = {"kind": "action", "call": {"name": "end_turn"}, "result": {"ok": True}}
+    recorded = [
+        {"kind": "turn_start", "entity_id": "x"},
+        action,
+        {"kind": "turn_end", "entity_id": "x", "end_cause": "budget"},
+    ]
+    legacy = [dict(r) for r in recorded]
+    legacy[-1].pop("end_cause")
+
+    assert group_turns(recorded)[0].end_cause == "budget"  # the record is the truth
+    assert group_turns(legacy)[0].end_cause == "agent"  # reconstructed for old files

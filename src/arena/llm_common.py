@@ -235,7 +235,10 @@ def decide_one_action(
             ),
         }
     ]
-    telemetry = DecisionTelemetry(menu_length=interface.menu_length(observation))
+    telemetry = DecisionTelemetry(
+        menu_length=interface.menu_length(observation),
+        menu_truncated=interface.menu_truncated(observation),
+    )
     agent.telemetry = telemetry
 
     action = _attempt(

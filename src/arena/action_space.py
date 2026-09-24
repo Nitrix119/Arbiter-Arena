@@ -146,6 +146,9 @@ class SpellOption:
     castable_levels: List[int]
     targets: List[TargetOption]
     aim_points: List[AimOption] = field(default_factory=list)
+    #: True when :data:`DEFAULT_MAX_AIM_POINTS` cut real aim options. Harness
+    #: metadata, never shown to an agent (not in :meth:`to_dict`).
+    aim_points_truncated: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -205,6 +208,11 @@ class LegalActions:
     spells: List[SpellOption] = field(default_factory=list)
     moves: List[MoveOption] = field(default_factory=list)
     can_end_turn: bool = True
+
+    @property
+    def truncated(self) -> bool:
+        """Whether a cap removed real options anywhere in this menu."""
+        return any(s.aim_points_truncated for s in self.spells)
 
     def to_dict(self) -> dict:
         return {
@@ -450,7 +458,7 @@ def aim_candidates(
     spell: SpellAction,
     *,
     step_ft: float = DEFAULT_AIM_STEP_FT,
-    max_candidates: int = DEFAULT_MAX_AIM_POINTS,
+    max_candidates: Optional[int] = DEFAULT_MAX_AIM_POINTS,
 ) -> List[AimOption]:
     """Distinct ways *caster* could aim *spell* right now — the area-targeting menu.
 
@@ -518,7 +526,7 @@ def aim_candidates(
             )
 
     options = sorted(seen.values(), key=lambda o: [t.entity_id for t in o.hits])
-    return options[:max_candidates]
+    return options if max_candidates is None else options[:max_candidates]
 
 
 @dataclass(frozen=True)
@@ -758,6 +766,10 @@ def legal_actions(combat: "CombatSystem", entity: Entity) -> LegalActions:
             levels = _castable_levels(entity, action)
             if not levels:
                 continue
+            # Capped here, with the bite recorded, rather than silently inside
+            # aim_candidates. The cap is read at call time so a test can lower it.
+            aims = aim_candidates(combat, entity, action, max_candidates=None)
+            cap = DEFAULT_MAX_AIM_POINTS
             spells.append(
                 SpellOption(
                     name=action.name,
@@ -767,7 +779,8 @@ def legal_actions(combat: "CombatSystem", entity: Entity) -> LegalActions:
                     range_ft=effective_range_ft(action),
                     castable_levels=levels,
                     targets=_spell_targets(combat, entity, action),
-                    aim_points=aim_candidates(combat, entity, action),
+                    aim_points=aims[:cap],
+                    aim_points_truncated=len(aims) > cap,
                 )
             )
 

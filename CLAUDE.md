@@ -34,9 +34,10 @@ the mistake is not repeated.
 
 ## 1. Project overview
 
-**D&D Auto-Battler** — a D&D 5e combat simulator. The engine is **Python** (`src/`),
-usable as a library or through a FastAPI web app (`web/`) with a browser JS client
-(`web/static/js/`). **Creatures, spells, and rules are JSON data** — most content is
+**Arbiter Arena** (formerly D&D Auto-Battler) — an SRD 5.1-compatible combat simulator
+and a deterministic evaluation harness for tool-using LLM agents. The engine is
+**Python** (`src/`), usable as a library or through a FastAPI web app (`web/`) with a
+browser JS client (`web/static/js/`). **Creatures, spells, and rules are JSON data** — most content is
 added without touching Python.
 
 The ambition (see [the vision doc](docs/current/SPELL_SYSTEM_VISION.md)): a **massively
@@ -231,6 +232,7 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
 | Type-check | `mypy src/` |
 | Run a study grid (resumable) | `python -m src.arena.study run GRID.toml --out results/<name>` (`--dry-run` to preview) |
 | Report on a study bundle | `python -m src.arena.study report results/<name>` |
+| Verify a bundle replays (must be 100%) | `python -m src.arena.study verify results/<name>` |
 | Read one match, decision by decision | `python -m src.arena.study show <transcript.jsonl> [--refused]` |
 | No-key demo of the whole pipeline | `python -m src.arena.study run examples/study/demo.toml --out results/demo` |
 | C1 parser audit | `python -m src.arena.audit sample results/<name> --out audit/` → `… label audit/` → `… score audit/ --report results/<name>/report` |

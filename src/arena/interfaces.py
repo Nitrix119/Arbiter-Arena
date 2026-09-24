@@ -160,6 +160,7 @@ class ActionInterface(ABC):
         """
         trimmed = dict(observation)
         trimmed.pop("enumerated_actions", None)
+        trimmed.pop("menu_truncated", None)  # harness metadata, never shown
         if not self.shows_menu:
             trimmed.pop("legal_actions", None)
         return trimmed
@@ -207,6 +208,12 @@ class ActionInterface(ABC):
         if not self.shows_menu:
             return None
         return len(observation.get("enumerated_actions", []))
+
+    def menu_truncated(self, observation: Dict[str, Any]) -> Optional[bool]:
+        """Whether a cap cut real options from the menu shown (``None``: no menu)."""
+        if not self.shows_menu:
+            return None
+        return bool(observation.get("menu_truncated", False))
 
     def format_rejected(self, action: Dict[str, Any]) -> str:
         """How a rejected action is described back to the model.
@@ -391,6 +398,7 @@ class MenuInterface(ActionInterface):
         """
         shown = dict(observation)
         shown.pop("legal_actions", None)
+        shown.pop("menu_truncated", None)  # harness metadata, never shown
         shown["actions"] = [
             action.to_dict() for action in observation.get("enumerated_actions", [])
         ]

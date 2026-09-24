@@ -560,3 +560,45 @@ def test_verdicts_are_deterministic_and_in_the_summary(bundle):
     summary = build_report(bundle)[3]
     assert "## Registered verdicts (prereg §7)" in summary
     assert registered_verdicts([]) == []
+
+
+# -- response integrity (review 2026-09-24, M-1 / M-4) --------------------------------
+
+
+def test_truncation_and_model_substitution_are_surfaced_per_cell():
+    """Three silent failure modes, each of which would bias a cell without a trace.
+
+    A response cut off at the token limit is a harness setting deciding the outcome;
+    a menu cut by a length cap removes real options; a router serving a different
+    model than the one requested changes the subject. All are counted per cell.
+    """
+    from src.arena.study_report import _integrity_section
+
+    records = _records((True, 1, True), (False, 1, False), (True, 1, False))
+    actions = [r for r in records if r["kind"] == "action"]
+    actions[0]["telemetry"].update(
+        requests=[{"finish_reason": "length", "served_model": "m"}],
+        menu_truncated=True,
+    )
+    actions[1]["telemetry"].update(
+        requests=[{"finish_reason": "stop", "served_model": "m-quantised"}]
+    )
+    decisions = decisions_of(Path("m.jsonl"), records)
+
+    assert [d.length_cutoffs for d in decisions] == [1, 0, 0]
+    assert [d.menu_truncated for d in decisions] == [True, None, None]
+    section = "\n".join(_integrity_section(decisions))
+    assert "| m | C2 | 1 | 1 | m, m-quantised |" in section
+    assert "served a model other than the one requested" in section
+    assert "m / C2" in section
+
+
+def test_a_clean_bundle_has_no_integrity_warnings():
+    from src.arena.study_report import _integrity_section
+
+    records = _records((True, 1, True))
+    records[-1]["telemetry"]["requests"] = [
+        {"finish_reason": "stop", "served_model": "m"}
+    ]
+    section = "\n".join(_integrity_section(decisions_of(Path("m.jsonl"), records)))
+    assert "Warning" not in section

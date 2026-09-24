@@ -24,10 +24,12 @@ its integer.
 
 import hashlib
 import json
+import platform
 import subprocess
+from importlib import metadata
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from src.models.action_resources import FEET_DP
 
@@ -85,6 +87,26 @@ def git_dirty(root: Optional[Path] = None) -> Optional[bool]:
     return bool(out.stdout.strip()) if out.returncode == 0 else None
 
 
+#: Packages whose version changes what a match does or how it is read: the C1 parser's
+#: grammar engine and the provider SDK.
+_VERSIONED_PACKAGES = ("lark", "openai")
+
+
+def package_versions() -> Dict[str, str]:
+    """Python and the versions of the packages the study's behaviour depends on.
+
+    A package that is not installed is simply absent (the ``openai`` SDK is an
+    optional extra, and the offline grid runs without it).
+    """
+    versions = {"python": platform.python_version()}
+    for package in _VERSIONED_PACKAGES:
+        try:
+            versions[package] = metadata.version(package)
+        except metadata.PackageNotFoundError:
+            continue
+    return versions
+
+
 def prompt_hash(*parts: str) -> str:
     """A stable fingerprint of the prompt text a match was run with.
 
@@ -136,6 +158,15 @@ class Manifest:
     #: True when the run began with uncommitted changes to tracked files, so
     #: ``commit`` alone does not name the code that ran.
     git_dirty: Optional[bool] = None
+    #: The model's output-token limit: a response cut off at it is the harness, not
+    #: the model, deciding the outcome.
+    max_tokens: Optional[int] = None
+    #: The upstream hosts the model was pinned to, in order (prereg §5).
+    hosts: Optional[List[str]] = None
+    #: The reasoning setting sent for a thinking model.
+    reasoning: Optional[Dict[str, Any]] = None
+    #: Python and package versions (see :func:`package_versions`).
+    versions: Dict[str, str] = field(default_factory=dict)
     schema_versions: Dict[str, str] = field(
         default_factory=lambda: dict(SCHEMA_VERSIONS)
     )
@@ -145,6 +176,7 @@ class Manifest:
         """Build a manifest, resolving the commit from the working tree by default."""
         fields.setdefault("commit", git_commit())
         fields.setdefault("git_dirty", git_dirty())
+        fields.setdefault("versions", package_versions())
         return cls(**fields)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -164,6 +196,10 @@ class Manifest:
             "prompt_hash": self.prompt_hash,
             "opponent": self.opponent,
             "git_dirty": self.git_dirty,
+            "max_tokens": self.max_tokens,
+            "hosts": list(self.hosts) if self.hosts else None,
+            "reasoning": dict(self.reasoning) if self.reasoning is not None else None,
+            "versions": dict(self.versions) if self.versions else None,
         }
         present = {k: v for k, v in data.items() if v is not None}
         present["schema_versions"] = dict(self.schema_versions)

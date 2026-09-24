@@ -14,6 +14,8 @@ from src.arena.enumeration import (
     enumerate_legal_actions,
     multi_target_spells_not_enumerated,
 )
+from src.arena.agent import Agent, ScriptedAgent
+from src.arena.match import run_match
 from src.arena.scenarios import SCENARIOS
 from src.arena.tools import ToolExecutor
 
@@ -281,3 +283,57 @@ def test_a_multi_target_spell_is_reported_rather_than_silently_dropped(
     assert multi_target_spells_not_enumerated(combat, wizard) == ["Magic Missile"]
     ids = [a.action_id for a in enumerate_legal_actions(combat, wizard)]
     assert not any(i.startswith("cast:magic-missile") for i in ids)
+
+
+# -- truncation is recorded, and checked on the states matches produce ----------------
+#
+# A cap that bites removes real options. The opening-position check above is a single
+# frame chosen by the scenario's designer (CLAUDE.md §9, 2026-09-21), so the caps are
+# also checked on every state a scripted match actually passes through.
+
+
+class _Watching(Agent):
+    """Plays the scripted policy and records every observation's truncation flag."""
+
+    def __init__(self, team):
+        super().__init__("watch", team)
+        self._policy = ScriptedAgent("watch", team)
+        self.flags = []
+
+    def decide(self, observation):
+        self.flags.append(observation["menu_truncated"])
+        return self._policy.decide(observation)
+
+
+@pytest.mark.parametrize("scenario_name", sorted(SCENARIOS))
+@pytest.mark.parametrize("seed", [1, 2, 3])
+def test_no_cap_bites_on_any_state_a_match_produces(scenario_name, seed):
+    scenario = SCENARIOS[scenario_name]
+    watchers = {team: _Watching(team) for team in ("a", "b")}
+
+    run_match(scenario.build(), watchers, seed=seed)
+
+    flags = [f for w in watchers.values() for f in w.flags]
+    assert flags and not any(flags), (scenario_name, seed)
+
+
+def test_a_biting_cap_is_flagged_in_the_observation(monkeypatch):
+    from src.arena import observation as observation_module
+
+    combat, mage = _at_turn("aoe_placement", "mage")
+    monkeypatch.setattr(observation_module, "MENU_CAP", 3)
+
+    shown = observation_module.build_observation(combat, mage)
+
+    assert shown["menu_truncated"] is True
+    assert len(shown["enumerated_actions"]) == 3
+
+
+def test_a_biting_aim_cap_is_flagged_too(monkeypatch):
+    from src.arena import action_space
+    from src.arena.observation import build_observation
+
+    combat, mage = _at_turn("aoe_placement", "mage")
+    monkeypatch.setattr(action_space, "DEFAULT_MAX_AIM_POINTS", 2)
+
+    assert build_observation(combat, mage)["menu_truncated"] is True

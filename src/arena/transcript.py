@@ -99,16 +99,31 @@ class Transcript:
             **extra,
         )
 
-    def turn_end(self, entity_id: str, state: Dict[str, Any]) -> None:
+    def turn_end(
+        self,
+        entity_id: str,
+        state: Dict[str, Any],
+        *,
+        end_cause: Optional[str] = None,
+    ) -> None:
         """Log the end of a turn with its ground-truth state and a canonical hash.
 
         The hash is what ``ReplayVerifier`` compares: re-running the recorded actions
         under the same seed must reproduce this exact sequence. Recording it *here*,
         as the state is captured, means a replay is checked against what the engine
         actually did rather than against a later re-serialisation of it.
+
+        ``end_cause`` says why the turn ended (``agent``, ``budget``, ``cap``,
+        ``skip``), so metrics read it rather than reconstruct it. It is not part of
+        the state, so it never changes the hash.
         """
+        extra = {"end_cause": end_cause} if end_cause is not None else {}
         self.log(
-            "turn_end", entity_id=entity_id, state=state, state_hash=state_hash(state)
+            "turn_end",
+            entity_id=entity_id,
+            state=state,
+            state_hash=state_hash(state),
+            **extra,
         )
 
     def match_end(self, winner: Optional[str], reason: str, rounds: int) -> None:

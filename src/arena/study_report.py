@@ -47,6 +47,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from src.arena.free_text import UNREAD_TEXT
 from src.arena.interfaces import REGISTRY
 from src.arena.metrics import area_hits, compute_report
+from src.arena.mock_model import MOCK_MODEL
 from src.arena.rescore import Bounded, RescoreError, rescore
 from src.arena.scenarios import SCENARIOS, model_team
 from src.utils import dice
@@ -280,6 +281,12 @@ class Decision:
     #: Not a retry: the same actor's previous decision this turn was not rejected.
     #: H1 is measured over fresh decisions only (prereg §6).
     fresh: bool = True
+    #: Requests this decision's model response was cut off at the token limit.
+    length_cutoffs: int = 0
+    #: Whether a length cap removed real options from the menu shown (menus only).
+    menu_truncated: Optional[bool] = None
+    #: The model the provider says served the decision's last request.
+    served_model: Optional[str] = None
 
 
 def _attempted_verb(text: str) -> str:
@@ -372,6 +379,18 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
                 served_provider=host,
                 provider_retries=len(telemetry.get("provider_failures") or []),
                 fresh=not retry,
+                length_cutoffs=sum(
+                    1 for r in requests if r.get("finish_reason") == "length"
+                ),
+                menu_truncated=telemetry.get("menu_truncated"),
+                served_model=next(
+                    (
+                        r["served_model"]
+                        for r in reversed(requests)
+                        if r.get("served_model")
+                    ),
+                    None,
+                ),
             )
         )
     return out
@@ -717,6 +736,7 @@ def summarise(
     parts += _tactics_sections(matches)
     parts += _layer_section(decisions)
     parts += _hosts_section(decisions)
+    parts += _integrity_section(decisions)
     parts += _infrastructure_section(
         decisions, matches, excluded_cells or {}, reasons or {}
     )
@@ -1053,6 +1073,77 @@ def _hosts_section(decisions: List[Decision]) -> List[str]:
                 for (model, condition), names in sorted(
                     hosts.items(), key=lambda kv: (kv[0][0], _cell_key_of(kv[0][1]))
                 )
+            ],
+        )
+    )
+    return parts
+
+
+def _integrity_section(decisions: List[Decision]) -> List[str]:
+    """Three silent ways a cell can be biased, counted per model x condition.
+
+    * a response cut off at the token limit — a harness setting deciding the outcome;
+    * a menu cut by a length cap — real options removed (should never happen);
+    * a served model other than the one requested — a router changing the subject.
+    """
+    cells: Dict[Cell, List[Decision]] = defaultdict(list)
+    for d in decisions:
+        cells[(d.model, d.condition)].append(d)
+    if not cells:
+        return []
+    keys = sorted(cells, key=lambda k: (k[0], _CONDITION_ORDER.get(k[1], 99)))
+    substituted = sorted(
+        key
+        for key in keys
+        # The mock's served id is a declared sentinel, not a router's substitution.
+        if any(d.served_model not in (None, key[0], MOCK_MODEL) for d in cells[key])
+    )
+    cut = sorted(
+        key
+        for key in keys
+        if any(d.length_cutoffs or d.menu_truncated for d in cells[key])
+    )
+    parts = ["", "## Response integrity", ""]
+    if substituted:
+        parts += [
+            "**Warning: served a model other than the one requested** — "
+            + ", ".join(f"{m} / {c}" for m, c in substituted)
+            + ". Check the served ids before pooling these cells.",
+            "",
+        ]
+    if cut:
+        parts += [
+            "**Warning: truncation** — a response cut at the token limit or a menu cut "
+            "by its cap in " + ", ".join(f"{m} / {c}" for m, c in cut) + ".",
+            "",
+        ]
+    parts.append(
+        _table(
+            [
+                "model",
+                "condition",
+                "responses cut at token limit",
+                "menus truncated",
+                "served models",
+            ],
+            [
+                [
+                    model,
+                    condition,
+                    str(sum(d.length_cutoffs for d in cells[(model, condition)])),
+                    str(sum(bool(d.menu_truncated) for d in cells[(model, condition)])),
+                    ", ".join(
+                        sorted(
+                            {
+                                d.served_model
+                                for d in cells[(model, condition)]
+                                if d.served_model
+                            }
+                        )
+                    )
+                    or "—",
+                ]
+                for model, condition in keys
             ],
         )
     )

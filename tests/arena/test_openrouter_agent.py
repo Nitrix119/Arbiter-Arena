@@ -382,3 +382,35 @@ def test_unusable_arguments_cost_a_failure_but_not_the_match(make_entity, make_c
     failed = [r for r in transcript.records_of("action") if not r["result"]["ok"]]
     assert [r["result"]["code"] for r in failed] == [MALFORMED_OUTPUT]
     assert failed[0]["telemetry"]["request_count"] == 1
+
+
+def test_reasoning_and_max_tokens_are_sent_beside_the_pinned_host():
+    """A thinking model's reasoning budget is a sampling setting like temperature.
+
+    Left to host defaults it can differ between hosts and change silently, so the
+    grid pins it and the adapter sends it (review 2026-09-24, M-1).
+    """
+    client = FakeClient([response(fn_call("end_turn", "{}"))])
+    agent = OpenRouterAgent(
+        "O",
+        "a",
+        client=client,
+        hosts=["DeepInfra"],
+        reasoning={"effort": "low"},
+        max_tokens=2048,
+    )
+
+    agent.decide(_obs())
+    kwargs = client.calls[0]
+
+    assert kwargs["extra_body"] == {
+        "provider": {"order": ["DeepInfra"], "allow_fallbacks": False},
+        "reasoning": {"effort": "low"},
+    }
+    assert kwargs["max_tokens"] == 2048
+
+
+def test_no_reasoning_setting_sends_none():
+    client = FakeClient([response(fn_call("end_turn", "{}"))])
+    OpenRouterAgent("O", "a", client=client).decide(_obs())
+    assert "extra_body" not in client.calls[0]

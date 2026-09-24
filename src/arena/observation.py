@@ -15,7 +15,7 @@ bridge applies; it does not belong in the agent's view.
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from src.arena.action_space import legal_actions
-from src.arena.enumeration import enumerate_legal_actions
+from src.arena.enumeration import DEFAULT_MAX_ACTIONS, enumerate_legal_actions
 from src.arena.information_policy import (
     FULL_INFORMATION,
     HP_EXACT,
@@ -28,6 +28,11 @@ from src.spatial.range_check import effective_range_ft
 
 if TYPE_CHECKING:
     from src.combat.combat_system import CombatSystem
+
+
+#: The flat menu's length cap (a §3.1 cost covariate), read at call time so a test can
+#: lower it. A cap that bites removes real options, so it is flagged, never silent.
+MENU_CAP = DEFAULT_MAX_ACTIONS
 
 
 def _position(entity: Entity) -> dict:
@@ -198,6 +203,8 @@ def build_observation(
     given study condition actually sees — this function shows everything.
     """
     current = combat.get_current_entity()
+    menu = legal_actions(combat, entity)
+    enumerated = enumerate_legal_actions(combat, entity, max_actions=None)
     return {
         "state": combat.state.name,
         "round": combat.round,
@@ -206,13 +213,16 @@ def build_observation(
         "self": _friendly(combat, entity),
         "allies": [_friendly(combat, a) for a in combat.get_allies(entity)],
         "enemies": [_serialize_enemy(e, policy) for e in combat.get_enemies(entity)],
-        "legal_actions": legal_actions(combat, entity).to_dict(),
+        "legal_actions": menu.to_dict(),
         # The same options flattened into one choosable list, for the enumerated
         # condition. Built here, unconditionally, so this module stays ignorant of
         # which condition is running; each ActionInterface decides what to show.
         # Carries live EnumeratedAction objects, not dicts — the interface needs the
         # ToolCall each id resolves to, and shows only `action_id`/`label`.
-        "enumerated_actions": enumerate_legal_actions(combat, entity),
+        "enumerated_actions": enumerated[:MENU_CAP],
+        # Harness metadata: whether a cap (actions or aim points) removed real
+        # options. Recorded per decision; every condition strips it before showing.
+        "menu_truncated": len(enumerated) > MENU_CAP or menu.truncated,
     }
 
 

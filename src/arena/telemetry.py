@@ -119,6 +119,8 @@ class DecisionTelemetry:
     #: How many legal options the model was shown (menu conditions only) — a cost
     #: covariate the study records per decision (prereg §2).
     menu_length: Optional[int] = None
+    #: Whether a length cap removed real options from that menu (it should never).
+    menu_truncated: Optional[bool] = None
 
     @property
     def request_count(self) -> int:
@@ -159,6 +161,7 @@ class DecisionTelemetry:
             "latency_ms": round(self.latency_ms, 3),
             "served_model": self.served_model,
             "menu_length": self.menu_length,
+            "menu_truncated": self.menu_truncated,
         }
 
 
