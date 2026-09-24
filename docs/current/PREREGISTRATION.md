@@ -493,6 +493,11 @@ pilot frequencies rather than in advance.
   - The rule's three comparisons are judged on **pooled point estimates** of first-attempt
     validity per model, with the intervals reported alongside. *(Registered here, before any
     data: the original wording said "holds" without saying on what.)*
+  - **Fresh decisions only, as in H1 (2026-09-24, before any data).** The audit samples
+    only fresh C1 first attempts, and its rates are weighted to that population. All three
+    checks compare fresh decisions. The tool used to pool retries into C1's and C2's
+    validity while the lenient bound was already fresh-only, so the three checks had
+    different denominators.
 - Seeds are **paired** across conditions (same scenario and seed in every cell). LLM
   nondeterminism breaks pairing after the first differing decision; this is stated as
   a limitation rather than corrected for.

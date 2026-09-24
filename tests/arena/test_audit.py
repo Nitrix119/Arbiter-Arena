@@ -212,3 +212,66 @@ def test_running_out_of_input_saves_and_quits(bundle, tmp_path):
     remaining = label_loop(tmp_path, ask=one_then_eof, say=lambda _: None)
     assert remaining == 3
     assert len(_read(tmp_path / LABELS)) == 1
+
+
+# -- fresh decisions only, as in H1 (review 2026-09-24) -------------------------------
+
+
+def test_only_fresh_first_attempts_are_sampled(bundle):
+    """A retry after a refusal is recovery, not a first attempt (prereg §6), so it is
+    not in the population the false-reject rate is weighted to."""
+    from src.arena.study_report import completed_transcripts, decisions_of
+
+    fresh = set()
+    for path, records in completed_transcripts(bundle):
+        relative = path.relative_to(bundle)
+        for d in decisions_of(relative, records):
+            if d.condition == "C1" and d.fresh:
+                fresh.add((relative.as_posix(), d.index))
+    attempts = first_attempts(bundle)
+
+    assert {(a.match, a.index) for a in attempts} == fresh
+
+
+def _write_csv(path, rows):
+    import csv
+
+    with open(path, "w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def test_the_decision_rule_compares_fresh_decisions_only(tmp_path):
+    """Retries flip this verdict if they are pooled in; H1 is over fresh decisions."""
+    from src.arena.audit import AuditScore, decision_rule
+
+    def rows(condition, fresh, valid, n):
+        return [
+            {
+                "model": "m",
+                "condition": condition,
+                "fresh": str(fresh),
+                "first_attempt_valid": str(valid),
+            }
+        ] * n
+
+    decisions = (
+        rows("C2", True, True, 4)
+        + rows("C2", False, False, 8)  # retries: would drag C2 down to 4/12
+        + rows("C1", True, True, 2)
+        + rows("C1", True, False, 2)
+        + rows("C1", False, True, 8)  # retries: would lift C1 to 10/12
+    )
+    _write_csv(tmp_path / "decisions.csv", decisions)
+    _write_csv(
+        tmp_path / "c1_bounds.csv",
+        [{"model": "m", "lenient": "True"}, {"model": "m", "lenient": "False"}],
+    )
+    nothing_labelled = AuditScore(0, 0, 0, 0, 0, 0, 0.0)
+
+    lines = decision_rule(tmp_path, nothing_labelled)
+
+    row = next(line for line in lines if line.startswith("| m |"))
+    assert "| 1.000 | 0.500 | 0.500 |" in row  # C2, C1 primary, C1 lenient
+    assert row.endswith("| supported |")

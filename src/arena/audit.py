@@ -41,7 +41,7 @@ from src.arena.free_text import read_response, render_command
 from src.arena.identifiers import identifier_key
 from src.arena.interfaces import C1, C2
 from src.arena.scenarios import model_team
-from src.arena.study_report import completed_transcripts, wilson
+from src.arena.study_report import completed_transcripts, decisions_of, wilson
 from src.utils import dice
 
 ITEMS = "items.jsonl"
@@ -86,20 +86,28 @@ def _attempt_id(match: str, index: int) -> str:
 
 
 def first_attempts(bundle: Path) -> List[Attempt]:
-    """Every C1 first attempt in the bundle, in a stable order."""
+    """Every C1 first attempt in the bundle, in a stable order.
+
+    Fresh decisions only, as in H1 (prereg §6): a retry after a refusal is measured
+    by recovery, so it is not in the population the audited rates are weighted to.
+    Freshness is read from the report's own :func:`decisions_of`, so the two cannot
+    disagree about which decisions those are.
+    """
     out: List[Attempt] = []
     for path, records in completed_transcripts(bundle):
         start = next(r for r in records if r["kind"] == "match_start")
         if start.get("condition") != C1:
             continue
         members = set(start["teams"].get(model_team(start, records), []))
-        match = path.relative_to(bundle).as_posix()
+        relative = path.relative_to(bundle)
+        match = relative.as_posix()
+        fresh = {d.index for d in decisions_of(relative, records) if d.fresh}
         decisions = [
             r for r in records if r["kind"] == "action" and r["actor_id"] in members
         ]
         for index, record in enumerate(decisions):
             requests = (record.get("telemetry") or {}).get("requests") or []
-            if not requests:
+            if index not in fresh or not requests:
                 continue
             text = requests[0].get("raw_output") or ""
             call = read_response(text).call
@@ -345,7 +353,9 @@ def decision_rule(report_dir: Path, result: AuditScore) -> List[str]:
     to C1's primary validity. Otherwise the C1 comparison is exploratory.
     """
     with open(report_dir / "decisions.csv", encoding="utf-8") as handle:
-        decisions = list(csv.DictReader(handle))
+        # Fresh decisions only, as H1 is measured (prereg §6); c1_bounds.csv is
+        # already restricted to them, so all three checks share one denominator.
+        decisions = [r for r in csv.DictReader(handle) if r.get("fresh") == "True"]
     with open(report_dir / "c1_bounds.csv", encoding="utf-8") as handle:
         bounds = list(csv.DictReader(handle))
     fr = result.false_reject_rate()
