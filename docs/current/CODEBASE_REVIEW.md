@@ -420,6 +420,50 @@ names where it should be addressed. Append; strike through and date an item when
   - **The action mix could move H1.** The report now shows validity by intended action
     kind, H1 without end-turns, and H1 at a common mix. These are descriptive
     sensitivity figures, prereg §7.
+- **A26. ~~An unbilled provider read as a free call, so the spend cap went inert.~~
+  Fixed 2026-09-25** (the third pre-pilot review).
+  - `transcript_tokens` (the spend cap's input) and `Decision.input_tokens` both
+    coerced an unreported `usage` count to `0`, discarding a distinction
+    `telemetry._sum_or_none` was written to preserve. A host that omits `usage` made
+    every cell cost `$0.0000`, so `spend_cap_usd` could never bind and a live grid
+    would run to completion against a ceiling believed to be guarding it. The report
+    could not tell "free" from "unknown" either, leaving the exploratory cost outcome
+    unfalsifiable.
+  - Recorded once on `DecisionTelemetry.usage_reported`; preflight refuses an
+    unbillable model, `run_grid` stops after a kept cell whose cost is unknowable,
+    and the report's integrity section counts unbilled decisions per cell.
+  - Same shape as the 2026-09-21 lesson: a fact declared in one layer and dropped at
+    the consumer. Prereg §5.
+- **A27. ~~Two response envelopes crashed the harness and stopped the grid.~~ Fixed
+  2026-09-25.** The A14 slice closed this class for tool *arguments*; these were the
+  two remaining shapes in the envelope. Both raised `AttributeError`, which is not an
+  infrastructure error, so `play_cell` re-raised and the run died with a traceback —
+  losing that cell's transcript, which is not even written to `_excluded/`.
+  - **Content parts.** `message.content` reached the caller as a list on a host that
+    answers with `{"type": "text", "text": …}` parts, and `read_response` ran
+    `text.strip()` on it. This is C1's entire channel. `llm_common.message_text` now
+    reads the text out of a string, a list of parts or a single part, rather than
+    refusing it — the envelope is a transport convention, not a model choice, and
+    charging C1's `malformed_output` rate for its host's serialisation would make H1
+    partly a function of routing.
+  - **A tool-call entry with no `function`.** Dropped; a readable call beside a broken
+    one still runs; a response whose every entry was unreadable is `malformed_output`,
+    not `no_tool_call` (which grants a free correction the other refusal paths do not).
+  - Prereg §6. The engine side needed nothing: `ToolExecutor.apply` already answers a
+    `None` tool name, an empty one and `arguments=None` with typed refusals.
+- **A28. ~~C1's parse layer conflated the command with the prose around it.~~ Fixed
+  2026-09-25.** `_layer` returned 3 whenever a response had more than one content
+  line, before comparing the command with its canonical rendering — so a byte-perfect
+  `ACTION:` line with a preamble scored the same as an action dug out of untagged
+  prose, and the registered `strict` bound (layer 0) was unreachable for real output.
+  Measured on the demo bundle: every C1 decision at layer 3, strict `0.000`, and a
+  layer histogram carrying no information. Layer 3 now means an *untagged* line, a
+  tagged line keeps its command's layer, and prose is its own recorded field and
+  report column. No hypothesis verdict moves — the C1 decision rule does not read the
+  layer. Prereg §7 and §10.
+  - Also closed: **A17's open `lark` pin** (exactly 1.3.1; the parser is the measuring
+    instrument), and `--dry-run` now reports the spend cap plus a per-model estimate
+    measured from what is on disk rather than printing no cost at all.
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 

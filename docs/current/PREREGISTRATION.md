@@ -341,6 +341,26 @@ variable** (cost per accepted action) and is expected to be worst in C1. It is
 therefore a result to report, not a defect to suppress — but it does set the budget
 envelope, so the runner enforces a hard spend cap.
 
+**A model must report its token usage (registered 2026-09-25).** The spend cap is
+computed from the `usage` block each response carries, and an unreported count was
+being read as zero — so a host that omits `usage` made every cell cost $0.0000, the
+cap could never bind, and cost per accepted action would have been published as zero
+rather than unknown. Three consequences, all now enforced:
+
+- **Preflight refuses** a model that reported no usage on either of its two live
+  checks, before any cell runs.
+- A run **stops** after a kept cell whose cost is unknowable. The match is sound and
+  enters the analysis; what is gone is the ability to enforce the cap, so the run does
+  not continue spending against a ceiling it cannot see.
+- The report's integrity section **counts** unbilled decisions per model × condition
+  and states that those cells' `$` figures are a floor. A partial report counts as
+  unknowable, since the sum would be an undercount; so does an unbilled provider retry
+  beside a billed request, because a retry is billed.
+
+`lark` is pinned exactly (1.3.1) rather than to a range, for the reason the version was
+already recorded per match: the C1 parser is the measuring instrument, so a parse change
+between runs would be an unrecorded change to the measured interface.
+
 ---
 
 ## 6. Metrics
@@ -398,6 +418,26 @@ the harness. Each of these used to stop the study runner as a "harness bug" or l
 - In C3, a `choose` with no `action_id` (or a non-string one) is `malformed_output`, as
   a missing argument is in C2. `unknown_target` is kept for an id that was written but is
   not on the list.
+
+**The response *envelope* is read, not charged to the model (2026-09-25, before any
+data).** Two shapes a real host sends, neither of which a well-formed mock can produce,
+raised `AttributeError` and so stopped the whole grid — the same class as the argument
+shapes above, in the envelope rather than the arguments:
+
+- **Content parts.** `message.content` is documented as a string, but a host may answer
+  with a list of `{"type": "text", "text": …}` parts. This is C1's *entire* channel. The
+  text is now read out of whatever envelope arrived — a string, a list of parts, or a
+  single part — rather than refused, for the same reason an empty-string argument is
+  `{}`: the envelope is a transport convention, not a model choice. Charging C1's
+  `malformed_output` rate for its host's serialisation would make H1 partly a function
+  of which host OpenRouter routed to, and since H1 predicts C1 is worst, that would
+  confirm the hypothesis for the wrong reason. Non-text parts (a reasoning trace, an
+  image) are not the answer and are skipped, as the Claude adapter already skipped them.
+  A response with no readable text holds no action, which is the correction path.
+- **A tool-call entry carrying no `function`.** Such entries are dropped, and a readable
+  call beside a broken one still runs. A response whose *every* entry was unreadable is
+  `malformed_output`, not `no_tool_call`: the model did answer, and `no_tool_call` grants
+  a free correction the other refusal paths do not.
 
 **Several different actions in one response are `malformed_output` in every condition
 (2026-09-24, before any data).** C1's parser already refused two different ACTION lines,
@@ -502,6 +542,25 @@ pilot frequencies rather than in advance.
   only; later attempts and tactics depend on the live parser and are labelled as such.
   *As implemented (2026-09-24; `free_text.read_lenient`, `src/arena/rescore.py`):*
   - **Strict:** accepted in one request at parse layer 0.
+  - **The layer describes the command, and prose is recorded separately (corrected
+    2026-09-25, before any data).** `_layer` returned 3 for any response with more than
+    one content line, *before* comparing the command with its canonical rendering. So a
+    byte-perfect `ACTION:` line with a preamble sentence scored the same as an action dug
+    out of untagged prose — and since a real model almost always writes a sentence, layer
+    0 was unreachable and the strict bound was ~0 by construction. Measured on the offline
+    demo bundle: every C1 decision at layer 3, strict 0.000, so the published band would
+    have been `0.000 ≤ primary ≤ lenient` and the layer histogram would have carried no
+    information.
+    Layer 3 now means what it always claimed — an **untagged** line, i.e. extraction. A
+    tagged line keeps its command's own layer (0 canonical, 1 surface-identical, 2
+    grammatical but not canonical), and whether the response said anything besides the
+    command is its own recorded field, reported as a `with prose` column. A markdown
+    fence is surface decoration, so a fenced response is layer 1 at best.
+    Neither the accept/reject boundary nor which action is read changes; this is about
+    what is recorded. Strict keeps its registered meaning — a canonical command — and
+    becomes measurable (0.901 / 1.000 / 0.654 on the demo bundle). **No hypothesis
+    verdict moves:** the C1 decision rule below rests on the primary parser, the lenient
+    bound and the audit, none of which reads the layer.
   - **Lenient:** the primary first attempt was valid, *or* the lenient reading of the first
     response's text executes. It is judged by the real executor on a deep copy of the game
     state at that decision, rebuilt by replay, and the replay must match the transcript's
@@ -720,6 +779,25 @@ scenario's designer arranged and so the least representative board in the match;
 registered value is now the minimum across sampled states. No data had been collected
 against the incorrect figure.
 
+### 2026-09-25 — C1's parse layer, and a cost metric that could not fail
+
+Both found by a pre-pilot review of the finished harness, both before any data.
+
+**The strict C1 bound was unmeetable by construction** (§7). The parse layer folded two
+facts together — how much tolerance the command needed, and whether the response also
+wrote prose — so layer 0 could not be reached by any response with a preamble sentence,
+which is nearly all of them. Registered wording is unchanged ("a strict bound accepts
+only layer 0"); what changed is that layer 0 now describes the *command*, so the bound
+measures what it says. The full reasoning and the measured before/after are in §7. This
+revises no hypothesis: the C1 decision rule does not read the layer.
+
+**Unreported token usage read as zero cost** (§5). The spend cap and the cost metric both
+coerced a missing `usage` block to 0, so a host that omits it made the cap unable to bind
+and would have published cost per accepted action as `0.000000` rather than unknown. The
+cost outcome is exploratory and no direction was predicted for it, but as it stood the
+figure was unfalsifiable. Now refused in preflight, stopped mid-run, and counted in the
+report. No data had been collected.
+
 ---
 
 ## 11. Open items before freeze
@@ -747,7 +825,9 @@ against the incorrect figure.
 - [ ] Prompt texts and their hashes for all four conditions — note the prompt was split
       into a shared body plus a per-condition action section on 2026-09-21, so **every
       hash changed**; they must be recorded from the frozen commit, not from memory
-- [ ] Confirmed per-match call and token counts from the pilot
+- [ ] Confirmed per-match call and token counts from the pilot. The dry run estimates
+      the remaining spend from $/request measured over what is already on disk, so run
+      a few cells and dry-run again before committing to the grid.
 - [ ] Citation verification for every work listed in §1
 
 **Settled since this list was written:** the AoE scenario is built (§4.1); combatant ids

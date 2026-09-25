@@ -854,3 +854,56 @@ rule lives, and whether a turn stops at the killing blow.
 
 Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml` (model id, host, prices,
 reasoning), dry-run it, and run it live only with the go-ahead.
+
+#### Phase 1 third-review fixes (2026-09-25)
+
+A fourth pre-pilot review, asked to look only for things that would genuinely harm the
+study on the way out of Phase 1. The harness was complete and green (1,632 tests); the
+whole demo grid ran, verified at 100% and reported. It found three problems and two
+loose ends, all fixed. 1,668 tests pass; flake8, mypy and Black are clean. Ledger
+A26–A28, registered in PREREGISTRATION §5, §6, §7 and §10 before any data.
+
+**Would have cost money without saying so.** The spend cap is computed from each
+transcript's token sums, and an unreported `usage` count was coerced to zero. A host that
+omits `usage` therefore made every cell cost `$0.0000`: the `$2.00` pilot cap could never
+bind, and a live grid would have run to completion against a ceiling believed to be
+guarding it. `telemetry._sum_or_none` was written precisely to keep "not reported" apart
+from "free" — both consumers then threw the distinction away, the same shape as the
+2026-09-21 lesson. Now recorded on `DecisionTelemetry.usage_reported`, refused in
+preflight (two requests, before any cell), stopped mid-run if a route stops billing, and
+counted in the report.
+
+**Would have stopped the grid on the first real response of its kind.** Two envelope
+shapes still crashed the harness — the A14 slice had closed this class for tool
+*arguments* only. `message.content` arriving as content parts made C1 call `.strip()` on
+a list; a tool-call entry with no `function` crashed the distinct-call count. Neither is
+an infrastructure error, so `play_cell` re-raised, the run died with a traceback, and
+that cell's transcript was lost entirely. Content parts are now **read** rather than
+refused: the envelope is a host's convention, and charging C1's `malformed_output` rate
+for it would make H1 partly a function of routing — with H1 predicting C1 is worst, that
+is confirmation for the wrong reason.
+
+**Would have published an uninformative registered measure.** C1's parse layer
+short-circuited to 3 whenever a response had a second content line, before it ever
+compared the command with its canonical form. Since a real model almost always writes a
+preamble, layer 0 was unreachable and the registered `strict` bound read ~0 by
+construction — on the demo bundle, every C1 decision at layer 3 and strict `0.000`, so
+the published band would have been `0.000 ≤ primary ≤ lenient`. The layer now describes
+the **command**; prose is its own field and report column; layer 3 goes back to meaning
+an untagged line. Strict now reads 0.901 / 1.000 / 0.654 on the same bundle. No
+hypothesis verdict moves: the C1 decision rule reads the primary parser, the lenient
+bound and the audit, never the layer.
+
+**Two loose ends closed.** `lark` is pinned exactly (1.3.1) — it is the measuring
+instrument, and A17 had left this open. `--dry-run` now prints the spend cap and, per
+live model, an estimate from $/request **measured** over what is already on disk; a model
+with nothing on disk is reported as "not yet measured" rather than multiplied by an
+invented tokens-per-call.
+
+**Three decisions the user made**, each recorded where it is measured: read content parts
+rather than refuse them; refuse an unbillable model in preflight *and* stop a run that
+becomes unbillable; and split the parse layer from the prose fact rather than redefining
+strict or publishing the limitation.
+
+Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml` (model id, host, prices,
+reasoning), dry-run it, and run it live only with the go-ahead.

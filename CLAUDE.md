@@ -401,6 +401,25 @@ leave a brief note here.
   A policy that loses to the scripted agent on the scenario meant to showcase it is the loudest
   possible signal of a scoring bug.
 
+### 2026-09-25 — A metric that cannot fail is not a metric
+- **Context:** Pre-pilot review of the arena's measurement code. Two separate findings turned
+  out to be the same mistake.
+- **What went wrong:** `telemetry._sum_or_none` deliberately returns `None` — not `0` — when a
+  provider reports no token usage, with a docstring explaining that "free" and "not reported"
+  are different facts. Both consumers then wrote `telemetry.get("input_tokens") or 0`. So an
+  unbilled cell cost `$0.0000`, the study's hard spend cap could never bind, and the cost metric
+  would have published `0.000000` as a *result*. Separately, C1's parse layer folded "how much
+  tolerance did the command need" together with "did the model also write prose", which made the
+  best layer unreachable for any realistic response — so a registered bound read ~0 by
+  construction and could not have come out any other way.
+- **Rule going forward:** When you add a measurement, ask what value would falsify it and check
+  that value is reachable. A number that can only come out one way — a cost that is always zero, a
+  bound that is always nil, a guard that never trips — is telling you about the instrument, not the
+  subject. Two specific corollaries: (1) a layer that preserves a distinction is worthless if its
+  consumer coerces it away, so follow the value to every reader (same seam-auditing lesson as
+  2026-08-08 and 2026-08-31); (2) one function must answer one question — `_layer` answering two
+  made the cheaper answer silently win.
+
 ### 2026-09-03 — A hand-written schema needs a machine-checked link to the code it describes
 - **Context:** Building the per-field block schema (`BlockContract.fields`) that lets the loader
   reject an unknown or malformed arg. The declarations are written by hand, next to each handler.
