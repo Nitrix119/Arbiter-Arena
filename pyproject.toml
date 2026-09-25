@@ -20,7 +20,11 @@ authors = [
 # replay, offline re-scoring and the parser audit must run with no LLM SDK installed.
 # Pure Python, no dependencies of its own.
 dependencies = [
-    "lark>=1.2,<2",
+    # Pinned exactly: the C1 parser is the study's measuring instrument, so a
+    # grammar or parse change between runs would be an unrecorded change to the
+    # measured interface (prereg §5 records the version per match). Bump only with
+    # a deliberate re-run of the C1 corpus.
+    "lark==1.3.1",
 ]
 
 [project.optional-dependencies]

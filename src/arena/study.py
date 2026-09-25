@@ -885,17 +885,80 @@ def verify_results(bundle: Path, echo: Callable[[str], None] = print) -> bool:
 # -- CLI --------------------------------------------------------------------------
 
 
+def cost_per_request(out: Path, grid: Grid) -> Dict[str, float]:
+    """$ per model request, **measured** from the bundle on disk, per model.
+
+    A model with nothing on disk yet is absent rather than guessed at: multiplying an
+    invented tokens-per-call would print a figure with no basis, and the dry run is the
+    last checkpoint before real money. On a resume — when the question "what will the
+    rest cost?" actually bites — this is grounded in what the same grid already spent.
+    """
+    tokens: Dict[str, List[int]] = {}
+    for path in out.rglob("*.jsonl") if out.exists() else []:
+        if path.name == RUN_LOG:
+            continue
+        records = _read(path)
+        start = next((r for r in records if r.get("kind") == "match_start"), {})
+        model = str(start.get("model", ""))
+        if grid.model(model) is None:
+            continue
+        requests = sum(
+            (r.get("telemetry") or {}).get("request_count", 0)
+            for r in records
+            if r.get("kind") == "action"
+        )
+        tokens_in, tokens_out = transcript_tokens(records)
+        totals = tokens.setdefault(model, [0, 0, 0])
+        totals[0] += tokens_in
+        totals[1] += tokens_out
+        totals[2] += requests
+    measured: Dict[str, float] = {}
+    for model, (tokens_in, tokens_out, requests) in tokens.items():
+        spec = grid.model(model)
+        if spec is not None and requests:
+            measured[model] = spec.cost_usd(tokens_in, tokens_out) / requests
+    return measured
+
+
 def _dry_run(grid: Grid, out: Path) -> str:
     all_cells = list(cells(grid))
     existing = sum(1 for c in all_cells if c.path(out).exists())
     remaining = len(all_cells) - existing
-    return (
+    lines = [
         f"{grid.name}: {len(all_cells)} cells "
         f"({len(grid.models)} models x {len(grid.conditions)} conditions x "
         f"{len(grid.scenarios)} scenarios x {len(grid.seeds)} seeds); "
         f"{existing} already done, {remaining} to run "
         f"(~{remaining * CALLS_PER_MATCH_ESTIMATE} model calls)."
-    )
+    ]
+    live = [spec for spec in grid.models if spec.provider == PROVIDER_OPENROUTER]
+    if live:
+        measured = cost_per_request(out, grid)
+        cap = (
+            f"spend cap ${grid.spend_cap_usd:,.2f}"
+            if grid.spend_cap_usd
+            else "NO spend cap set"
+        )
+        lines.append(f"Cost: {cap} (the hard ceiling; a run stops when it is reached).")
+        for spec in live:
+            todo = sum(
+                1
+                for c in all_cells
+                if c.model.id == spec.id and not c.path(out).exists()
+            )
+            rate = measured.get(spec.id)
+            if rate is None:
+                lines.append(
+                    f"  {spec.id}: {todo} cells to run, cost not yet measured — "
+                    "run a few cells, then dry-run again for an estimate."
+                )
+            else:
+                estimate = rate * todo * CALLS_PER_MATCH_ESTIMATE
+                lines.append(
+                    f"  {spec.id}: {todo} cells to run, ~${estimate:,.2f} "
+                    f"(${rate:,.4f}/request measured over what is on disk)."
+                )
+    return "\n".join(lines)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:

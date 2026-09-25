@@ -763,3 +763,58 @@ def test_the_committed_opponent_grid_is_free_and_uses_the_heuristic():
     grid = load_grid(Path("examples/study/pilot_opponent.toml"))
     assert grid.opponent == "heuristic"
     assert {m.provider for m in grid.models} == {"baseline"}
+
+
+# -- the dry run's cost estimate ------------------------------------------------------
+
+
+def test_a_dry_run_reports_the_spend_cap_and_says_when_it_cannot_estimate():
+    """A fresh grid has no measurement, so the cap is the only honest number.
+
+    The alternative — multiplying a guessed tokens-per-call — would print a figure
+    with no basis, and the dry run is the last checkpoint before real money.
+    """
+    from src.arena.study import _dry_run
+
+    grid = _grid(
+        models=[
+            {
+                "id": "org/model",
+                "provider": "openrouter",
+                "usd_per_m_input": 1.0,
+                "usd_per_m_output": 3.0,
+            }
+        ],
+        spend_cap_usd=2.5,
+    )
+    text = _dry_run(grid, Path("no-such-bundle"))
+
+    assert "spend cap $2.50" in text
+    assert "org/model" in text and "not yet measured" in text
+
+
+def test_a_dry_run_estimates_from_what_the_bundle_already_cost(tmp_path, monkeypatch):
+    """On a resume the estimate is measured, not guessed: $/request from disk."""
+    from src.arena.study import CALLS_PER_MATCH_ESTIMATE, _dry_run
+
+    monkeypatch.setattr("src.arena.study.git_dirty", lambda: False)
+    model = {
+        "id": "org/model",
+        "provider": "openrouter",
+        # $1 per token either way, so the arithmetic is readable.
+        "usd_per_m_input": 1_000_000.0,
+        "usd_per_m_output": 1_000_000.0,
+    }
+    ran = _grid(seeds=[1], models=[model], spend_cap_usd=1e9)
+    factories = {**MODEL_FACTORIES, "openrouter": lambda *a: _Healthy("m", "a")}
+    run_grid(ran, tmp_path, factories=factories, echo=lambda _: None)
+
+    # The same grid, one seed wider: one cell is on disk and one is still to run.
+    wider = _grid(seeds=[1, 2], models=[model], spend_cap_usd=1e9)
+    text = _dry_run(wider, tmp_path)
+
+    # _Healthy bills 40 + 8 tokens per request, so a request cost $48 and the one
+    # remaining cell is estimated at that rate over ~35 requests.
+    assert "1 already done, 1 to run" in text
+    assert "$48.0000/request measured" in text
+    assert f"${48.0 * CALLS_PER_MATCH_ESTIMATE:,.2f}" in text
