@@ -58,7 +58,12 @@ def test_a_c1_match_plays_records_and_replays(scenario):
         if record is refused[0]:
             assert reading["code"] == "malformed_output"
         else:
-            assert reading["layer"] == 3  # read out of the surrounding prose
+            # The mock writes a preamble line, then the canonical command. The layer
+            # describes the command (0), and the prose is its own fact — the two were
+            # folded together until 2026-09-25, which hid every canonical command
+            # behind layer 3 and made the strict bound unmeetable (prereg §7).
+            assert reading["layer"] == 0
+            assert reading["prose"] is True
             assert record["call"]["name"] != UNREAD_TEXT
 
     report = verify(transcript.records, build)

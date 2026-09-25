@@ -56,17 +56,21 @@ ACCEPTED = [
     ("ACTION: attack Raider 1 with Dagger", _attack("Raider 1"), 0),
     ("ACTION: hit raider-1 with Dagger", _attack(), 2),
     ("ACTION: I hit the raider-1 with my Dagger", _attack(), 2),
+    # Surrounding prose does not change the layer: the tagged command here is
+    # canonical, so it is layer 0, with `prose` recorded beside it (PROSE_WRAPPED).
     (
         "Raider 1 is adjacent.\nACTION: attack raider-1 with Dagger\nGood luck!",
         _attack(),
-        3,
+        0,
     ),
+    # Untagged: layer 3 is extraction — nothing marked the line as an attempt.
     ("Attack raider-1 with Dagger", _attack(), 3),
-    ("I won't attack raider-2.\nACTION: attack raider-1 with Dagger", _attack(), 3),
+    ("I won't attack raider-2.\nACTION: attack raider-1 with Dagger", _attack(), 0),
+    # Saying the same thing twice is grammatical, but it is not the canonical form.
     (
         "ACTION: attack raider-1 with Dagger\nACTION: attack raider-1 with Dagger",
         _attack(),
-        3,
+        2,
     ),
     # Parses; the executor decides these name nothing (no repair here or there).
     ("ACTION: attack raider-3 with Dagger", _attack("raider-3"), 0),
@@ -200,7 +204,12 @@ def test_no_action(text):
 
 @pytest.mark.parametrize("text, call, layer", [r for r in ACCEPTED if r[2] == 0])
 def test_canonical_rows_render_back_to_their_own_text(text, call, layer):
-    assert "ACTION: " + render_command(call) == text
+    """Layer 0 means the *command line* is the canonical rendering of what was read.
+
+    Not the whole response: a model may write a sentence around a byte-perfect
+    command, and that fact is :attr:`Reading.prose`, not a layer.
+    """
+    assert "ACTION: " + render_command(call) in text.splitlines()
 
 
 def test_rendering_keeps_full_float_precision():
@@ -378,3 +387,42 @@ def test_the_lenient_bound_still_refuses_what_no_reader_could_resolve(
     reading = read_lenient(text, sole_attack=sole_attack)
     assert reading.call is None
     assert reading == read_response(text)  # refused exactly as primary refuses
+
+
+# -- the parse layer and the prose fact are separate (pre-freeze, 2026-09-25) --------
+# `_layer` used to return 3 for any response with more than one content line, before
+# it ever compared the command with its canonical form. So a byte-perfect ACTION line
+# with a preamble sentence scored the same as an action dug out of untagged prose, and
+# the registered `strict` bound (layer 0) was unreachable for any real model output.
+
+PROSE_WRAPPED = [
+    # (text, expected layer, expected prose)
+    ("ACTION: attack raider-1 with Dagger", 0, False),
+    ("Closing in.\nACTION: attack raider-1 with Dagger", 0, True),
+    ("ACTION: attack raider-1 with Dagger\nThat should hurt.", 0, True),
+    ("Let me think.\nACTION: Attack Raider-1 with dagger.", 1, True),
+    ("Thinking...\nACTION: end my turn", 2, True),
+    # A fence is surface decoration, so it is layer 1 whether or not prose surrounds it.
+    ("```\nACTION: attack raider-1 with Dagger\n```", 1, False),
+    ("Here:\n```\nACTION: attack raider-1 with Dagger\n```", 1, True),
+    # Untagged: layer 3 is *extraction*, which is what it always claimed to mean.
+    ("attack raider-1 with Dagger", 3, False),
+    ("I will close in.\nmove to x=10 z=5", 3, True),
+]
+
+
+@pytest.mark.parametrize("text, layer, prose", PROSE_WRAPPED)
+def test_layer_reads_the_command_and_prose_is_recorded_beside_it(text, layer, prose):
+    reading = read_response(text)
+    assert reading.code is None, reading.reason
+    assert reading.layer == layer
+    assert reading.prose is prose
+
+
+def test_prose_does_not_change_which_action_is_read():
+    """The split is about *recording*, not about accepting anything new."""
+    bare = read_response("ACTION: move to x=0 z=35")
+    wrapped = read_response("They are closing.\nACTION: move to x=0 z=35\nSafer there.")
+    assert bare.call == wrapped.call
+    assert (bare.layer, wrapped.layer) == (0, 0)
+    assert (bare.prose, wrapped.prose) == (False, True)

@@ -282,6 +282,9 @@ class Decision:
     menu_length: Optional[int]
     c1_layer: Optional[int]
     served_provider: Optional[str] = None
+    #: Whether a C1 response said anything besides the command that was read.
+    #: Recorded apart from the layer, which describes the command alone (prereg §7).
+    c1_prose: bool = False
     #: Requests the provider failed and that were retried unchanged (prereg §8).
     #: Cost, never a model attempt — ``request_count`` excludes them.
     provider_retries: int = 0
@@ -448,10 +451,12 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
         telemetry = record.get("telemetry") or {}
         requests = telemetry.get("requests") or []
         layer = None
+        prose = False
         host = None
         if requests:
             reading = requests[-1].get("interpretation") or {}
             layer = reading.get("layer")
+            prose = bool(reading.get("prose", False))
             host = requests[-1].get("served_provider")
         kind, spatial = classify(record["call"], area_spells)
         ok = bool(record["result"].get("ok"))
@@ -485,6 +490,7 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
                 latency_ms=float(telemetry.get("latency_ms") or 0.0),
                 menu_length=telemetry.get("menu_length"),
                 c1_layer=layer,
+                c1_prose=prose,
                 served_provider=host,
                 provider_retries=len(telemetry.get("provider_failures") or []),
                 fresh=not retry,
@@ -1452,7 +1458,15 @@ def _cell_key_of(condition: str) -> int:
 
 
 def _layer_section(decisions: List[Decision]) -> List[str]:
-    """How C1's accepted actions were read: the parse layer each needed."""
+    """How C1's accepted actions were read: the parse layer each needed.
+
+    The layer describes the **command**: 0 canonical, 1 surface-identical (case,
+    markdown, quotes), 2 grammatical but not canonical, 3 read out of an untagged
+    line. Whether the model wrote anything *besides* the command is the separate
+    ``with prose`` column — the two were folded together until 2026-09-25, which made
+    layer 0 unreachable for real output and the registered strict bound uninformative
+    (prereg §7).
+    """
     c1 = [d for d in decisions if d.condition == "C1"]
     if not c1:
         return []
@@ -1460,15 +1474,26 @@ def _layer_section(decisions: List[Decision]) -> List[str]:
     for d in c1:
         label = f"layer {d.c1_layer}" if d.c1_layer is not None else "refused / none"
         by_model[d.model][label] += 1
+        if d.c1_prose:
+            by_model[d.model]["with prose"] += 1
     labels = ["layer 0", "layer 1", "layer 2", "layer 3", "refused / none"]
     return [
         "",
         "## C1 parse layers",
         "",
+        "The layer describes the command that was read: 0 canonical, 1 identical "
+        "after surface normalisation, 2 grammatical but not canonical, 3 read out of "
+        "an untagged line. *With prose* counts accepted actions whose response also "
+        "said something else; it is not a layer, and does not affect one.",
+        "",
         _table(
-            ["model", *labels],
+            ["model", *labels, "with prose"],
             [
-                [model, *[str(counts[label]) for label in labels]]
+                [
+                    model,
+                    *[str(counts[label]) for label in labels],
+                    str(counts["with prose"]),
+                ]
                 for model, counts in sorted(by_model.items())
             ],
         ),
@@ -1546,7 +1571,8 @@ def _bounds_section(bounds: List[_Bounds], problems: List[str]) -> List[str]:
         "",
         "First-attempt validity over fresh decisions, as in H1, re-scored offline "
         "from the recorded text. *Strict* "
-        "accepts only canonical text; *lenient* adds every registered repair, judged "
+        "accepts only a canonical command (layer 0), whether or not the response also "
+        "wrote prose; *lenient* adds every registered repair, judged "
         "by the executor in the state the game was in. Later attempts and tactics "
         "depend on the live parser and are not re-scored.",
         "",
@@ -1682,7 +1708,8 @@ def describe(records: List[Dict[str, Any]], *, refused_only: bool = False) -> st
             reading = first.get("interpretation")
             if reading:
                 if "layer" in reading:
-                    lines.append(f"  read  : layer {reading['layer']}")
+                    prose = " (with prose)" if reading.get("prose") else ""
+                    lines.append(f"  read  : layer {reading['layer']}{prose}")
                 else:
                     lines.append(f"  read  : refused — {reading.get('reason', '')}")
         call = record["call"]

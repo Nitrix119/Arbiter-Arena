@@ -310,7 +310,14 @@ class FreeTextInterface(ActionInterface):
         """
         reading = read_response(record.raw_output)
         if reading.call is not None:
-            record.interpretation = {"layer": reading.layer, "line": reading.line}
+            record.interpretation = {
+                "layer": reading.layer,
+                "line": reading.line,
+                # Kept apart from the layer: whether the model also wrote prose is a
+                # different fact from how much tolerance its command needed, and
+                # folding them together made layer 0 unreachable (prereg §7).
+                "prose": reading.prose,
+            }
             return reading.call
         if reading.code is None:
             return None  # no action at all: the correction path

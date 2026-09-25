@@ -150,6 +150,11 @@ class Reading:
     line: Optional[str]
     code: Optional[str]
     reason: str
+    #: Whether the response said anything besides the command that was read. Kept
+    #: *apart* from the layer: how much tolerance the command needed and whether the
+    #: model also wrote a sentence are different facts, and folding the second into
+    #: the first made layer 0 unreachable for real output. See :func:`_layer`.
+    prose: bool = False
 
 
 _NOTHING = Reading(None, None, None, None, "")
@@ -366,13 +371,23 @@ def _empty_reason() -> str:
 # -- a whole response --------------------------------------------------------------
 
 
-def _layer(response: str, call: ToolCall, extracted: bool) -> int:
-    if extracted:
-        return 3
+def _layer(command_lines: List[str], call: ToolCall, fenced: bool) -> int:
+    """How much tolerance the *command* needed — 0 canonical, 1 surface, 2 grammar.
+
+    Judged on the tagged line(s) alone, not on the whole response. Whether the model
+    also wrote a sentence around them is :attr:`Reading.prose`, recorded separately:
+    this used to short-circuit to layer 3 whenever the response had a second content
+    line, which meant a byte-perfect command with a preamble was indistinguishable
+    from an action dug out of untagged prose — and since a real model almost always
+    writes a preamble, the registered ``strict`` bound (layer 0) could never be met.
+
+    A markdown fence *is* surface decoration, so a fenced response is layer 1 at best,
+    which is what layer 1 has always meant.
+    """
     canonical = "ACTION: " + render_command(call)
-    if response.strip() == canonical:
+    body = "\n".join(command_lines).strip()
+    if body == canonical and not fenced:
         return 0
-    body = "\n".join(ln for ln in response.splitlines() if not _FENCE.match(ln))
     if surface(body).casefold() == surface(canonical).casefold():
         return 1
     return 2
@@ -391,6 +406,7 @@ def read_response(text: Optional[str]) -> Reading:
     if text is None or not text.strip():
         return _NOTHING
 
+    fenced = any(_FENCE.match(ln) for ln in text.splitlines())
     lines = [ln for ln in text.splitlines() if not _FENCE.match(ln)]
     content = [surface(ln) for ln in lines if surface(ln)]
 
@@ -407,10 +423,19 @@ def read_response(text: Optional[str]) -> Reading:
                 MALFORMED_OUTPUT,
                 "The response gives more than one different ACTION; give exactly one.",
             )
-        extracted = len(content) > 1
         call = calls[0]
         assert call is not None
-        return Reading(call, _layer(text, call, extracted), tagged[0], None, "")
+        # The *raw* tagged lines: `content` is already surface-normalised, which would
+        # erase the layer 0/1 distinction the layer exists to record.
+        raw_tagged = [ln for ln in lines if _TAG.match(surface(ln))]
+        return Reading(
+            call,
+            _layer(raw_tagged, call, fenced),
+            tagged[0],
+            None,
+            "",
+            prose=len(content) > len(tagged),
+        )
 
     readable = [r for r in (_read_command(ln) for ln in content) if r.call is not None]
     if not readable:
@@ -424,7 +449,10 @@ def read_response(text: Optional[str]) -> Reading:
         )
     first = readable[0]
     assert first.call is not None
-    return Reading(first.call, 3, first.line, None, "")
+    # Layer 3 is *extraction*: nothing marked the line as an attempt.
+    return Reading(
+        first.call, 3, first.line, None, "", prose=len(content) > len(readable)
+    )
 
 
 # -- the lenient bound (offline re-scoring only) -------------------------------------

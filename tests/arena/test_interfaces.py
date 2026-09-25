@@ -172,7 +172,11 @@ def test_c1_reads_an_action_from_the_models_text():
     assert action == ToolCall(
         "attack", {"action_name": "Dagger", "defender_id": "raider-1"}
     )
-    assert record.interpretation == {"layer": 0, "line": "attack raider-1 with Dagger"}
+    assert record.interpretation == {
+        "layer": 0,
+        "line": "attack raider-1 with Dagger",
+        "prose": False,
+    }
 
 
 def test_c1_refuses_an_unreadable_line_with_a_code():

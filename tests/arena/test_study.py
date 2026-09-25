@@ -673,7 +673,10 @@ def test_show_reads_a_match_decision_by_decision(tmp_path, capsys):
     assert main(["show", str(path)]) == 0
     everything = capsys.readouterr().out
     assert "REFUSED malformed_output" in everything
-    assert "read  : refused" in everything and "read  : layer 3" in everything
+    # The mock writes a preamble line before a canonical command, so the command is
+    # layer 0 and the prose is recorded beside it, not folded into the layer.
+    assert "read  : refused" in everything
+    assert "read  : layer 0 (with prose)" in everything
 
     assert main(["show", str(path), "--refused"]) == 0
     refused = capsys.readouterr().out

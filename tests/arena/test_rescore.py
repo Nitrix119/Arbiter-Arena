@@ -27,10 +27,16 @@ from src.arena.transcript import Transcript
 SCRIPT = [
     # No weapon named: primary refuses; lenient implies the Longbow, in range.
     ("ACTION: attack bruiser", (False, False, True)),
-    # Prose around a valid line: primary accepts at layer 3, so strict does not.
-    ("Loosing an arrow.\nACTION: attack bruiser with Longbow", (True, False, True)),
-    # Canonical: valid under all three.
+    # Prose around a *canonical* line: the layer describes the command, so this is
+    # layer 0 and strict accepts it. Before 2026-09-25 the prose forced layer 3 and
+    # strict refused, which made the strict bound unmeetable for real model output
+    # (prereg §7) — a model almost always writes a sentence.
+    ("Loosing an arrow.\nACTION: attack bruiser with Longbow", (True, True, True)),
+    # Canonical: valid under all three. Ends turn 1.
     ("ACTION: end turn", (True, True, True)),
+    # Turn 2. A synonym form: grammatical but not canonical (layer 2), so strict
+    # refuses. This is what strict is for, and it still discriminates.
+    ("ACTION: end my turn", (True, False, True)),
     # A target that does not exist: no reading can make that executable.
     ("ACTION: attack nobody with Longbow", (False, False, False)),
 ]
