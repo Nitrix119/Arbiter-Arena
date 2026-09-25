@@ -143,6 +143,25 @@ class DecisionTelemetry:
         return [*self.requests, *self.provider_failures]
 
     @property
+    def usage_reported(self) -> bool:
+        """Whether this decision's cost is *knowable* — every billed request billed.
+
+        :func:`_sum_or_none` keeps "not reported" apart from zero, but a consumer that
+        coerces ``None`` to ``0`` reads an unbilled decision as a free one. That is not
+        a rounding error: it silently disables the study's spend cap, which is computed
+        from these sums. So the fact is recorded once, here, and the runner refuses to
+        keep spending against a cap it can no longer enforce (prereg §5).
+
+        A *partial* report is not knowable either — the sum would be an undercount —
+        and a retried request is billed, so an unbilled retry makes the total unknown
+        even when the kept request was billed.
+        """
+        billed = self._billed()
+        return bool(billed) and all(
+            r.input_tokens is not None and r.output_tokens is not None for r in billed
+        )
+
+    @property
     def latency_ms(self) -> float:
         return sum(r.latency_ms for r in self.requests)
 
@@ -162,6 +181,7 @@ class DecisionTelemetry:
             "request_count": self.request_count,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
+            "usage_reported": self.usage_reported,
             "latency_ms": round(self.latency_ms, 3),
             "served_model": self.served_model,
             "menu_length": self.menu_length,

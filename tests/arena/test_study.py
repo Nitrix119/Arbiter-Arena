@@ -11,7 +11,8 @@ from pathlib import Path
 import pytest
 
 from src.arena.agent import Agent, ProviderError
-from src.arena.interfaces import C1, C2, C3
+from src.arena.interfaces import C1, C2, C3, get_interface
+from src.arena.llm_common import decide_one_action
 from src.arena.mock_model import MockModelAgent
 from src.arena.study import (
     EXCLUDED_DIR,
@@ -296,10 +297,29 @@ class _Silent(Agent):
 
 
 class _Healthy(_Silent):
+    """Ends its turn every time, through the real decide loop so telemetry is real."""
+
+    billed = {"input_tokens": 40, "output_tokens": 8}
+
+    def __init__(self, name, team=None):
+        super().__init__(name, team)
+        self.interface = get_interface(C2)
+
+    def decide(self, observation):
+        return decide_one_action(
+            self._request_action, self, observation, self.interface
+        )
+
     def _request_action(self, messages, tools):
         if tools:
-            return ToolCall("end_turn", {}), RequestRecord()
-        return None, RequestRecord(raw_output="ACTION: end turn")
+            return ToolCall("end_turn", {}), RequestRecord(**self.billed)
+        return None, RequestRecord(raw_output="ACTION: end turn", **self.billed)
+
+
+class _Unbilled(_Healthy):
+    """Answers correctly, but its host reports no token usage."""
+
+    billed: dict = {}
 
 
 def _live(agent_cls):
@@ -327,6 +347,49 @@ def test_preflight_catches_a_model_without_tool_calling():
 def test_preflight_passes_a_healthy_model_and_skips_the_mock():
     assert preflight(*_live(_Healthy)) == []
     assert preflight(_grid()) == []
+
+
+def test_preflight_refuses_a_model_whose_host_reports_no_usage():
+    """An unbillable model reads as $0.00, so the spend cap would never fire.
+
+    Caught before the first cell, where it costs two requests instead of a whole
+    grid's worth of unmetered spend.
+    """
+    problems = preflight(*_live(_Unbilled))
+    assert any("no token usage" in p for p in problems)
+
+
+def test_a_run_stops_when_a_kept_cell_reports_no_usage(tmp_path, monkeypatch):
+    """The backstop for a route that stops billing mid-grid (prereg §5).
+
+    The match itself is sound, so it is kept and analysed; what is gone is the
+    ability to enforce the cap, so the run does not go on spending.
+    """
+    monkeypatch.setattr("src.arena.study.git_dirty", lambda: False)
+    grid, factories = _live(_Unbilled)
+    summary = run_grid(grid, tmp_path, factories=factories, echo=lambda _: None)
+
+    assert summary.done == 1
+    assert "no token usage" in (summary.stopped or "")
+    kept = list(tmp_path.rglob("seed*.jsonl"))
+    assert len(kept) == 1  # kept, not excluded: the data is fine, the billing is not
+    assert any(
+        event.get("event") == "stop" and "usage" in str(event.get("reason", ""))
+        for event in (
+            json.loads(line)
+            for line in (tmp_path / RUN_LOG).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    )
+
+
+def test_a_billed_run_does_not_stop(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.arena.study.git_dirty", lambda: False)
+    grid, factories = _live(_Healthy)
+    summary = run_grid(grid, tmp_path, factories=factories, echo=lambda _: None)
+
+    assert summary.stopped is None
+    assert summary.done == 1
 
 
 # -- the CLI ---------------------------------------------------------------------------

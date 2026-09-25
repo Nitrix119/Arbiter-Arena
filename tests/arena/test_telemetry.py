@@ -67,6 +67,40 @@ def test_unreported_usage_is_none_not_zero():
     assert telemetry.output_tokens is None
 
 
+def test_usage_reported_says_whether_the_cost_is_knowable():
+    """The spend cap and the cost metric both read this, so it must be explicit.
+
+    A decision the provider did not bill for reads as $0.00 to every consumer that
+    coerces ``None`` to zero, which silently disables the study's spend cap. The fact
+    is recorded once, here, rather than re-derived by each consumer.
+    """
+    billed = DecisionTelemetry(
+        requests=[RequestRecord(latency_ms=1.0, input_tokens=10, output_tokens=2)]
+    )
+    assert billed.usage_reported is True
+
+    silent = DecisionTelemetry(requests=[RequestRecord(latency_ms=1.0)])
+    assert silent.usage_reported is False
+
+    # Partial counts are not a knowable cost either: the sum is an undercount.
+    partial = DecisionTelemetry(
+        requests=[RequestRecord(latency_ms=1.0, input_tokens=10)]
+    )
+    assert partial.usage_reported is False
+
+    # A retried request is billed too, so an unbilled retry makes the total unknown.
+    retried = DecisionTelemetry(
+        requests=[RequestRecord(latency_ms=1.0, input_tokens=10, output_tokens=2)],
+        provider_failures=[RequestRecord(latency_ms=1.0)],
+    )
+    assert retried.usage_reported is False
+
+
+def test_usage_reported_reaches_the_transcript():
+    telemetry = DecisionTelemetry(requests=[RequestRecord(latency_ms=1.0)])
+    assert telemetry.to_dict()["usage_reported"] is False
+
+
 def test_partial_usage_sums_what_was_reported():
     telemetry = DecisionTelemetry(
         requests=[

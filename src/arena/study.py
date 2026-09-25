@@ -519,7 +519,12 @@ def provider_errors(records: Sequence[Dict[str, Any]]) -> int:
 
 
 def transcript_tokens(records: Sequence[Dict[str, Any]]) -> Tuple[int, int]:
-    """(input, output) tokens a transcript's decisions reported spending."""
+    """(input, output) tokens a transcript's decisions reported spending.
+
+    Coerces an unreported count to zero, which is only safe because
+    :func:`unreported_usage` is checked alongside it: on its own this would read a
+    provider that omits ``usage`` as a free call and let the spend cap never fire.
+    """
     tokens_in = tokens_out = 0
     for r in records:
         telemetry = r.get("telemetry") if r.get("kind") == "action" else None
@@ -527,6 +532,21 @@ def transcript_tokens(records: Sequence[Dict[str, Any]]) -> Tuple[int, int]:
             tokens_in += telemetry.get("input_tokens") or 0
             tokens_out += telemetry.get("output_tokens") or 0
     return tokens_in, tokens_out
+
+
+def unreported_usage(records: Sequence[Dict[str, Any]]) -> int:
+    """Decisions whose provider billed no token usage, so their cost is unknown.
+
+    The companion to :func:`transcript_tokens`: a cell with any of these has a cost
+    the cap cannot see. Transcripts written before ``usage_reported`` existed carry no
+    such key, and are read as billed rather than retro-flagged.
+    """
+    return sum(
+        1
+        for r in records
+        if r.get("kind") == "action"
+        and (r.get("telemetry") or {}).get("usage_reported", True) is False
+    )
 
 
 @dataclass
@@ -691,6 +711,15 @@ def preflight(
                 )
             if not needs_call and not (record.raw_output or "").strip():
                 problems.append(f"{spec.id}: returned no text for the C1 check")
+            if record.input_tokens is None or record.output_tokens is None:
+                # An unbillable model reads as $0.00 to the cost metric, so the spend
+                # cap would never fire and a grid could run to completion unmetered.
+                # Two requests to find that out beats a day of unmetered spend.
+                problems.append(
+                    f"{spec.id}: reported no token usage on the {condition} check — "
+                    "the spend cap cannot be enforced for it, and cost per accepted "
+                    "action would read as zero"
+                )
             echo(
                 f"preflight {spec.id} [{condition}]: served by "
                 f"{record.served_provider or 'an unreported host'}"
@@ -778,6 +807,18 @@ def run_grid(
                 summary.done += 1
                 log("cell_done", cell=cell.label(), spent_usd=spend)
                 echo(f"done      {cell.label()}")
+                unbilled = unreported_usage(result.records)
+                if unbilled and cell.model.provider == PROVIDER_OPENROUTER:
+                    # The match is sound and is kept; what is gone is the ability to
+                    # enforce the cap, so the run does not go on spending blind. The
+                    # preflight normally catches this; a route can stop billing later.
+                    summary.stopped = (
+                        f"{cell.label()}: {unbilled} decision(s) reported no token "
+                        "usage — the spend cap cannot be enforced; check the host, "
+                        "then resume"
+                    )
+                    log("stop", reason=summary.stopped)
+                    echo(summary.stopped)
                 break
             summary.excluded_attempts += 1
             excluded = _next_excluded_path(out, path)
@@ -800,6 +841,8 @@ def run_grid(
             )
             log("stop", reason=summary.stopped)
             echo(summary.stopped)
+            break
+        if summary.stopped:  # a kept cell whose cost is unknowable; see above
             break
 
     log("run_end", done=summary.done, skipped=summary.skipped, spent_usd=spend)

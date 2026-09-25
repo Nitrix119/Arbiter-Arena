@@ -300,6 +300,10 @@ class Decision:
     #: What kind of action was attempted (:func:`intended_kind`), read the same way
     #: in every condition; ``None`` when the attempt named no action.
     intent: Optional[str] = None
+    #: Whether the provider billed this decision, so its cost is knowable.
+    #: ``None`` for a deterministic agent, which called no provider at all —
+    #: ``input_tokens`` is coerced to ``0`` above and cannot tell the two apart.
+    usage_reported: Optional[bool] = None
 
 
 def _attempted_verb(text: str) -> str:
@@ -492,6 +496,9 @@ def decisions_of(path: Path, records: List[Dict[str, Any]]) -> List[Decision]:
                     1 for r in requests if (r.get("extra_tool_calls") or 0) > 0
                 ),
                 intent=intended_kind(record["call"], area_spells),
+                usage_reported=(
+                    bool(telemetry.get("usage_reported", True)) if telemetry else None
+                ),
                 served_model=next(
                     (
                         r["served_model"]
@@ -1353,7 +1360,9 @@ def _integrity_section(decisions: List[Decision]) -> List[str]:
     * a menu cut by a length cap — real options removed (should never happen);
     * a response holding several tool calls — a host ignoring
       ``parallel_tool_calls``; refused when they differ (prereg §6), counted always;
-    * a served model other than the one requested — a router changing the subject.
+    * a served model other than the one requested — a router changing the subject;
+    * a decision the provider never billed — its cost is unknown, and the runner's
+      spend cap reads it as free, so the $ figures for that cell are a floor only.
     """
     cells: Dict[Cell, List[Decision]] = defaultdict(list)
     for d in decisions:
@@ -1372,7 +1381,18 @@ def _integrity_section(decisions: List[Decision]) -> List[str]:
         for key in keys
         if any(d.length_cutoffs or d.menu_truncated for d in cells[key])
     )
+    unbilled = sorted(
+        key for key in keys if any(d.usage_reported is False for d in cells[key])
+    )
     parts = ["", "## Response integrity", ""]
+    if unbilled:
+        parts += [
+            "**Warning: unreported token usage** — the provider billed no tokens for "
+            "some decisions in " + ", ".join(f"{m} / {c}" for m, c in unbilled) + ". "
+            "Their cost is unknown, not zero: the $ figures for those cells are a "
+            "floor, and the runner's spend cap could not be enforced over them.",
+            "",
+        ]
     if substituted:
         parts += [
             "**Warning: served a model other than the one requested** — "
@@ -1394,6 +1414,7 @@ def _integrity_section(decisions: List[Decision]) -> List[str]:
                 "responses cut at token limit",
                 "menus truncated",
                 "responses with several calls",
+                "decisions with unreported usage",
                 "served models",
             ],
             [
@@ -1403,6 +1424,11 @@ def _integrity_section(decisions: List[Decision]) -> List[str]:
                     str(sum(d.length_cutoffs for d in cells[(model, condition)])),
                     str(sum(bool(d.menu_truncated) for d in cells[(model, condition)])),
                     str(sum(d.multi_call_responses for d in cells[(model, condition)])),
+                    str(
+                        sum(
+                            d.usage_reported is False for d in cells[(model, condition)]
+                        )
+                    ),
                     ", ".join(
                         sorted(
                             {
