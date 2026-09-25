@@ -19,13 +19,15 @@ import time
 from types import ModuleType
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from src.arena.agent import Agent, ProviderError
+from src.arena.agent import Agent, ProviderError, RejectedResponse
 from src.arena.credentials import resolve_credential
+from src.arena.error_codes import MALFORMED_OUTPUT
 from src.arena.interfaces import C2_MENU, ActionInterface, get_interface
 from src.arena.llm_common import (
     decide_one_action,
     decode_arguments,
     distinct_call_count,
+    message_text,
 )
 from src.arena.telemetry import RequestRecord
 from src.arena.tools import ToolCall
@@ -45,6 +47,8 @@ DEFAULT_MAX_TOKENS = 4096
 # deterministic — the study says so rather than claiming otherwise.
 DEFAULT_TEMPERATURE = 0.0
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+#: The attempt recorded when the response's tool call carried no readable function.
+UNREADABLE_TOOL_CALL = "(unreadable_tool_call)"
 # Optional OpenRouter attribution headers (harmless; used only for their leaderboards).
 _RANKING_HEADERS = {
     "HTTP-Referer": "https://github.com/Nitrix119/arbiter-arena",
@@ -221,12 +225,20 @@ class OpenRouterAgent(Agent):
         )
 
         message = _first_message(response, self.model, record)
-        record.raw_output = getattr(message, "content", None) or None
+        # Not `content or None`: a host may answer with content parts rather than a
+        # string, and `content` is C1's whole channel — see `message_text`.
+        record.raw_output = message_text(getattr(message, "content", None))
         choice = response.choices[0]
         record.finish_reason = getattr(choice, "finish_reason", None)
 
-        tool_calls = getattr(message, "tool_calls", None) or []
-        record.extra_tool_calls = max(0, len(tool_calls) - 1)
+        returned = getattr(message, "tool_calls", None) or []
+        # An entry whose `function` is missing carries no call we can read. Dropped
+        # here rather than crashing on `tc.function.name`, which is not an
+        # infrastructure error and so would stop the whole grid.
+        tool_calls = [
+            tc for tc in returned if getattr(tc, "function", None) is not None
+        ]
+        record.extra_tool_calls = max(0, len(returned) - 1)
         record.distinct_tool_calls = distinct_call_count(
             (tc.function.name, tc.function.arguments) for tc in tool_calls
         )
@@ -236,4 +248,16 @@ class OpenRouterAgent(Agent):
             record.tool_call = {"name": fn.name, "arguments": arguments}
             args = decode_arguments(fn.name, arguments, record)
             return ToolCall(fn.name, args, call_id=getattr(tc, "id", None)), record
+        if returned:
+            # The model answered and every entry was unreadable. Not `no_tool_call`,
+            # which means "attempted nothing" and grants a free correction that the
+            # other refusal paths do not (the unfairness closed for C3's invented ids
+            # in `4b1198b`): a counted `malformed_output`, like undecodable arguments.
+            raise RejectedResponse(
+                MALFORMED_OUTPUT,
+                f"{self.model}: the response's tool call could not be read — it "
+                "carried no function. Make exactly one named tool call.",
+                ToolCall(UNREADABLE_TOOL_CALL, {}),
+                record=record,
+            )
         return None, record

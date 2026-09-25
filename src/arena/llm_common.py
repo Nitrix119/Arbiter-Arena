@@ -96,6 +96,51 @@ def distinct_call_count(calls: Iterable[Tuple[Any, Any]]) -> int:
     return len({_call_key(name, arguments) for name, arguments in calls})
 
 
+def message_text(content: Any) -> Optional[str]:
+    """The prose a model wrote, whatever envelope its host wrapped it in.
+
+    An OpenAI-style ``message.content`` is documented as a string, but the SDK parses
+    responses leniently and some hosts answer with **content parts** — a list of
+    ``{"type": "text", "text": …}`` — which then reaches the caller as a list. That
+    matters far more than it looks: ``content`` is C1's *entire* channel, so a text
+    condition would raise ``AttributeError`` on ``text.strip()``, which is not an
+    infrastructure error and so stops the whole study grid.
+
+    Reading the text out is the right answer rather than refusing it, for the reason
+    :func:`decode_arguments` reads an empty-string argument as ``{}``: the envelope is
+    a transport convention, not a model choice, and charging C1's ``malformed_output``
+    rate for its host's serialisation would make H1 partly a function of which host
+    OpenRouter routed to — with H1 predicting C1 is worst, that would confirm the
+    hypothesis for the wrong reason.
+
+    Non-text parts (a reasoning trace, an image) are not the answer and are skipped,
+    as the Claude adapter already skips them. Anything with no readable text is
+    ``None``: no action, which is the loop's correction path.
+    """
+    if isinstance(content, str):
+        return content or None
+    if isinstance(content, dict):
+        content = [content]
+    if not isinstance(content, list):
+        return None  # a shape we cannot read is not text
+    texts: List[str] = []
+    for part in content:
+        if isinstance(part, str):
+            texts.append(part)
+            continue
+        kind = (
+            part.get("type") if isinstance(part, dict) else getattr(part, "type", None)
+        )
+        if kind not in (None, "text"):
+            continue
+        text = (
+            part.get("text") if isinstance(part, dict) else getattr(part, "text", None)
+        )
+        if isinstance(text, str) and text:
+            texts.append(text)
+    return "\n".join(texts) or None
+
+
 def decode_arguments(name: str, arguments: Any, record: RequestRecord) -> Dict:
     """A tool call's arguments as a dict, or refuse them as ``malformed_output``.
 

@@ -8,7 +8,7 @@ from src.arena import credentials
 from src.arena import openrouter_agent as ora
 from src.arena.agent import NoToolCallError, ProviderError, RejectedResponse
 from src.arena.error_codes import MALFORMED_OUTPUT, PROVIDER_ERROR
-from src.arena.interfaces import SHARED_PROMPT
+from src.arena.interfaces import C1, C2, SHARED_PROMPT, get_interface
 from src.arena.llm_common import PROVIDER_ATTEMPTS
 from src.arena.openrouter_agent import DEFAULT_MODEL, OpenRouterAgent, _to_openai_tools
 from src.arena.tools import TOOLS
@@ -464,3 +464,119 @@ def test_parallel_tool_calls_are_asked_off_whenever_tools_are_sent():
     client = FakeClient([response(fn_call("end_turn", "{}"))])
     OpenRouterAgent("O", "a", client=client).decide(_obs())
     assert client.calls[0]["parallel_tool_calls"] is False
+
+
+# -- response shapes a real host sends that a well-formed mock never does ------------
+# The A14 slice closed this class for tool *arguments*; these are the two remaining
+# envelope shapes, both of which crashed the adapter and so stopped the whole grid
+# (`play_cell` re-raises anything that is not infrastructure).
+
+
+@pytest.mark.parametrize(
+    "content, expected",
+    [
+        ("ACTION: end turn", "ACTION: end turn"),
+        ([{"type": "text", "text": "ACTION: end turn"}], "ACTION: end turn"),
+        (
+            [
+                {"type": "text", "text": "Closing in."},
+                {"type": "text", "text": "ACTION: end turn"},
+            ],
+            "Closing in.\nACTION: end turn",
+        ),
+        # A part object rather than a dict, as an SDK may model it.
+        (
+            [SimpleNamespace(type="text", text="ACTION: end turn")],
+            "ACTION: end turn",
+        ),
+        # A bare string inside the list, and a single part as a dict.
+        (["ACTION: end turn"], "ACTION: end turn"),
+        ({"type": "text", "text": "ACTION: end turn"}, "ACTION: end turn"),
+        # Reasoning traces and other non-text parts are not the answer.
+        (
+            [
+                {"type": "thinking", "thinking": "hmm"},
+                {"type": "text", "text": "ACTION: end turn"},
+            ],
+            "ACTION: end turn",
+        ),
+        # Nothing readable at all: no action, which is the correction path.
+        ([{"type": "image", "source": {}}], None),
+        ([], None),
+        ("", None),
+        (None, None),
+        (17, None),
+    ],
+)
+def test_content_parts_are_read_as_the_text_the_model_wrote(content, expected):
+    """C1's entire channel is ``message.content``, so its shape must not crash.
+
+    A host that wraps the answer in content parts is a transport convention, not a
+    model choice — the same reason ``decode_arguments`` reads an empty-string argument
+    as ``{}``. Charging C1's ``malformed_output`` rate for its host's serialisation
+    would make H1 partly a function of which host OpenRouter routed to.
+    """
+    message = SimpleNamespace(tool_calls=None, content=content)
+    # Twice: with nothing readable the loop sends its one correction re-prompt.
+    client = FakeClient(
+        [SimpleNamespace(choices=[SimpleNamespace(message=message)], model="m")] * 2
+    )
+    agent = OpenRouterAgent("O", "a", client=client, interface=get_interface(C1))
+
+    try:
+        agent.decide(_obs())
+    except NoToolCallError:
+        pass  # nothing readable; the loop's own business
+    assert agent.last_telemetry().requests[0].raw_output == expected
+
+
+def test_a_content_parts_envelope_parses_into_a_real_c1_action():
+    message = SimpleNamespace(
+        tool_calls=None, content=[{"type": "text", "text": "ACTION: end turn"}]
+    )
+    client = FakeClient(
+        [SimpleNamespace(choices=[SimpleNamespace(message=message)], model="m")]
+    )
+    agent = OpenRouterAgent("O", "a", client=client, interface=get_interface(C1))
+
+    call = agent.decide(_obs())
+
+    assert call.name == "end_turn"
+
+
+def test_a_tool_call_entry_with_no_function_is_refused_not_a_crash():
+    """Unreadable, but the model *did* answer, so it is a counted refusal.
+
+    ``no_tool_call`` would be wrong twice over: it is the bucket for a response that
+    attempted nothing, and it grants a free correction the other refusal paths do not
+    (the unfairness closed for C3's invented ids in `4b1198b`).
+    """
+    message = SimpleNamespace(
+        tool_calls=[SimpleNamespace(id="tc1", function=None)], content=None
+    )
+    client = FakeClient(
+        [SimpleNamespace(choices=[SimpleNamespace(message=message)], model="m")]
+    )
+    agent = OpenRouterAgent("O", "a", client=client, interface=get_interface(C2))
+
+    with pytest.raises(RejectedResponse) as raised:
+        agent.decide(_obs())
+
+    assert raised.value.code == MALFORMED_OUTPUT
+    assert agent.last_telemetry().request_count == 1  # recorded, not lost
+
+
+def test_an_unreadable_entry_alongside_a_good_call_does_not_hide_the_call():
+    message = SimpleNamespace(
+        tool_calls=[
+            SimpleNamespace(id="tc1", function=None),
+            fn_call("end_turn", "{}", call_id="tc2"),
+        ],
+        content=None,
+    )
+    client = FakeClient(
+        [SimpleNamespace(choices=[SimpleNamespace(message=message)], model="m")]
+    )
+    agent = OpenRouterAgent("O", "a", client=client, interface=get_interface(C2))
+
+    assert agent.decide(_obs()).name == "end_turn"
