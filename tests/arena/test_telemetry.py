@@ -6,12 +6,13 @@ two requests, a decision that failed, and a provider that reports no usage at al
 """
 
 import json
+import time
 from types import SimpleNamespace
 
 import pytest
 
 from src.arena.agent import ProviderError, RejectedResponse, ScriptedAgent
-from src.arena.llm_common import PROVIDER_ATTEMPTS
+from src.arena.llm_common import PROVIDER_ATTEMPTS, _failure_record
 from src.arena.openrouter_agent import OpenRouterAgent
 from src.arena.telemetry import (
     REDACTED,
@@ -88,12 +89,28 @@ def test_usage_reported_says_whether_the_cost_is_knowable():
     )
     assert partial.usage_reported is False
 
-    # A retried request is billed too, so an unbilled retry makes the total unknown.
-    retried = DecisionTelemetry(
+    # A failure that came back with partial counts had a response: unknowable.
+    half_billed_retry = DecisionTelemetry(
         requests=[RequestRecord(latency_ms=1.0, input_tokens=10, output_tokens=2)],
-        provider_failures=[RequestRecord(latency_ms=1.0)],
+        provider_failures=[RequestRecord(latency_ms=1.0, output_tokens=3)],
     )
-    assert retried.usage_reported is False
+    assert half_billed_retry.usage_reported is False
+
+
+def test_a_transient_retry_does_not_make_the_cost_unknown():
+    """A 429 or a dropped connection carries no usage because nothing was billed.
+
+    Reading it as "unknown" made the runner stop a live grid after any cell that
+    hit a single rate limit — which on a shared router is most of them.
+    """
+    started = time.perf_counter()
+    rate_limited = _failure_record(RuntimeError("429 rate limited"), started)
+    telemetry = DecisionTelemetry(
+        requests=[RequestRecord(latency_ms=1.0, input_tokens=10, output_tokens=2)],
+        provider_failures=[rate_limited],
+    )
+    assert telemetry.usage_reported is True
+    assert telemetry.input_tokens == 10
 
 
 def test_usage_reported_reaches_the_transcript():

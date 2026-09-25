@@ -354,8 +354,10 @@ rather than unknown. Three consequences, all now enforced:
   not continue spending against a ceiling it cannot see.
 - The report's integrity section **counts** unbilled decisions per model × condition
   and states that those cells' `$` figures are a floor. A partial report counts as
-  unknowable, since the sum would be an undercount; so does an unbilled provider retry
-  beside a billed request, because a retry is billed.
+  unknowable, since the sum would be an undercount. A *provider failure* (a 429, a
+  dropped connection, a 5xx) that reports no usage at all counts as nothing spent — no
+  response came back to bill — so a transient retry does not stop the run; one with
+  partial counts did come with a response, and is unknowable.
 
 `lark` is pinned exactly (1.3.1) rather than to a range, for the reason the version was
 already recorded per match: the C1 parser is the measuring instrument, so a parse change
@@ -555,7 +557,8 @@ pilot frequencies rather than in advance.
     tagged line keeps its command's own layer (0 canonical, 1 surface-identical, 2
     grammatical but not canonical), and whether the response said anything besides the
     command is its own recorded field, reported as a `with prose` column. A markdown
-    fence is surface decoration, so a fenced response is layer 1 at best.
+    fence around the command is surface decoration, so a fenced command is layer 1 at
+    best; a fence elsewhere in the response does not touch the command's layer.
     Neither the accept/reject boundary nor which action is read changes; this is about
     what is recorded. Strict keeps its registered meaning — a canonical command — and
     becomes measurable (0.901 / 1.000 / 0.654 on the demo bundle). **No hypothesis
@@ -826,8 +829,9 @@ report. No data had been collected.
       into a shared body plus a per-condition action section on 2026-09-21, so **every
       hash changed**; they must be recorded from the frozen commit, not from memory
 - [ ] Confirmed per-match call and token counts from the pilot. The dry run estimates
-      the remaining spend from $/request measured over what is already on disk, so run
-      a few cells and dry-run again before committing to the grid.
+      the remaining spend from $/cell measured per model x condition over the cells
+      already on disk (a condition not yet run is listed, unpriced), so run a few cells
+      of every condition and dry-run again before committing to the grid.
 - [ ] Citation verification for every work listed in §1
 
 **Settled since this list was written:** the AoE scenario is built (§4.1); combatant ids

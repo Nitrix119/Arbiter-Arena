@@ -896,9 +896,10 @@ bound and the audit, never the layer.
 
 **Two loose ends closed.** `lark` is pinned exactly (1.3.1) — it is the measuring
 instrument, and A17 had left this open. `--dry-run` now prints the spend cap and, per
-live model, an estimate from $/request **measured** over what is already on disk; a model
-with nothing on disk is reported as "not yet measured" rather than multiplied by an
-invented tokens-per-call.
+live model, an estimate from $/cell **measured** per condition over what is already on
+disk; a condition with nothing on disk is reported as "not yet measured" rather than
+priced from an invented figure, and a bundle with unbilled decisions reports its cost as
+unknown.
 
 **Three decisions the user made**, each recorded where it is measured: read content parts
 rather than refuse them; refuse an unbillable model in preflight *and* stop a run that

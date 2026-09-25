@@ -794,8 +794,8 @@ def test_a_dry_run_reports_the_spend_cap_and_says_when_it_cannot_estimate():
 
 
 def test_a_dry_run_estimates_from_what_the_bundle_already_cost(tmp_path, monkeypatch):
-    """On a resume the estimate is measured, not guessed: $/request from disk."""
-    from src.arena.study import CALLS_PER_MATCH_ESTIMATE, _dry_run
+    """On a resume the estimate is measured, not guessed: $/cell from disk."""
+    from src.arena.study import _dry_run
 
     monkeypatch.setattr("src.arena.study.git_dirty", lambda: False)
     model = {
@@ -813,8 +813,46 @@ def test_a_dry_run_estimates_from_what_the_bundle_already_cost(tmp_path, monkeyp
     wider = _grid(seeds=[1, 2], models=[model], spend_cap_usd=1e9)
     text = _dry_run(wider, tmp_path)
 
-    # _Healthy bills 40 + 8 tokens per request, so a request cost $48 and the one
-    # remaining cell is estimated at that rate over ~35 requests.
+    # The one remaining cell is estimated at what the one completed cell cost —
+    # requests per match measured along with the price, not assumed.
+    per_cell = spent_usd(tmp_path, ran)
+    assert per_cell > 0
     assert "1 already done, 1 to run" in text
-    assert "$48.0000/request measured" in text
-    assert f"${48.0 * CALLS_PER_MATCH_ESTIMATE:,.2f}" in text
+    assert f"{C2} ${per_cell:,.4f}" in text
+    assert f"~${per_cell:,.2f}" in text
+
+
+def test_a_dry_run_does_not_price_a_condition_it_has_not_measured(
+    tmp_path, monkeypatch
+):
+    """A rate measured on C2 says little about C1: C1's cells are listed, unpriced."""
+    from src.arena.study import _dry_run
+
+    monkeypatch.setattr("src.arena.study.git_dirty", lambda: False)
+    model = {
+        "id": "org/model",
+        "provider": "openrouter",
+        "usd_per_m_input": 1.0,
+        "usd_per_m_output": 1.0,
+    }
+    ran = _grid(models=[model], spend_cap_usd=1e9)
+    factories = {**MODEL_FACTORIES, "openrouter": lambda *a: _Healthy("m", "a")}
+    run_grid(ran, tmp_path, factories=factories, echo=lambda _: None)
+
+    both = _grid(conditions=[C2, "C1"], models=[model], spend_cap_usd=1e9)
+    text = _dry_run(both, tmp_path)
+
+    assert "not yet measured, so not included: 1 C1" in text
+
+
+def test_a_dry_run_will_not_price_an_unbilled_bundle(tmp_path, monkeypatch):
+    """Unbilled decisions add no tokens, so a rate over them would read low, not
+    unknown — the free-call mistake the spend cap was fixed for."""
+    from src.arena.study import _dry_run
+
+    monkeypatch.setattr("src.arena.study.git_dirty", lambda: False)
+    ran, factories = _live(_Unbilled)
+    run_grid(ran, tmp_path, factories=factories, echo=lambda _: None)
+    text = _dry_run(ran, tmp_path)
+
+    assert "cost unknown" in text and "reported no token usage" in text

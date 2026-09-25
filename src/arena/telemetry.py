@@ -152,13 +152,18 @@ class DecisionTelemetry:
         from these sums. So the fact is recorded once, here, and the runner refuses to
         keep spending against a cap it can no longer enforce (prereg §5).
 
-        A *partial* report is not knowable either — the sum would be an undercount —
-        and a retried request is billed, so an unbilled retry makes the total unknown
-        even when the kept request was billed.
+        A *partial* report is not knowable either — the sum would be an undercount.
+
+        A provider *failure* is judged differently from a request. A failure that
+        reports no usage at all is the ordinary shape of a 429, a dropped connection or
+        a 5xx: no response came back to bill, so it counts as nothing spent. Treating
+        it as unknown made one transient retry stop a live grid. A failure with
+        *partial* counts did come with a response, so it is still unknowable.
         """
-        billed = self._billed()
-        return bool(billed) and all(
-            r.input_tokens is not None and r.output_tokens is not None for r in billed
+        if not self._billed():
+            return False
+        return all(_fully_reported(r) for r in self.requests) and not any(
+            _partly_reported(r) for r in self.provider_failures
         )
 
     @property
@@ -187,6 +192,14 @@ class DecisionTelemetry:
             "menu_length": self.menu_length,
             "menu_truncated": self.menu_truncated,
         }
+
+
+def _fully_reported(record: RequestRecord) -> bool:
+    return record.input_tokens is not None and record.output_tokens is not None
+
+
+def _partly_reported(record: RequestRecord) -> bool:
+    return (record.input_tokens is None) != (record.output_tokens is None)
 
 
 def _sum_or_none(values: Any) -> Optional[int]:

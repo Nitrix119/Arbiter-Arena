@@ -371,7 +371,7 @@ def _empty_reason() -> str:
 # -- a whole response --------------------------------------------------------------
 
 
-def _layer(command_lines: List[str], call: ToolCall, fenced: bool) -> int:
+def _layer(command_lines: List[Tuple[str, bool]], call: ToolCall) -> int:
     """How much tolerance the *command* needed — 0 canonical, 1 surface, 2 grammar.
 
     Judged on the tagged line(s) alone, not on the whole response. Whether the model
@@ -381,16 +381,34 @@ def _layer(command_lines: List[str], call: ToolCall, fenced: bool) -> int:
     from an action dug out of untagged prose — and since a real model almost always
     writes a preamble, the registered ``strict`` bound (layer 0) could never be met.
 
-    A markdown fence *is* surface decoration, so a fenced response is layer 1 at best,
-    which is what layer 1 has always meant.
+    A markdown fence around the command is surface decoration, so it is layer 1 at
+    best; a fence elsewhere in the response is not the command's and does not touch
+    its layer.
     """
     canonical = "ACTION: " + render_command(call)
-    body = "\n".join(command_lines).strip()
+    body = "\n".join(line for line, _ in command_lines).strip()
+    fenced = any(inside for _, inside in command_lines)
     if body == canonical and not fenced:
         return 0
     if surface(body).casefold() == surface(canonical).casefold():
         return 1
     return 2
+
+
+def _tagged_lines(text: str) -> List[Tuple[str, bool]]:
+    """Each raw ``ACTION:`` line, and whether a markdown fence encloses it.
+
+    Raw, because the surface-normalised lines would erase the 0/1 distinction the
+    layer exists to record. An unclosed fence encloses everything after it.
+    """
+    found: List[Tuple[str, bool]] = []
+    inside = False
+    for ln in text.splitlines():
+        if _FENCE.match(ln):
+            inside = not inside
+        elif _TAG.match(surface(ln)):
+            found.append((ln, inside))
+    return found
 
 
 def read_response(text: Optional[str]) -> Reading:
@@ -406,7 +424,6 @@ def read_response(text: Optional[str]) -> Reading:
     if text is None or not text.strip():
         return _NOTHING
 
-    fenced = any(_FENCE.match(ln) for ln in text.splitlines())
     lines = [ln for ln in text.splitlines() if not _FENCE.match(ln)]
     content = [surface(ln) for ln in lines if surface(ln)]
 
@@ -425,12 +442,9 @@ def read_response(text: Optional[str]) -> Reading:
             )
         call = calls[0]
         assert call is not None
-        # The *raw* tagged lines: `content` is already surface-normalised, which would
-        # erase the layer 0/1 distinction the layer exists to record.
-        raw_tagged = [ln for ln in lines if _TAG.match(surface(ln))]
         return Reading(
             call,
-            _layer(raw_tagged, call, fenced),
+            _layer(_tagged_lines(text), call),
             tagged[0],
             None,
             "",

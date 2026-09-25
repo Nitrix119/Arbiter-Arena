@@ -31,7 +31,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.arena.agent import Agent
 from src.arena.interfaces import C2_MENU, ActionInterface, get_interface
-from src.arena.llm_common import decide_one_action, distinct_call_count
+from src.arena.llm_common import (
+    decide_one_action,
+    distinct_call_count,
+    message_text,
+)
 from src.arena.telemetry import RequestRecord
 from src.arena.tools import ToolCall
 
@@ -118,15 +122,11 @@ class LLMAgent(Agent):
         )
 
         call: Optional[ToolCall] = None
-        texts: List[str] = []
         uses: List[Tuple[str, Any]] = []
         for block in response.content:
-            block_type = getattr(block, "type", None)
-            if block_type == "text":
-                texts.append(getattr(block, "text", "") or "")
-            elif block_type != "tool_use":
+            if getattr(block, "type", None) != "tool_use":
                 continue
-            elif call is not None:
+            if call is not None:
                 uses.append((block.name, dict(block.input)))
                 record.extra_tool_calls += 1  # counted (A5); refused if different
             else:
@@ -138,5 +138,6 @@ class LLMAgent(Agent):
         record.distinct_tool_calls = distinct_call_count(uses)
         # Thinking blocks are deliberately not recorded: they are not the model's
         # answer, they are large, and some providers forbid storing them.
-        record.raw_output = "\n".join(t for t in texts if t) or None
+        # `message_text` skips them, as it does for the OpenRouter adapter.
+        record.raw_output = message_text(response.content)
         return call, record

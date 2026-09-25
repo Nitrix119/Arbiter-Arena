@@ -885,39 +885,77 @@ def verify_results(bundle: Path, echo: Callable[[str], None] = print) -> bool:
 # -- CLI --------------------------------------------------------------------------
 
 
-def cost_per_request(out: Path, grid: Grid) -> Dict[str, float]:
-    """$ per model request, **measured** from the bundle on disk, per model.
+@dataclass
+class MeasuredCost:
+    """What the completed cells of one model x condition cost, read from disk."""
 
-    A model with nothing on disk yet is absent rather than guessed at: multiplying an
-    invented tokens-per-call would print a figure with no basis, and the dry run is the
-    last checkpoint before real money. On a resume — when the question "what will the
-    rest cost?" actually bites — this is grounded in what the same grid already spent.
+    cells: int = 0
+    usd: float = 0.0
+    #: Decisions whose provider reported no usage — their cost, and so the rate, is
+    #: unknown rather than low.
+    unbilled: int = 0
+
+    @property
+    def per_cell(self) -> Optional[float]:
+        if not self.cells or self.unbilled:
+            return None
+        return self.usd / self.cells
+
+
+def measured_costs(out: Path, grid: Grid) -> Dict[Tuple[str, str], MeasuredCost]:
+    """$ per completed cell, **measured** from the bundle, per model x condition.
+
+    Per cell, not per request times a guessed calls-per-match: how many requests a
+    match takes is exactly what varies between conditions (C1's corrections, C2's
+    menus), so it is measured along with the price. And per condition, because a rate
+    measured on one condition says little about another. A pair with nothing on disk
+    is absent rather than guessed at: the dry run is the last checkpoint before real
+    money. Unbilled decisions are counted rather than read as free — the invariant
+    :func:`transcript_tokens` states.
     """
-    tokens: Dict[str, List[int]] = {}
-    for path in out.rglob("*.jsonl") if out.exists() else []:
-        if path.name == RUN_LOG:
+    measured: Dict[Tuple[str, str], MeasuredCost] = {}
+    for cell in cells(grid):
+        path = cell.path(out)
+        if not path.exists():
             continue
         records = _read(path)
-        start = next((r for r in records if r.get("kind") == "match_start"), {})
-        model = str(start.get("model", ""))
-        if grid.model(model) is None:
-            continue
-        requests = sum(
-            (r.get("telemetry") or {}).get("request_count", 0)
-            for r in records
-            if r.get("kind") == "action"
-        )
-        tokens_in, tokens_out = transcript_tokens(records)
-        totals = tokens.setdefault(model, [0, 0, 0])
-        totals[0] += tokens_in
-        totals[1] += tokens_out
-        totals[2] += requests
-    measured: Dict[str, float] = {}
-    for model, (tokens_in, tokens_out, requests) in tokens.items():
-        spec = grid.model(model)
-        if spec is not None and requests:
-            measured[model] = spec.cost_usd(tokens_in, tokens_out) / requests
+        entry = measured.setdefault((cell.model.id, cell.condition), MeasuredCost())
+        entry.cells += 1
+        entry.usd += cell.model.cost_usd(*transcript_tokens(records))
+        entry.unbilled += unreported_usage(records)
     return measured
+
+
+def _estimate_line(
+    spec: ModelSpec,
+    todo: Dict[str, int],
+    measured: Dict[Tuple[str, str], MeasuredCost],
+) -> str:
+    """One model's remaining cost, from what its completed cells cost on disk."""
+    total = sum(todo.values())
+    head = f"  {spec.id}: {total} cells to run"
+    costs = {c: measured.get((spec.id, c), MeasuredCost()) for c in todo}
+    unbilled = sum(m.unbilled for m in costs.values())
+    if unbilled:
+        return (
+            f"{head}, cost unknown — {unbilled} decision(s) on disk reported no token "
+            "usage, so no rate can be measured; check the host."
+        )
+    rates = {c: m.per_cell for c, m in costs.items() if m.per_cell is not None}
+    if not rates:
+        return (
+            f"{head}, cost not yet measured — run a few cells, then dry-run again "
+            "for an estimate."
+        )
+    estimate = sum(rates[c] * n for c, n in todo.items() if c in rates)
+    measured_rates = ", ".join(f"{c} ${r:,.4f}" for c, r in sorted(rates.items()))
+    line = f"{head}, ~${estimate:,.2f} (per cell measured on disk: {measured_rates})"
+    unmeasured = {c: n for c, n in todo.items() if c not in rates and n}
+    if unmeasured:
+        line += "; not yet measured, so not included: " + ", ".join(
+            f"{n} {c}" for c, n in sorted(unmeasured.items())
+        )
+    return line + "."
 
 
 def _dry_run(grid: Grid, out: Path) -> str:
@@ -933,7 +971,7 @@ def _dry_run(grid: Grid, out: Path) -> str:
     ]
     live = [spec for spec in grid.models if spec.provider == PROVIDER_OPENROUTER]
     if live:
-        measured = cost_per_request(out, grid)
+        measured = measured_costs(out, grid)
         cap = (
             f"spend cap ${grid.spend_cap_usd:,.2f}"
             if grid.spend_cap_usd
@@ -941,23 +979,11 @@ def _dry_run(grid: Grid, out: Path) -> str:
         )
         lines.append(f"Cost: {cap} (the hard ceiling; a run stops when it is reached).")
         for spec in live:
-            todo = sum(
-                1
-                for c in all_cells
-                if c.model.id == spec.id and not c.path(out).exists()
-            )
-            rate = measured.get(spec.id)
-            if rate is None:
-                lines.append(
-                    f"  {spec.id}: {todo} cells to run, cost not yet measured — "
-                    "run a few cells, then dry-run again for an estimate."
-                )
-            else:
-                estimate = rate * todo * CALLS_PER_MATCH_ESTIMATE
-                lines.append(
-                    f"  {spec.id}: {todo} cells to run, ~${estimate:,.2f} "
-                    f"(${rate:,.4f}/request measured over what is on disk)."
-                )
+            todo: Dict[str, int] = {c: 0 for c in grid.conditions}
+            for c in all_cells:
+                if c.model.id == spec.id and not c.path(out).exists():
+                    todo[c.condition] += 1
+            lines.append(_estimate_line(spec, todo, measured))
     return "\n".join(lines)
 
 

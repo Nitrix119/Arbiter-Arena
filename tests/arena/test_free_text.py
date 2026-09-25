@@ -405,6 +405,8 @@ PROSE_WRAPPED = [
     # A fence is surface decoration, so it is layer 1 whether or not prose surrounds it.
     ("```\nACTION: attack raider-1 with Dagger\n```", 1, False),
     ("Here:\n```\nACTION: attack raider-1 with Dagger\n```", 1, True),
+    # ...but only a fence around the command: one elsewhere is not the command's.
+    ("```\nplan: flank\n```\nACTION: attack raider-1 with Dagger", 0, True),
     # Untagged: layer 3 is *extraction*, which is what it always claimed to mean.
     ("attack raider-1 with Dagger", 3, False),
     ("I will close in.\nmove to x=10 z=5", 3, True),
