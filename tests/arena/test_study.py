@@ -657,10 +657,13 @@ def test_a_grid_with_a_todo_left_in_it_cannot_run(tmp_path):
         load_grid(grid_file)
 
 
-def test_the_committed_pilot_grid_pins_what_prereg_5_requires():
+@pytest.mark.parametrize(
+    "grid_file", ["pilot.toml", "pilot_gemini.toml", "pilot_sonnet.toml"]
+)
+def test_each_committed_live_pilot_pins_what_prereg_5_requires(grid_file):
     from src.arena.study import load_grid
 
-    grid = load_grid(Path("examples/study/pilot.toml"))
+    grid = load_grid(Path("examples/study") / grid_file)
     (live,) = [m for m in grid.models if m.provider == "openrouter"]
     assert len(live.hosts) == 1  # one host, fallbacks off: no mixed-host cells
     assert live.reasoning_config() is not None  # pinned, not left to host defaults
