@@ -641,11 +641,29 @@ def test_the_committed_demo_grid_runs_offline(tmp_path, capsys):
     assert "cells" in capsys.readouterr().out
 
 
-def test_the_pilot_template_cannot_run_until_filled_in():
+def test_a_grid_with_a_todo_left_in_it_cannot_run(tmp_path):
     from src.arena.study import load_grid
 
+    grid_file = tmp_path / "grid.toml"
+    grid_file.write_text(
+        '[study]\nseeds = [1]\nscenarios = ["kiting"]\nconditions = ["C1"]\n'
+        "spend_cap_usd = 1.0\n"
+        '[[models]]\nid = "TODO: the model id"\nprovider = "openrouter"\n'
+        "usd_per_m_input = 1.0\nusd_per_m_output = 1.0\n",
+        encoding="utf-8",
+    )
     with pytest.raises(GridError, match="unfilled template"):
-        load_grid(Path("examples/study/pilot.toml"))
+        load_grid(grid_file)
+
+
+def test_the_committed_pilot_grid_pins_what_prereg_5_requires():
+    from src.arena.study import load_grid
+
+    grid = load_grid(Path("examples/study/pilot.toml"))
+    (live,) = [m for m in grid.models if m.provider == "openrouter"]
+    assert len(live.hosts) == 1  # one host, fallbacks off: no mixed-host cells
+    assert live.reasoning_config() is not None  # pinned, not left to host defaults
+    assert grid.spend_cap_usd > 0
 
 
 def test_a_live_model_priced_at_zero_is_refused():
