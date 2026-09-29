@@ -21,17 +21,23 @@ max_attempts = 3
 backoff_seconds = 30
 
 [[models]]
-id = "TODO: the OpenRouter model id, pinned exactly"
+# The paid endpoint, not ":free": the harness refuses a $0 price (the cap could
+# never bind), the free tier's 1,000 requests/day is below the pilot's ~1,100
+# calls, and its only host is a 4-bit quant unlike the final run's (prereg §5).
+id = "nvidia/nemotron-3.5-lightning"
 provider = "openrouter"
 temperature = 0.0
-usd_per_m_input = 0.0          # TODO: set from the model's OpenRouter page
-usd_per_m_output = 0.0         # TODO: set from the model's OpenRouter page
-hosts = ["TODO: the upstream host to pin (prereg §5)"]
+usd_per_m_input = 0.07         # CoreWeave's listed price, checked 2026-09-30
+usd_per_m_output = 0.20
+# CoreWeave at full precision (bf16): tools, tool choice and seed, and the best
+# uptime of the hosts (100% over a day; DeepInfra is cheaper but ~98.9%). It is
+# the only host allowed; fallbacks are off. It stays pinned for the final run.
+hosts = ["coreweave/bf16"]
 max_tokens = 4096              # recorded; a response cut at this limit is flagged
-# For a thinking model, pin its reasoning budget rather than leave it to host
-# defaults, which can differ (recorded in every manifest). Delete for a model
-# without reasoning:
-reasoning = { effort = "TODO: low, medium or high; or use enabled = false" }
+# Nemotron is a thinking model, so pin reasoning rather than leave it to host
+# defaults (recorded in every manifest). Off: how this "Lightning" model is
+# mostly used, and reasoning tokens would count against max_tokens.
+reasoning = { enabled = false }
 
 [[models]]
 id = "baseline-scripted"
