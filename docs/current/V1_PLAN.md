@@ -948,3 +948,19 @@ turn. Pilot 1 had the same pattern, most heavily in C2.
 It is now refused with a new code, `no_effect` (ledger A31, prereg §6 and §10). That
 counts against the failure budget. The web client no longer sends a move when a token
 is clicked without being dragged.
+
+**Second pilot (2026-09-30), on the fixed engine: clean.** `results/pilot-2`, commit
+`2d397af`.
+- 56/56 matches replay, with no exclusions and no provider retries. One host served
+  every request, and every response reported its usage.
+- A scan of every model cell found no action-cap endings, no accepted no-op moves, no
+  adjacency refusals and no untyped engine errors.
+- **$0.19** in all, about $0.0058 per cell. That puts the final run at about $0.93 per
+  model at this rate, at list price; the cache discount makes the real bill about 20%
+  lower.
+- C1's parser read every response. The strict bound is 0.304 and the primary and
+  lenient bounds are both 0.325.
+- The §4.4 choices are settled from it: the opponent stays **Scripted** (best pooled
+  win rate 3/8), and **`invalid_target_relation` does not split** (0 occurrences).
+
+Next: the freeze.

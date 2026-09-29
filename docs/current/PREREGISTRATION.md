@@ -872,8 +872,13 @@ baseline agents never make such a move, so the baselines are unchanged. Ledger A
       strict/lenient re-scoring design and a parser audit rule. **Decided 2026-09-24:**
       C1 runs; all recommendations accepted. **Built 2026-09-24** (C1 slice 2); this
       item closes when the parser is frozen with the rest at `study-freeze`.
-- [ ] Opponent: Scripted vs Heuristic, decided in the pilot by the §4.4 rule
-- [ ] Whether `invalid_target_relation` splits, from pilot frequencies (§6)
+- [x] Opponent: Scripted vs Heuristic, decided in the pilot by the §4.4 rule.
+      **Scripted** (2026-09-30, second pilot `results/pilot-2`, on the fixed engine). The
+      model's best pooled win rate in any scenario was 3/8 (aoe_placement), far below
+      the 0.95 in two scenarios that would trigger a switch. Read pooled over conditions
+      only, as the rule requires.
+- [x] Whether `invalid_target_relation` splits, from pilot frequencies (§6). **No
+      split:** the code occurred zero times in either pilot, pooled over all conditions.
 
 **Routine — values to fill in:**
 
