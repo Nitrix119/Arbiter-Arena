@@ -48,7 +48,11 @@ from src.arena.interfaces import C1, C2, REGISTRY, ActionInterface, get_interfac
 from src.arena.manifest import Manifest, git_dirty, interface_fingerprint
 from src.arena.match import DEFAULT_ROUND_CAP, run_match
 from src.arena.mock_model import STUMBLE_STYLES
-from src.arena.openrouter_agent import DEFAULT_MAX_TOKENS
+from src.arena.openrouter_agent import (
+    DEFAULT_MAX_TOKENS,
+    PROVIDER_DEFAULT_TEMPERATURE,
+    Temperature,
+)
 from src.arena.scenarios import SCENARIOS
 from src.arena.transcript import Transcript
 from src.combat.combat_system import CombatSystem
@@ -95,7 +99,8 @@ class ModelSpec:
 
     id: str
     provider: str
-    temperature: float = 0.0
+    #: A number, or ``"default"`` to leave it to the provider (not sent, recorded).
+    temperature: Temperature = 0.0
     usd_per_m_input: float = 0.0
     usd_per_m_output: float = 0.0
     #: Mock only: decision indices at which the mock answers malformed, so an offline
@@ -162,6 +167,19 @@ def _number(table: Dict[str, Any], key: str, default: float, what: str) -> float
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
         raise GridError(f"{what}.{key} must be a non-negative number; got {value!r}")
     return float(value)
+
+
+def _temperature(table: Dict[str, Any], what: str) -> Temperature:
+    """A model's temperature: a non-negative number, or the provider's default."""
+    if table.get("temperature") == PROVIDER_DEFAULT_TEMPERATURE:
+        return PROVIDER_DEFAULT_TEMPERATURE
+    try:
+        return _number(table, "temperature", 0.0, what)
+    except GridError:
+        raise GridError(
+            f"{what}.temperature must be a non-negative number or "
+            f"{PROVIDER_DEFAULT_TEMPERATURE!r}; got {table.get('temperature')!r}"
+        ) from None
 
 
 #: A value still containing this is an unfilled template, never a runnable grid.
@@ -316,7 +334,7 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
             ModelSpec(
                 id=model_id,
                 provider=provider,
-                temperature=_number(entry, "temperature", 0.0, what),
+                temperature=_temperature(entry, what),
                 usd_per_m_input=_number(entry, "usd_per_m_input", 0.0, what),
                 usd_per_m_output=_number(entry, "usd_per_m_output", 0.0, what),
                 stumble_on=tuple(stumble_on),

@@ -29,7 +29,7 @@ import subprocess
 from importlib import metadata
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from src.models.action_resources import FEET_DP
 
@@ -151,7 +151,8 @@ class Manifest:
     seed: Optional[int] = None
     condition: Optional[str] = None
     model: Optional[str] = None
-    temperature: Optional[float] = None
+    #: A number, or ``"default"`` when the provider's own temperature was used.
+    temperature: Optional[Union[float, str]] = None
     prompt_hash: Optional[str] = None
     #: The fixed opponent the model faced (``scripted`` / ``heuristic``).
     opponent: Optional[str] = None

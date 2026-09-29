@@ -17,7 +17,7 @@ exactly how a flaw surfaces.
 
 import time
 from types import ModuleType
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from src.arena.agent import Agent, ProviderError, RejectedResponse
 from src.arena.credentials import resolve_credential
@@ -46,6 +46,12 @@ DEFAULT_MAX_TOKENS = 4096
 # V1_PLAN §3.2 holds sampling at the provider minimum and records it. Still not
 # deterministic — the study says so rather than claiming otherwise.
 DEFAULT_TEMPERATURE = 0.0
+#: Leave the temperature to the provider: the parameter is not sent at all. Some models
+#: refuse any value but their own (Sonnet 5.5 answers 400), and Google advises against
+#: lowering Gemini 3's. Recorded as this literal in every manifest, never as absent.
+PROVIDER_DEFAULT_TEMPERATURE = "default"
+#: A temperature setting: a number, or :data:`PROVIDER_DEFAULT_TEMPERATURE`.
+Temperature = Union[float, str]
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 #: The attempt recorded when the response's tool call carried no readable function.
 UNREADABLE_TOOL_CALL = "(unreadable_tool_call)"
@@ -133,7 +139,7 @@ class OpenRouterAgent(Agent):
         team: Optional[str] = None,
         *,
         model: str = DEFAULT_MODEL,
-        temperature: float = DEFAULT_TEMPERATURE,
+        temperature: Temperature = DEFAULT_TEMPERATURE,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         interface: Optional[ActionInterface] = None,
         client: Any = None,
@@ -204,11 +210,12 @@ class OpenRouterAgent(Agent):
             tool_fields["extra_body"] = extra_body
         if self.seed is not None:
             tool_fields["seed"] = self.seed
+        if self.temperature != PROVIDER_DEFAULT_TEMPERATURE:
+            tool_fields["temperature"] = self.temperature
         started = time.perf_counter()
         response = self._client.chat.completions.create(
             model=self.model,
             messages=oai_messages,
-            temperature=self.temperature,
             max_tokens=self.max_tokens,
             extra_headers=_RANKING_HEADERS,
             **tool_fields,

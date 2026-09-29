@@ -13,7 +13,7 @@ import pytest
 
 from src.arena.agent import ProviderError, RejectedResponse, ScriptedAgent
 from src.arena.llm_common import PROVIDER_ATTEMPTS, _failure_record
-from src.arena.openrouter_agent import OpenRouterAgent
+from src.arena.openrouter_agent import PROVIDER_DEFAULT_TEMPERATURE, OpenRouterAgent
 from src.arena.telemetry import (
     REDACTED,
     DecisionTelemetry,
@@ -231,6 +231,14 @@ def test_temperature_is_sent_and_defaults_to_zero():
     client = FakeClient([_response(fn_call("end_turn", "{}"))])
     OpenRouterAgent("O", "a", client=client).decide(_obs())
     assert client.calls[0]["temperature"] == 0.0
+
+
+def test_a_provider_default_temperature_is_not_sent():
+    client = FakeClient([_response(fn_call("end_turn", "{}"))])
+    OpenRouterAgent(
+        "O", "a", client=client, temperature=PROVIDER_DEFAULT_TEMPERATURE
+    ).decide(_obs())
+    assert "temperature" not in client.calls[0]
 
 
 # -- reaching the transcript -------------------------------------------------

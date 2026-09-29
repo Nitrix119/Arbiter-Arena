@@ -14,6 +14,7 @@ from src.arena.agent import Agent, ProviderError
 from src.arena.interfaces import C1, C2, C3, get_interface
 from src.arena.llm_common import decide_one_action
 from src.arena.mock_model import MockModelAgent
+from src.arena.openrouter_agent import PROVIDER_DEFAULT_TEMPERATURE
 from src.arena.study import (
     EXCLUDED_DIR,
     GRID_COPY,
@@ -762,6 +763,28 @@ def test_max_tokens_and_reasoning_are_validated_grid_fields():
         _grid(
             models=[{"id": "mock", "provider": "mock", "reasoning": {"effort": "low"}}]
         )
+
+
+def test_temperature_may_be_left_to_the_provider_default(tmp_path):
+    """Some models refuse any temperature but their own (Sonnet 5.5 answers 400).
+
+    `temperature = "default"` omits the parameter, and the manifest records that the
+    provider's default was used, rather than dropping the field as unknown.
+    """
+    grid = _grid(models=[_live_model(temperature="default")], spend_cap_usd=1.0)
+    assert grid.models[0].temperature == PROVIDER_DEFAULT_TEMPERATURE
+
+    with pytest.raises(GridError, match="temperature"):
+        _grid(models=[_live_model(temperature="hot")], spend_cap_usd=1.0)
+
+    run_grid(
+        _grid(models=[{"id": "mock", "provider": "mock", "temperature": "default"}]),
+        tmp_path,
+        echo=lambda _: None,
+    )
+    (path,) = tmp_path.rglob("seed1.jsonl")
+    start = json.loads(path.read_text().splitlines()[0])
+    assert start["temperature"] == "default"
 
 
 def test_the_manifest_records_the_settings_that_ran(tmp_path):
