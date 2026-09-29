@@ -464,6 +464,35 @@ names where it should be addressed. Append; strike through and date an item when
   - Also closed: **A17's open `lark` pin** (exactly 1.3.1; the parser is the measuring
     instrument), and `--dry-run` now reports the spend cap plus a per-model estimate
     measured from what is on disk rather than printing no cost at all.
+- **A29. ~~Adjacent creatures were refused as overlapping.~~ Fixed 2026-09-30** (found
+  by the Phase 2 pilot).
+  - `BoundingBox.overlaps` compared closed intervals (`<=`/`>=`), so two boxes sharing
+    only a face, edge or corner counted as overlapping. Its docstring said so, and
+    contradicted itself: "share any volume (touching counts)". A shared face has no
+    volume.
+  - It is the engine's only occupancy test (`is_destination_clear` and
+    `_check_movement_overlap`; area targeting has its own tests in `aoe.py`). So a
+    Medium creature could not stand 5 ft centre-to-centre from another, the ordinary
+    adjacent position. SRD 5.1 forbids only ending a move *in* another creature's
+    space (5 by 5 ft for Medium).
+  - A unit test pinned the wrong rule (`test_overlaps_touching_edge`), so nothing
+    failed.
+  - In the pilot, 141 of 492 raw-coordinate `destination_blocked` refusals were
+    touching only (C1 49/237, C2 91/254, C2+M 1/1). The menus are built from the
+    same test and never offered a touching spot, so the defect loaded error onto
+    exactly the conditions H1 and H2 predict are worse.
+  - Now strict, with `OVERLAP_EPSILON_FT = 1e-6` for float noise only. The pilot's
+    smallest real overlap was 0.06 ft. Registered menu-coverage figures are unchanged
+    (re-measured). Prereg §10.
+- **A30. Moving *through* a hostile creature is not checked. Open.**
+  - SRD 5.1 allows moving through a hostile creature's space only if it is at least
+    two sizes larger or smaller. The engine checks a move's *destination* only, never
+    its path, so a creature can pass straight through an enemy line.
+  - It applies alike to every condition and to both sides, so it is not a between-
+    condition confound. It does make the positioning scenarios (`kiting`,
+    `protect_squishy`) easier to escape than the rules intend.
+  - Decide before the freeze: fix it, or declare it in the prompt's "Not modelled"
+    list and in prereg §9.
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 

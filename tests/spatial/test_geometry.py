@@ -110,10 +110,20 @@ class TestBoundingBox:
         b = _box(0, 0, 0, 5, 5, 5)
         assert b.overlaps(b)
 
-    def test_overlaps_touching_edge(self):
+    def test_touching_faces_do_not_overlap(self):
+        # A shared face has no volume: adjacent creatures do not share a space.
         a = _box(0, 0, 0, 5, 5, 5)
-        b = _box(5, 0, 0, 10, 5, 5)
-        assert a.overlaps(b)
+        assert not a.overlaps(_box(5, 0, 0, 10, 5, 5))
+        assert not a.overlaps(_box(5, 0, 5, 10, 5, 10))  # a shared edge only
+
+    def test_touching_within_float_noise_does_not_overlap(self):
+        a = _box(0, 0, 0, 12.071 - 2.5, 5, 5)
+        b = _box(7.071 + 2.5, 0, 0, 20, 5, 5)
+        assert not a.overlaps(b)
+
+    def test_shallow_overlap_still_overlaps(self):
+        a = _box(0, 0, 0, 5, 5, 5)
+        assert a.overlaps(_box(4.99, 0, 0, 10, 5, 5))
 
     def test_no_overlap_separated_x(self):
         a = _box(0, 0, 0, 5, 5, 5)

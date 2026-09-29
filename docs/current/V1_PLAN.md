@@ -908,3 +908,33 @@ strict or publishing the limitation.
 
 Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml` (model id, host, prices,
 reasoning), dry-run it, and run it live only with the go-ahead.
+
+#### Phase 2, first pilot (2026-09-30) — one engine defect, then a re-run
+
+The grid ran Nemotron 3.5 Lightning, paid, pinned to `coreweave/bf16`, with reasoning
+off. The harness held:
+
+- **56/56** matches replay, with no exclusions and no provider retries.
+- Every request was served by one host, and every response reported its usage.
+- **$0.25** in all, about $0.0077 per cell. That puts the final run at about $1.24
+  per model at this token rate.
+- C1's parser read every response: strict, primary and lenient all agree.
+
+It found one correctness defect. The engine refused **adjacent** creatures as
+overlapping (ledger A29, prereg §10), and that charged 29% of raw-coordinate
+`destination_blocked` refusals to the conditions H1 predicts are worse. It is fixed
+test-first, and the registered coverage figures are re-measured and unchanged.
+
+The review also surfaced ledger A30, which is open: a move's path through a hostile
+creature is never checked.
+
+Read from pilot 1, and to be confirmed on the re-run:
+- **Opponent:** stays Scripted. The best pooled win rate in any scenario was 0.38.
+- **`invalid_target_relation`:** no split. It never occurred.
+- **End turn:** Nemotron never called `end_turn` in C1 or C2, so the failure budget
+  ended those turns. The prompt text is the same in every condition; the menus list
+  "end turn". This is a real interface effect, and it will be prominent in the
+  write-up.
+
+Next: re-run the pilot on the fixed engine (with the user's go-ahead), then the
+freeze.

@@ -292,6 +292,26 @@ leave a brief note here.
 - **Rule going forward:** the concrete, testable rule.
 ```
 
+### 2026-09-30 — A test pinned a boundary convention that broke the rules
+- **Context:** The Phase 2 pilot, the first live data. The engine refused 141 moves as
+  overlapping another creature when the two only touched: plain D&D adjacency.
+- **What went wrong:** `BoundingBox.overlaps` used closed intervals, so a shared face
+  counted as overlap. A unit test, `test_overlaps_touching_edge`, asserted exactly that,
+  so the suite defended the bug instead of catching it.
+  - Nobody checked the convention against SRD 5.1, which forbids only ending a move
+    *in* another creature's space.
+  - Every layer above inherited the rule. The menus never offered an adjacent spot, so
+    only the free-coordinate conditions were ever refused for one. That silently
+    biased the study toward its own hypotheses.
+- **Rule going forward:** a boundary convention (`<` vs `<=`, inclusive vs exclusive, a
+  tolerance) *is* a rules decision.
+  - A test that pins one must say which rule it encodes. Here: "SRD: adjacent is legal;
+    only ending in a space is not".
+  - When one primitive is used for two purposes (occupancy vs area hits), give each
+    purpose its own semantics rather than letting one inherit the other's.
+  - And a test that asserts a behaviour is not evidence the behaviour is right. Check
+    it against the source of truth.
+
 ### 2026-09-24 — A mock that only speaks well-formed output proves nothing about real models
 - **Context:** The Phase 1 review, before the first live pilot. The offline smoke ran every
   condition x scenario through the real runner with a mock model, and was green.

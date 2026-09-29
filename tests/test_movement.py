@@ -189,6 +189,54 @@ class TestMoveEntity:
         with pytest.raises(ValueError, match="overlaps"):
             combat.move_entity(mover, 15.0, 0.0, 0.0)
 
+    # SRD 5.1 forbids ending a move in another creature's *space*. A Medium space is
+    # 5 by 5 ft, so two Medium creatures 5 ft apart centre-to-centre are adjacent:
+    # their spaces share an edge, not an area. Found by the Phase 2 pilot, where
+    # 29% of raw-coordinate `destination_blocked` refusals were adjacency.
+
+    @pytest.mark.parametrize(
+        "dx, dz",
+        [(5.0, 0.0), (-5.0, 0.0), (0.0, 5.0), (5.0, 5.0), (5.0, -3.0)],
+        ids=["east", "west", "south", "diagonal", "edge-offset"],
+    )
+    def test_move_adjacent_to_a_creature_is_allowed(self, dx, dz):
+        mover = _make_entity("Mover", x=-20.0)
+        other = _make_entity("Other", x=0.0)
+        combat = _make_combat(mover, other)
+
+        combat.move_entity(mover, dx, 0.0, dz)
+
+        assert (mover.x, mover.z) == (dx, dz)
+
+    def test_adjacent_to_a_large_creature_is_allowed(self):
+        # Large box [15,25] on x; a Medium mover at x=12.5 spans [10,15]: touching.
+        mover = _make_entity("Mover", size=CreatureSize.MEDIUM)
+        large = _make_entity("Dragon", size=CreatureSize.LARGE, x=20.0)
+        combat = _make_combat(mover, large)
+
+        combat.move_entity(mover, 12.5, 0.0, 0.0)
+
+        assert mover.x == 12.5
+
+    def test_adjacency_survives_float_noise(self):
+        # 12.071 - 2.5 and 7.071 + 2.5 need not be the same float; a 3-dp position
+        # (the menu's precision) must not turn exact adjacency into an overlap.
+        mover = _make_entity("Mover", x=-20.0)
+        other = _make_entity("Other", x=7.071, z=3.333)
+        combat = _make_combat(mover, other)
+
+        assert combat.is_destination_clear(mover, 12.071, 0.0, 8.333)
+        assert combat.is_destination_clear(mover, 2.071, 0.0, -1.667)
+
+    def test_a_small_real_overlap_still_blocks(self):
+        # The pilot's smallest genuine overlaps were 0.06 ft: not adjacency.
+        mover = _make_entity("Mover", x=-20.0)
+        other = _make_entity("Other", x=0.0)
+        combat = _make_combat(mover, other)
+
+        with pytest.raises(ValueError, match="overlaps"):
+            combat.move_entity(mover, 4.94, 0.0, 0.0)
+
 
 # ---------------------------------------------------------------------------
 # push_entity (forced movement)

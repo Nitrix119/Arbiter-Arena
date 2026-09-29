@@ -17,6 +17,11 @@ import math
 from dataclasses import dataclass
 from typing import List
 
+#: How far two boxes must interpenetrate on every axis to overlap. Pure float noise:
+#: far below the 3-dp precision positions are offered at, and far below the
+#: smallest real overlap the pilot saw (0.06 ft), so it never changes a ruling.
+OVERLAP_EPSILON_FT = 1e-6
+
 
 @dataclass(frozen=True)
 class Vector3D:
@@ -101,14 +106,22 @@ class BoundingBox:
     # ------------------------------------------------------------------
 
     def overlaps(self, other: "BoundingBox") -> bool:
-        """True when this AABB and *other* share any volume (touching counts)."""
+        """True when this AABB and *other* share volume.
+
+        Boxes that only touch (a shared face, edge or corner) do **not** overlap:
+        this is the occupancy test, and SRD 5.1 lets a creature stand adjacent to
+        another; it only forbids ending a move in the other's space. Each axis must
+        penetrate by more than :data:`OVERLAP_EPSILON_FT`, so float noise at an
+        exact boundary does not turn adjacency into an overlap.
+        """
+        eps = OVERLAP_EPSILON_FT
         return (
-            self.min_corner.x <= other.max_corner.x
-            and self.max_corner.x >= other.min_corner.x
-            and self.min_corner.y <= other.max_corner.y
-            and self.max_corner.y >= other.min_corner.y
-            and self.min_corner.z <= other.max_corner.z
-            and self.max_corner.z >= other.min_corner.z
+            self.min_corner.x < other.max_corner.x - eps
+            and self.max_corner.x > other.min_corner.x + eps
+            and self.min_corner.y < other.max_corner.y - eps
+            and self.max_corner.y > other.min_corner.y + eps
+            and self.min_corner.z < other.max_corner.z - eps
+            and self.max_corner.z > other.min_corner.z + eps
         )
 
     def nearest_point(self, p: Point3D) -> Point3D:

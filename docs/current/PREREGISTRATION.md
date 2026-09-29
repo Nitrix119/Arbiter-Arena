@@ -801,6 +801,27 @@ cost outcome is exploratory and no direction was predicted for it, but as it sto
 figure was unfalsifiable. Now refused in preflight, stopped mid-run, and counted in the
 report. No data had been collected.
 
+### 2026-09-30 — Adjacent creatures were refused as overlapping
+
+Found by the Phase 2 pilot. The pilot is not data (§4.4), and fixing this is the kind
+of correctness change the pilot exists to make.
+
+**What was wrong.** The engine's occupancy test counted boxes that only touch as
+overlapping. So a creature could not stand directly beside another. SRD 5.1 forbids
+only *ending* a move in another creature's space, which is 5 by 5 ft for a Medium
+creature. Standing adjacent is legal.
+
+**Why it mattered for the hypotheses.** In the pilot, 141 of 492 `destination_blocked`
+refusals were adjacency (C1 49 of 237, C2 91 of 254). The menus use the same test, so
+they never offered those spots, and only the raw-coordinate conditions were charged.
+That is the direction H1 and H2 predict, so the defect would have supported them for
+the wrong reason.
+
+**The fix.** Boxes must now share volume to overlap, with a 1e-6 ft tolerance for float
+noise only. The registered coverage figures (§4.1.1) were re-measured and are
+unchanged. The pilot is re-run on the fixed engine, and the §4.4 choices are read from
+that re-run. Ledger A29.
+
 ---
 
 ## 11. Open items before freeze
