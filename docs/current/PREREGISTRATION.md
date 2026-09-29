@@ -754,6 +754,13 @@ Also declared (2026-09-24):
   therefore fixed per model in the grid and recorded in every manifest. Responses cut at
   the limit are counted per cell in the report.
 
+Also declared (2026-09-30):
+- **Moving through enemies.** The engine checks only where a move ends, never its path.
+  So a creature can pass through a hostile creature's space, which SRD 5.1 forbids
+  unless the two differ by at least two sizes. This applies to every condition and to
+  both sides alike. It makes the positioning scenarios easier to escape than the rules
+  intend. Ledger A30.
+
 ---
 
 ## 10. Deviations from this pre-registration

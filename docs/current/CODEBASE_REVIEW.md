@@ -491,8 +491,21 @@ names where it should be addressed. Append; strike through and date an item when
   - It applies alike to every condition and to both sides, so it is not a between-
     condition confound. It does make the positioning scenarios (`kiting`,
     `protect_squishy`) easier to escape than the rules intend.
-  - Decide before the freeze: fix it, or declare it in the prompt's "Not modelled"
-    list and in prereg §9.
+  - **Accepted as a known limitation (user decision, 2026-09-30).** It is unlikely to
+    affect a between-condition measure measurably. Worth fixing after the study.
+    Recorded in prereg §9; the prompt is unchanged.
+- **A31. A zero-distance move is a free, valid action. Open: needs a decision.**
+  - `move` to the creature's own position costs nothing and is accepted. The failure
+    budget never fires on it, so a model can repeat it until the per-turn action cap
+    ends the turn (`end_cause: cap`).
+  - Pilot 1 (accepted model moves that went nowhere): C2 351/439, C2+M 115/177,
+    C1 35/94, C3 0/59. The menus never offer one.
+  - Adjacency check cell (C2 protect_squishy seed 2, after A29): 376/383, at 4x a
+    typical cell's cost. The model reached its spot, then idled in place until the
+    cap.
+  - These no-op moves count as valid first attempts in H1, so they inflate the
+    raw-coordinate conditions' validity. That runs against H1's prediction, but it
+    distorts the measure and the cost either way.
 - *(Known and declared in code, not duplicated here: multi-target spells are enumerated
   nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
 
