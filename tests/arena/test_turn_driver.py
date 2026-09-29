@@ -86,13 +86,35 @@ def test_total_failure_budget_forces_end(make_entity, make_combat):
     combat = _started(make_combat, [fighter, goblin], fighter)
 
     bad = ToolCall("attack", {"action_name": "Nope", "defender_id": "bad"})
-    ok = ToolCall("move", {"x": 1, "z": 0})  # legal move (resets consecutive)
+    # Legal moves (reset the consecutive count). Each must go somewhere: repeating
+    # one from where it landed would be a no-op, refused as `no_effect`.
+    ok1 = ToolCall("move", {"x": 1, "z": 0})
+    ok2 = ToolCall("move", {"x": 2, "z": 0})
     # fail,fail,ok,fail,fail,ok,fail -> 5 total failures before 3-in-a-row
-    agent = _SequenceAgent([bad, bad, ok, bad, bad, ok, bad])
+    agent = _SequenceAgent([bad, bad, ok1, bad, bad, ok2, bad])
     outcome = run_turn(combat, fighter, agent)
 
     assert outcome.failures == 5
     assert outcome.actions_taken == 2  # the two successful moves
+    assert outcome.forced_end is True
+
+
+def test_repeating_a_move_in_place_ends_by_the_failure_budget(make_entity, make_combat):
+    """The pilot's loop (ledger A31): a model re-moving to where it stands.
+
+    Once accepted as free valid actions, these ran until the per-turn action cap.
+    Refused now, they count as failures, and the failure budget ends the turn after
+    three.
+    """
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    stay = _SequenceAgent([ToolCall("move", {"x": 0, "z": 0})])
+    outcome = run_turn(combat, fighter, stay)
+
+    assert outcome.actions_taken == 0
+    assert outcome.failures == 3
     assert outcome.forced_end is True
 
 

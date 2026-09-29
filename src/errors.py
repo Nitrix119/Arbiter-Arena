@@ -38,6 +38,9 @@ INVALID_TARGET_RELATION = "invalid_target_relation"
 OUT_OF_RANGE = "out_of_range"
 #: The destination is occupied by another creature.
 DESTINATION_BLOCKED = "destination_blocked"
+#: The action would change nothing: the actor is already in the state it asks for,
+#: such as a move to where it already stands.
+NO_EFFECT = "no_effect"
 
 #: Every code the **engine** can raise. The arena adds its own (agent-side) codes on
 #: top of these; see :mod:`src.arena.error_codes`.
@@ -51,6 +54,7 @@ ENGINE_ERROR_CODES = frozenset(
         INVALID_TARGET_RELATION,
         OUT_OF_RANGE,
         DESTINATION_BLOCKED,
+        NO_EFFECT,
     }
 )
 

@@ -381,6 +381,7 @@ implemented 2026-09-21):
 | `invalid_target_relation` | The target exists but is not legal for this action, including an illegal parameter combination |
 | `out_of_range` | Beyond the action's reach |
 | `destination_blocked` | Destination occupied by another creature, or off the ground: no creature can fly, so a move may not change altitude (added 2026-09-24, before any data) |
+| `no_effect` | The action would change nothing: a move to where the creature already stands, or one too short to cost any movement (added 2026-09-30, from the pilot; ledger A31) |
 | `insufficient_resource` | A consumable is exhausted — movement feet, or a spell slot |
 | `action_economy_spent` | The action/bonus action/reaction is already used this turn |
 | `not_your_turn` | Acting out of initiative |
@@ -828,6 +829,31 @@ the wrong reason.
 noise only. The registered coverage figures (§4.1.1) were re-measured and are
 unchanged. The pilot is re-run on the fixed engine, and the §4.4 choices are read from
 that re-run. Ledger A29.
+
+### 2026-09-30 — A move that goes nowhere is refused as `no_effect`
+
+Found while checking the A29 fix live, and present throughout the first pilot.
+
+**What was wrong.** A move to the creature's own position cost nothing and was
+accepted. Every one counted as a valid first attempt in H1. And because it was never a
+failure, the failure budget never ended a turn spent repeating it. Only the per-turn
+action cap did.
+
+**How often.** In pilot 1, these no-op moves were 351 of 439 accepted C2 moves, 115 of
+177 in C2+M, 35 of 94 in C1, and none in C3 (the menus never offer one). In one check
+cell after A29, the model reached its spot and then repeated the move in place 324
+times.
+
+**Why it mattered.** C2's pilot validity was mostly no-ops: actions that did nothing
+were measured as successes. That inflates the raw-coordinate conditions, which runs
+against H1's prediction. But it distorts the primary measure, and the cost, whichever
+way it runs.
+
+**The fix.** The engine refuses such a move with a new code, `no_effect`, and names the
+creature's position ("already at …"). That counts against the failure budget like any
+refusal. A move too short to cost any movement (under 0.05 ft, since movement is charged
+to 0.1 ft) is the same no-op and is refused too. Forced movement is unaffected. The
+baseline agents never make such a move, so the baselines are unchanged. Ledger A31.
 
 ---
 

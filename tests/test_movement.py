@@ -4,6 +4,7 @@ import math
 import pytest
 
 from src.combat.combat_system import CombatSystem
+from src.errors import NO_EFFECT, RuleViolation
 from src.models.ability import AbilityScores
 from src.models.creature_size import CreatureSize
 from src.models.entity import Entity
@@ -160,13 +161,50 @@ class TestMoveEntity:
 
         assert mover.x == 0.0
 
-    def test_move_zero_distance_costs_nothing(self):
+    # A willing move that goes nowhere changes no state, so it is refused as
+    # `no_effect` rather than accepted as a free action (ledger A31). In the pilot, a
+    # model repeated one until the per-turn cap, each counted as a valid action.
+
+    def test_move_to_own_position_is_refused_as_no_effect(self):
+        mover = _make_entity(speed=30, x=10.0, z=5.0)
+        combat = _make_combat(mover)
+
+        with pytest.raises(RuleViolation, match="already at") as refused:
+            combat.move_entity(mover, 10.0, 0.0, 5.0)
+
+        assert refused.value.code == NO_EFFECT
+        assert (mover.x, mover.z) == (10.0, 5.0)
+        assert mover.resources.movement == 30
+
+    def test_a_move_too_short_to_cost_anything_is_refused(self):
+        # Movement is charged to FEET_DP (0.1 ft), so 0.04 ft would cost 0.0: a free
+        # nudge in place, which is the same no-op.
         mover = _make_entity(speed=30)
         combat = _make_combat(mover)
 
-        combat.move_entity(mover, 0.0, 0.0, 0.0)
+        with pytest.raises(RuleViolation) as refused:
+            combat.move_entity(mover, 0.04, 0.0, 0.0)
 
-        assert mover.resources.movement == 30
+        assert refused.value.code == NO_EFFECT
+        assert mover.x == 0.0
+
+    def test_the_shortest_chargeable_move_is_allowed(self):
+        mover = _make_entity(speed=30)
+        combat = _make_combat(mover)
+
+        combat.move_entity(mover, 0.1, 0.0, 0.0)
+
+        assert mover.x == 0.1
+        assert mover.resources.movement == 29.9
+
+    def test_a_push_that_goes_nowhere_is_still_fine(self):
+        # Forced movement is not a choice the creature made; a zero push is harmless.
+        mover = _make_entity()
+        combat = _make_combat(mover)
+
+        combat.push_entity(mover, 0.0, 0.0, 0.0)
+
+        assert mover.x == 0.0
 
     def test_dead_entity_does_not_block_movement(self):
         mover = _make_entity("Mover")

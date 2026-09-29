@@ -198,7 +198,12 @@ export function initInputHandlers() {
                 const ddy    = (state.draggingToken.y - state.dragStartPos.y) * CELL_FEET;
                 const distFt = Math.round(Math.sqrt(ddx * ddx + ddy * ddy) * 10) / 10;
 
-                if (distFt > state.dragStartMovement) {
+                if (distFt === 0) {
+                    // A click without a drag goes nowhere. The engine refuses such a
+                    // move as `no_effect`, so there is nothing to send.
+                    state.draggingToken.x = state.dragStartPos.x;
+                    state.draggingToken.y = state.dragStartPos.y;
+                } else if (distFt > state.dragStartMovement) {
                     state.draggingToken.x = state.dragStartPos.x;
                     state.draggingToken.y = state.dragStartPos.y;
                 } else {

@@ -75,6 +75,22 @@ def test_destination_blocked(make_entity, make_combat):
     )
 
 
+def test_no_effect_for_a_move_to_where_the_actor_stands(make_entity, make_combat):
+    """A move that goes nowhere is refused, not accepted as a free valid action.
+
+    Found in the Phase 2 pilot (ledger A31): a raw-coordinate condition could repeat
+    one until the per-turn cap, each counting as a valid first attempt. The menu
+    condition never offers one.
+    """
+    fighter = make_entity("Fighter", team="a", pos=(10, 0, 5))
+    goblin = make_entity("Goblin", team="b", pos=(100, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    assert (
+        _code(combat, fighter, ToolCall("move", {"x": 10.0, "z": 5.0})) == "no_effect"
+    )
+
+
 def test_destination_blocked_when_a_move_leaves_the_ground(make_entity, make_combat):
     """No creature has a fly speed, so a voluntary move cannot change altitude.
 

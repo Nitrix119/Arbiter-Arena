@@ -494,7 +494,9 @@ names where it should be addressed. Append; strike through and date an item when
   - **Accepted as a known limitation (user decision, 2026-09-30).** It is unlikely to
     affect a between-condition measure measurably. Worth fixing after the study.
     Recorded in prereg §9; the prompt is unchanged.
-- **A31. A zero-distance move is a free, valid action. Open: needs a decision.**
+- **A31. ~~A zero-distance move is a free, valid action.~~ Fixed 2026-09-30** (user
+  decision: its own rejection code, `no_effect`, like "you are already holding that";
+  prereg §6, §10).
   - `move` to the creature's own position costs nothing and is accepted. The failure
     budget never fires on it, so a model can repeat it until the per-turn action cap
     ends the turn (`end_cause: cap`).

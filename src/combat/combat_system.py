@@ -10,6 +10,7 @@ from src.errors import (
     DESTINATION_BLOCKED,
     INSUFFICIENT_RESOURCE,
     INVALID_TARGET_RELATION,
+    NO_EFFECT,
     NOT_YOUR_TURN,
     UNKNOWN_ACTION,
     UNKNOWN_TARGET,
@@ -727,6 +728,15 @@ class CombatSystem:
             (new_x - entity.x) ** 2 + (new_y - entity.y) ** 2 + (new_z - entity.z) ** 2
         )
         cost_ft = round(distance, FEET_DP)
+        if cost_ft == 0:
+            # A move that goes nowhere changes no state. Accepted, it was a free
+            # "valid" action a model could repeat until the per-turn cap (ledger A31).
+            # Anything too short to charge counts too: it would move for free.
+            raise RuleViolation(
+                NO_EFFECT,
+                f"{entity.name} is already at ({entity.x:g}, {entity.y:g}, "
+                f"{entity.z:g}): that move would go nowhere",
+            )
         movement_cost = ActionCost(movement=cost_ft)
 
         if not entity.can_afford(movement_cost):

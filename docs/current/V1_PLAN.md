@@ -119,7 +119,8 @@ study **ablates** that choice. Related work to read and cite before freezing the
 - **Primary:** first-attempt valid-action rate per decision.
 - **Invalid-action taxonomy** (needs typed codes from the executor): `malformed_output`,
   `unknown_action`, `unknown_target`, `invalid_target_relation`, `out_of_range`,
-  `destination_blocked`, `insufficient_resource`, `action_economy_spent`, `no_tool_call`.
+  `destination_blocked`, `no_effect` (added 2026-09-30), `insufficient_resource`,
+  `action_economy_spent`, `no_tool_call`.
 - **Recovery rate:** P(valid on the next attempt | rejected).
 - **Forfeit turns** (failure budget exhausted).
 - **Cost:** input and output tokens per decision and per accepted action, latency, $ estimate.
@@ -938,3 +939,12 @@ Read from pilot 1, and to be confirmed on the re-run:
 
 Next: re-run the pilot on the fixed engine (with the user's go-ahead), then the
 freeze.
+
+**Second pilot defect (2026-09-30): a move that goes nowhere was a free, valid
+action.** The live check of the A29 fix found a model "moving" to its own position 324
+times in one match. Each counted as a valid action, and only the per-turn cap ended the
+turn. Pilot 1 had the same pattern, most heavily in C2.
+
+It is now refused with a new code, `no_effect` (ledger A31, prereg §6 and §10). That
+counts against the failure budget. The web client no longer sends a move when a token
+is clicked without being dragged.
