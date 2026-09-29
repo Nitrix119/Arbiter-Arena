@@ -152,7 +152,8 @@ model capability.
 | Opponent | A single fixed non-LLM agent, identical across all cells. It is chosen in the pilot by the rule in §4.4. |
 | LLM side | The scenario's `llm_team` |
 | Information policy | One fixed policy: the current default (all enemy info revealed, `hp_display="exact"`). Information sensitivity is a different study. |
-| Temperature | 0 (or provider minimum), recorded. Still not deterministic — stated as a limitation. |
+| Temperature | 0 where the model accepts it; otherwise the provider's default, which is not sent and is recorded as `default` (2026-09-30). Sonnet 5.5 refuses any non-default value (400), so it runs at its default. Gemini 3.8 Flash: decided before its pilot (§11). Still not deterministic — stated as a limitation. |
+| Reasoning | The **lowest setting each provider allows**, the same rule as temperature (2026-09-30). Nemotron: off. Gemini 3.8 Flash and Sonnet 5.5 cannot turn reasoning off, so both run at `low`. Fixed per model across all four conditions, and recorded in every manifest. Turn-by-turn tactical choices gain little from long deliberation. |
 | Failure budget | Existing: 3 consecutive **or** 5 total failed calls per turn → turn forced to end. Rejection feedback returned to the agent. |
 | Round cap | 20 (`DEFAULT_ROUND_CAP`) |
 | Match end | The moment one team has no one standing, at the killing blow. Added 2026-09-24, before any data. Combat used to end only when a single *creature* was left, so a 2v2 won with two survivors played on to the round cap. The winners then acted against nobody, which wasted paid calls and padded H1 with trivial decisions in exactly the matches a model won. Winners are unchanged, since the match result was already decided by team. A turn ended this way is recorded as `end_cause: over` and is neither forced nor forfeited. |
@@ -316,9 +317,21 @@ deliberately.
 
 | Model | Role | Status |
 |---|---|---|
-| Nemotron 3.5 | Cheap/accessible baseline | **Confirmed.** A paid host is used for throughput; "free-tier model" describes availability, not how it is run. |
-| Gemini 3.8 | Fast, competitive mid-tier | **Confirmed** |
-| Claude Sonnet | High-capability reference | **Conditional on budget**, decided after observing the first two models' realised token cost. Currently discounted (~$0.75/$3.75 per M tokens). |
+| Nemotron 3.5 Lightning | Small open-weight model | **Confirmed.** Paid `coreweave/bf16`, bf16, $0.07/$0.20. Temperature 0 with seed; reasoning off. Piloted twice (2026-09-30). |
+| Gemini 3.8 Flash | Fast commercial model | **Confirmed.** `google-ai-studio`, standard tier, $0.75/$3.75. It accepts temperature and seed there; Vertex does not accept temperature. Flex is not used: its 1–15 minute queueing targets and pre-emption do not suit a sequential agent loop. Reasoning `low` (it cannot be turned off). Pilot pending. |
+| Claude Sonnet 5.5 | Flagship commercial model | **Confirmed (2026-09-30).** `azure/us`, $2/$10. The provider's default temperature, since it refuses any other; **no seed on any host**. Reasoning `low` (mandatory). Pilot pending; the budget cap is set after it. |
+
+**The tiers are product classes, not a capability ranking (2026-09-30).** On the
+Artificial Analysis Intelligence Index, Gemini 3.8 Flash scores at or above Sonnet 5.5 at
+every matched reasoning effort, so "mid" and "high" would misdescribe them. Capability in
+*this* environment is measured by the study itself; the external index, at the reasoning
+settings actually used, is recorded as a secondary reference. The exploratory
+capability question (§3) is read with that in mind.
+
+**Sampling is not identical across models, and cannot be.** Only Nemotron runs at
+temperature 0 with a seed. Every hypothesis compares a model with itself across
+conditions under one fixed setting, so this cannot favour a condition. It does blur the
+exploratory between-model comparison, and it is declared in §9.
 
 Exact model strings are pinned before the final run, and the **provider-returned
 model id** is recorded per call. Tool-calling support is confirmed in preflight for
@@ -761,6 +774,10 @@ Also declared (2026-09-30):
   unless the two differ by at least two sizes. This applies to every condition and to
   both sides alike. It makes the positioning scenarios easier to escape than the rules
   intend. Ledger A30.
+- **Sampling differs between models.** Sonnet 5.5 accepts no temperature but its default
+  and no seed on any host, and Gemini 3.8 Flash and Sonnet 5.5 cannot turn reasoning off.
+  Each model keeps one setting across all its conditions, so no hypothesis is affected.
+  The exploratory between-model comparison mixes capability with sampling.
 
 ---
 
@@ -882,7 +899,12 @@ baseline agents never make such a move, so the baselines are unchanged. Ledger A
 
 **Routine — values to fill in:**
 
-- [ ] Whether Claude Sonnet is in the final run (budget, after two models' real cost)
+- [x] Whether Claude Sonnet is in the final run. **Yes, Sonnet 5.5** (2026-09-30), on
+      `azure/us`, at `low` reasoning and its default temperature (§5).
+- [ ] Pilots for Gemini 3.8 Flash and Sonnet 5.5 (32 cells each), to measure real token
+      use including low-effort reasoning, and to confirm each pinned host behaves as
+      listed. **Then** set the final run's spend cap and key limit.
+- [ ] Gemini 3.8 Flash temperature: 0, or the provider's default (§4)
 - [ ] Exact pinned model strings
 - [ ] Prompt texts and their hashes for all four conditions — note the prompt was split
       into a shared body plus a per-condition action section on 2026-09-21, so **every
