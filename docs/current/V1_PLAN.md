@@ -999,3 +999,21 @@ automatically (~40%). Sonnet caches only what a request marks, from 512 tokens.
 - Nothing is sent back to the model, which never sees its earlier turns, so behaviour
   is unchanged.
 - Showing it in the web replay viewer is ledger A33 (later).
+
+**Claude Sonnet 5.5 pilot (2026-10-01): clean.** `results/pilot-sonnet`, on
+`google-vertex/global`.
+- 32/32 matches replay, with no exclusions, no retries and no flags.
+- **$3.63 at list, about $2.29 billed.** Cache reads were 48% of input. The Vertex
+  endpoint load-balances, so a cell's first few requests sometimes re-write the cache
+  before it warms; each write costs far less than a hit saves.
+- At `low` effort Sonnet barely reasons: 19 of 663 requests returned reasoning, 2,773
+  tokens in all.
+- Validity: C1 0.99, C2 0.90, C2+M 1.00, C3 1.00. C2's misses are mostly attacks after
+  the action was spent (10), so C2 sits *below* C1 for this model.
+- Tactics are *not* saturated for Sonnet, unlike Gemini: win rates run 0.50–0.75, and
+  it kited perfectly only in C3.
+- Final-run cost at this rate: about $18 at list, or about $11.50 billed with caching.
+
+All three models are piloted. Estimated final-run cost at list (what the spend cap
+counts): Nemotron ~$0.93, Gemini ~$9.32, Sonnet ~$18.17, **~$28.40 in total**
+(billed: roughly $22). Next: set the final cap and key limit, then the freeze.
