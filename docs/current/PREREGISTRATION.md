@@ -915,7 +915,7 @@ baseline agents never make such a move, so the baselines are unchanged. Ledger A
 **Routine — values to fill in:**
 
 - [x] Whether Claude Sonnet is in the final run. **Yes, Sonnet 5.5** (2026-09-30), on
-      `azure/us`, at `low` reasoning and its default temperature (§5).
+      `google-vertex/global`, at `low` reasoning and its default temperature (§5).
 - [ ] Pilots for Gemini 3.8 Flash and Sonnet 5.5 (32 cells each), to measure real token
       use including low-effort reasoning, and to confirm each pinned host behaves as
       listed. **Then** set the final run's spend cap and key limit.

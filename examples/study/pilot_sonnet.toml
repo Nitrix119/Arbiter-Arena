@@ -15,7 +15,7 @@ seeds = [1, 2]
 scenarios = ["kiting", "alpha_strike", "protect_squishy", "aoe_placement"]
 conditions = ["C1", "C2", "C2+M", "C3"]
 opponent = "scripted"          # settled by the Nemotron pilot (prereg §4.4)
-spend_cap_usd = 12.0           # a hard stop, recomputed from disk on every resume
+spend_cap_usd = 9.0            # below the $10 key limit, so the grid stops cleanly first
 max_attempts = 3
 backoff_seconds = 30
 
