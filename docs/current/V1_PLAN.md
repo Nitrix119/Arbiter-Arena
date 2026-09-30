@@ -357,13 +357,13 @@ Runner and analysis:
 - [x] Offline smoke: all conditions × all scenarios with a **mocked** model, green in CI.
 
 ### Phase 2 — Pilot → freeze → final runs (≈2 sessions, then waiting)
-- [ ] Pilot: 1 model × 4 conditions × **4** scenarios × 2 seeds (32 matches, plus the free
+- [x] Pilot: 1 model × 4 conditions × **4** scenarios × 2 seeds (32 matches, plus the free
       baselines). The grid is `examples/study/pilot.toml`: fill in its TODOs, and it refuses to
       run until you do.
-- [ ] Fix **only** correctness and method issues (parser bugs, menu bugs, crashes), not results
+- [x] Fix **only** correctness and method issues (parser bugs, menu bugs, crashes), not results
       you dislike.
-- [ ] Pick the opponent (Scripted vs Heuristic), decide on C2+M, confirm call counts and cost per match.
-- [ ] **Freeze:** tag the commit (`study-freeze`), finalise `PREREGISTRATION.md` (hypotheses,
+- [x] Pick the opponent (Scripted vs Heuristic), decide on C2+M, confirm call counts and cost per match.
+- [x] **Freeze:** tag the commit (`study-freeze`), finalise `PREREGISTRATION.md` (hypotheses,
       metrics, exclusions, seeds, prompts plus hashes, models, settings).
 - [ ] Launch the final grid in the background, outside Claude Code. Check once a day.
 - [ ] Baselines through the C3 path (free, fast).
@@ -1017,3 +1017,16 @@ automatically (~40%). Sonnet caches only what a request marks, from 512 tokens.
 All three models are piloted. Estimated final-run cost at list (what the spend cap
 counts): Nemotron ~$0.93, Gemini ~$9.32, Sonnet ~$18.17, **~$28.40 in total**
 (billed: roughly $22). Next: set the final cap and key limit, then the freeze.
+
+**Freeze (2026-10-01).** All three models are piloted, and every freeze item is settled
+(prereg §11): the Scripted opponent, no taxonomy split, registered model versions,
+prompt hashes, measured cost per match, and verified citations. The final grid is
+`examples/study/final.toml`: 3 models × 4 conditions × 4 scenarios × seeds 101–110,
+plus baselines, with a $35 cap. Next: re-check the model versions, then launch it in
+the background, outside Claude Code (~10–12 hours), and verify 100% replay.
+
+**Pilot observations** are written up in `docs/current/PILOT_OBSERVATIONS.md`. They are
+exploratory, not data. At `low` effort, Gemini deliberates every turn and Sonnet almost
+never. C3's menu appears to stand in for the deliberation Sonnet skips, and C2's
+tool-call format removes the reasoning Sonnet writes out loud in C1 (cf. Tam et al.,
+2024). There is a list of what to check in the final run.
