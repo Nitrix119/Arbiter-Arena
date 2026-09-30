@@ -290,7 +290,7 @@ deepest layer it needed:
 |---|---|---|
 | 0 — canonical | Exactly the documented form | `ACTION: attack raider-1 with Greatsword` |
 | 1 — surface | Case, extra spaces, Unicode lookalikes (NFKC: smart quotes, en dashes, non-breaking spaces), trailing punctuation, markdown (`**`, backticks, code fences), surrounding quotes | `**Action:** Attack raider-1 with greatsword.` |
-| 2 — phrasing | A closed list of verb synonyms (hit/strike/shoot → attack; go/walk/run → move; pass/done → end turn); filler words (`I`, `my`, `the`, `will`); number formats (`15ft`, `15 feet`, `x: 15`) | `I hit the raider-1 with my greatsword` |
+| 2 — phrasing | A closed list of verb synonyms (hit/strike/shoot → attack; go/walk/run → move; pass/done → end turn); filler words (`I`, `my`, `the`, `will`); number formats (`15ft`, `15 feet`, `x: 15`). *Not* trailing zeros: `x=-80.0` is the same number as `x=-80` and stays layer 0 (2026-10-01). | `I hit the raider-1 with my greatsword` |
 | 3 — extraction | Prose before or after the `ACTION:` line. With no `ACTION:` tag, accept if **exactly one** line of the response parses | `Raider 1 is closest. ACTION: attack raider-1 with Greatsword` |
 
 Identifiers (creature, attack and spell names) are **not** fuzzy-matched. The parser passes

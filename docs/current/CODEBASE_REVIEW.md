@@ -494,6 +494,17 @@ names where it should be addressed. Append; strike through and date an item when
   - **Accepted as a known limitation (user decision, 2026-09-30).** It is unlikely to
     affect a between-condition measure measurably. Worth fixing after the study.
     Recorded in prereg §9; the prompt is unchanged.
+- **A32. ~~C1's strict bound measured number formatting.~~ Fixed 2026-10-01** (Gemini
+  pilot; user decision).
+  - The canonical rendering drops a whole number's `.0`, so `move to x=-80.0 z=0.0`
+    read as layer 2. Gemini wrote every move that way. Its strict bound was 0.769
+    against a primary of 0.986, and all 48 of the layer-2 lines were trailing zeros.
+  - Trailing fractional zeros now count as the same number when the layer is judged
+    (`free_text._same_numbers`). Other number formats (`15ft`, `x: 15`) are still
+    layer 2.
+  - Re-derived offline on copies of both pilots: Gemini's strict bound is now 0.986
+    and Nemotron's 0.325, both equal to primary. 69 requests changed layer, all of
+    them trailing zeros. The recorded bundles are untouched.
 - **A31. ~~A zero-distance move is a free, valid action.~~ Fixed 2026-09-30** (user
   decision: its own rejection code, `no_effect`, like "you are already holding that";
   prereg §6, §10).

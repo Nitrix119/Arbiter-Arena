@@ -18,8 +18,10 @@ Design, from ``docs/current/C1_PARSER_OPTIONS.md`` (accepted 2026-09-24):
   0 byte-identical to the canonical rendering, 1 identical after surface normalisation
   (case, markdown, quotes, dashes, trailing punctuation), 2 grammatical but not
   canonical (synonyms, fillers, number formats), 3 read out of surrounding prose or an
-  untagged line. The layer is *derived* by comparing the text with
-  :func:`render_command` of the result, so the grammar carries no bookkeeping.
+  untagged line. Trailing fractional zeros (``-80.0`` for ``-80``) are the same number,
+  not a format: they never cost a layer (2026-10-01). The layer is *derived* by
+  comparing the text with :func:`render_command` of the result, so the grammar
+  carries no bookkeeping.
 * **No repair.** A name that names nothing still parses and is refused by the executor;
   a construction the grammar cannot read is refused here with a code and a reason the
   model can act on. The lenient bound (implied weapon, bare coordinate pairs, "take the
@@ -371,6 +373,28 @@ def _empty_reason() -> str:
 # -- a whole response --------------------------------------------------------------
 
 
+#: A decimal number with trailing fractional zeros: ``-80.0``, ``12.50``, ``3.000``.
+_TRAILING_ZEROS = re.compile(r"(?<![\w.])(-?\d+)\.(\d*?)0+(?![\w.])")
+
+
+def _same_numbers(text: str) -> str:
+    """*text* with trailing fractional zeros dropped, as the canonical rendering does.
+
+    ``x=-80.0`` and ``x=-80`` are the same number. Writing a whole number in decimal is
+    a stylistic choice, not a departure from the grammar, so it must not cost the
+    command its layer (user decision, 2026-10-01). Only trailing zeros: ``15ft`` or
+    ``x: 15`` are still phrasing (layer 2).
+    """
+
+    def drop(match: "re.Match[str]") -> str:
+        whole, fraction = match.group(1), match.group(2)
+        if fraction:
+            return f"{whole}.{fraction}"
+        return "0" if whole == "-0" else whole
+
+    return _TRAILING_ZEROS.sub(drop, text)
+
+
 def _layer(command_lines: List[Tuple[str, bool]], call: ToolCall) -> int:
     """How much tolerance the *command* needed — 0 canonical, 1 surface, 2 grammar.
 
@@ -386,7 +410,7 @@ def _layer(command_lines: List[Tuple[str, bool]], call: ToolCall) -> int:
     its layer.
     """
     canonical = "ACTION: " + render_command(call)
-    body = "\n".join(line for line, _ in command_lines).strip()
+    body = _same_numbers("\n".join(line for line, _ in command_lines).strip())
     fenced = any(inside for _, inside in command_lines)
     if body == canonical and not fenced:
         return 0

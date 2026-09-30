@@ -964,3 +964,21 @@ is clicked without being dragged.
   win rate 3/8), and **`invalid_target_relation` does not split** (0 occurrences).
 
 Next: the freeze.
+
+**Gemini 3.8 Flash pilot (2026-10-01): clean, and at the ceiling.** `results/pilot-gemini`.
+- 32/32 matches replay, with no exclusions and no retries. Every request was served by
+  Google AI Studio.
+- **$1.86**, about $0.058 per cell. That puts Gemini's final run at about $9.30.
+  Reasoning (`low`) is about 180–320 output tokens per decision, roughly half of each
+  cell's cost.
+- First-attempt validity is 0.98–1.00 in every condition, the win rate is 0.875 in
+  every condition, and kiting and protect_squishy are solved in every condition. The
+  only refusals were 10 `destination_blocked`.
+- **Decision (user): the scenarios stay as they are.** A strong model solving them is a
+  result, not a defect: it shows that capable models do not need the options spelled
+  out, while Nemotron does. Changing scenarios because the results were uninformative
+  is what the pilot rules exclude.
+- Found one instrument issue: trailing zeros cost C1 commands their layer (A32, fixed
+  test-first).
+- Observed: prompt caching was **0%** on Gemini (Nemotron on CoreWeave was about 40%).
+  To be looked at before the final run.

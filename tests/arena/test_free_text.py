@@ -199,6 +199,29 @@ def test_no_action(text):
     assert read_response(text) == Reading(None, None, None, None, "")
 
 
+# -- trailing zeros are the same number (user decision, 2026-10-01) ---------------
+# Gemini's pilot wrote every move as `x=-80.0 z=0.0`. The canonical rendering drops a
+# whole number's `.0`, so these read as layer 2 and the registered strict bound fell to
+# 0.77 against a primary of 0.99: it was measuring number formatting. Writing a whole
+# number in decimal is a stylistic choice, not a departure from the grammar.
+TRAILING_ZEROS = [
+    ("ACTION: move to x=-80.0 z=0.0", _move(-80, 0), 0),
+    ("ACTION: move to x=12.50 z=3.000", _move(12.5, 3), 0),
+    ("ACTION: cast Fireball at x=7.50 z=60.0", _cast_at_point(7.5, 60), 0),
+    ("ACTION: move to x=-0.0 z=5", _move(0, 5), 0),
+    # Only trailing fractional zeros. Other number formats are still phrasing.
+    ("ACTION: move to x=5ft z=30.0", _move(5, 30), 2),
+    ("ACTION: move to x: -80.0, z: 0.0", _move(-80, 0), 2),
+]
+
+
+@pytest.mark.parametrize("text, call, layer", TRAILING_ZEROS)
+def test_trailing_zeros_do_not_change_the_layer(text, call, layer):
+    reading = read_response(text)
+    assert reading.call == call
+    assert reading.layer == layer
+
+
 # -- canonical rendering: the inverse of parsing ---------------------------------
 
 

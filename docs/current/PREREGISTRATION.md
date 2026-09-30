@@ -847,6 +847,21 @@ noise only. The registered coverage figures (§4.1.1) were re-measured and are
 unchanged. The pilot is re-run on the fixed engine, and the §4.4 choices are read from
 that re-run. Ledger A29.
 
+### 2026-10-01 — Trailing zeros no longer cost a C1 command its layer
+
+Found by the Gemini pilot, before the freeze. The canonical rendering writes a whole
+number without a decimal point, so `x=-80.0` was judged layer 2 ("number format"), and
+the registered strict bound, which accepts only layer 0, fell to 0.769 against a
+primary of 0.986. All 48 layer-2 lines were trailing zeros. Writing a whole number in
+decimal is a stylistic choice, not a departure from the grammar, so trailing
+fractional zeros are now treated as the same number when the layer is judged (user
+decision). Other number formats stay layer 2.
+
+The strict bound's definition is unchanged (layer 0 only). What changed is that it no
+longer measures number formatting. No verdict moves: the C1 decision rule reads the
+primary parser, the lenient bound and the audit. Re-derived on both pilots, strict now
+equals primary for both models. Ledger A32.
+
 ### 2026-09-30 — A move that goes nowhere is refused as `no_effect`
 
 Found while checking the A29 fix live, and present throughout the first pilot.
