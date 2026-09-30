@@ -1,6 +1,7 @@
 # Pre-registration — The Action-Interface Study
 
-> **STATUS: DRAFT.** Written 2026-09-19, before any study data was collected.
+> **STATUS: FROZEN at the `study-freeze` tag (2026-10-01),** after three pilots and
+> before any confirmatory data. Written 2026-09-19, before any study data was collected.
 > Everything marked **TBD** is resolved after the Phase 2 pilot, at which point this
 > document is **frozen** and the commit tagged `study-freeze`. No hypothesis, metric,
 > exclusion rule or analysis choice below may change after that tag — later changes
@@ -37,6 +38,21 @@ D20Bench; *Setting the DC: Tool-Grounded D&D Simulations to Test LLM Agents*;
 GameBench (arXiv 2406.06613); SmartPlay (arXiv 2310.01557); *Let Me Speak Freely?*
 (Tam et al., 2024) on format-restriction effects; invalid-action masking in RL
 (Huang & Ontañón, 2020).
+
+**Verified 2026-10-01**, each against its primary listing:
+- D20Bench is an open-source benchmark and blog post (e4developer). Its stated contract
+  is that "the engine generates every legal action … the model picks exactly one by its
+  id", which is C3.
+- *Setting the DC* is at NeurIPS 2025 (OpenReview `rmEBSdk26P`).
+- GameBench is Costarelli et al., arXiv 2406.06613.
+- SmartPlay is Wu, Tang, Mitchell & Li, arXiv 2310.01557.
+- *Let Me Speak Freely?* is Tam et al., EMNLP 2024 Industry Track, arXiv 2408.02442.
+  Relevant here: it finds that parsing failures are *not* the main cause of the
+  degradation that format restriction causes.
+- Huang & Ontañón is FLAIRS 2020, arXiv 2006.14171.
+
+Found while verifying, and to be read for the write-up: *DungeonBench: A Benchmark for
+Rules-Rich Tactical Reasoning in D&D Combat* (arXiv 2607.29577, 2026).
 
 ---
 
@@ -153,7 +169,7 @@ model capability.
 | LLM side | The scenario's `llm_team` |
 | Information policy | One fixed policy: the current default (all enemy info revealed, `hp_display="exact"`). Information sensitivity is a different study. |
 | Temperature | 0 where the model accepts it; otherwise the provider's default, which is not sent and is recorded as `default` (2026-09-30). Nemotron runs at 0. Sonnet 5.5 refuses any non-default value (400), so it runs at its default. Gemini 3.8 Flash also runs at its default: Google strongly advises against lowering it on Gemini 3 models, warning of looping and degraded reasoning, which the harness would otherwise record as the model's own errors (user decision, 2026-09-30). A fixed temperature of 0 that providers may stop supporting is the larger threat to a study meant to be repeatable. Still not deterministic — stated as a limitation. |
-| Reasoning | The **lowest setting each provider allows**, the same rule as temperature (2026-09-30). Nemotron: off. Gemini 3.8 Flash and Sonnet 5.5 cannot turn reasoning off, so both run at `low`. Fixed per model across all four conditions, and recorded in every manifest. Turn-by-turn tactical choices gain little from long deliberation. |
+| Reasoning | The **lowest setting each provider allows**, the same rule as temperature (2026-09-30). Nemotron: off. Gemini 3.8 Flash and Sonnet 5.5 cannot turn reasoning off, so both run at `low`. Fixed per model across all four conditions, and recorded in every manifest. Turn-by-turn tactical choices gain little from long deliberation. **"Low" is not the same across vendors (measured in the pilots, 2026-10-01).** Gemini at `low` reasoned on most turns (~180–320 output tokens per decision). Sonnet at `low` reasoned on 19 of 663 requests (2,773 tokens in all): its adaptive thinking mostly judges these turns too simple to think about. Kept deliberately, as a result, not corrected (user decision; see §9). |
 | Failure budget | Existing: 3 consecutive **or** 5 total failed calls per turn → turn forced to end. Rejection feedback returned to the agent. |
 | Round cap | 20 (`DEFAULT_ROUND_CAP`) |
 | Match end | The moment one team has no one standing, at the killing blow. Added 2026-09-24, before any data. Combat used to end only when a single *creature* was left, so a 2v2 won with two survivors played on to the round cap. The winners then acted against nobody, which wasted paid calls and padded H1 with trivial decisions in exactly the matches a model won. Winners are unchanged, since the match result was already decided by team. A turn ended this way is recorded as `end_cause: over` and is neither forced nor forfeited. |
@@ -317,9 +333,9 @@ deliberately.
 
 | Model | Role | Status |
 |---|---|---|
-| Nemotron 3.5 Lightning | Small open-weight model | **Confirmed.** Paid `coreweave/bf16`, bf16, $0.07/$0.20. Temperature 0 with seed; reasoning off. Piloted twice (2026-09-30). |
-| Gemini 3.8 Flash | Fast commercial model | **Confirmed.** `google-ai-studio`, standard tier, $0.75/$3.75. The provider's default temperature, as Google recommends, with seed. Flex is not used: its 1–15 minute queueing targets and pre-emption do not suit a sequential agent loop. Reasoning `low` (it cannot be turned off). Pilot pending. |
-| Claude Sonnet 5.5 | Flagship commercial model | **Confirmed (2026-09-30).** `google-vertex/global`, $2/$10 (2026-10-01; first `azure/us`, whose US-regional endpoint lists 10% higher, with no remaining advantage once temperature proved unsettable). The system prompt is marked for prompt caching (`cache_prompt`, 2026-10-01): this changes the bill, never the words sent, and the report prices every call at list, so no cost comparison between conditions is affected. The provider's default temperature, since it refuses any other; **no seed on any host**. Reasoning `low` (mandatory). Pilot pending; the budget cap is set after it. |
+| Nemotron 3.5 Lightning | Small open-weight model | **Confirmed.** Paid `coreweave/bf16`, bf16, $0.07/$0.20. Temperature 0 with seed; reasoning off. Piloted twice (2026-09-30). Registered version `nvidia/nemotron-3.5-lightning-20260807`. |
+| Gemini 3.8 Flash | Fast commercial model | **Confirmed.** `google-ai-studio`, standard tier, $0.75/$3.75. The provider's default temperature, as Google recommends, with seed. Flex is not used: its 1–15 minute queueing targets and pre-emption do not suit a sequential agent loop. Reasoning `low` (it cannot be turned off). Piloted 2026-10-01: $1.86 for 32 cells, clean. Registered version `google/gemini-3.8-flash-20260902`. |
+| Claude Sonnet 5.5 | Flagship commercial model | **Confirmed (2026-09-30).** `google-vertex/global`, $2/$10 (2026-10-01; first `azure/us`, whose US-regional endpoint lists 10% higher, with no remaining advantage once temperature proved unsettable). The system prompt is marked for prompt caching (`cache_prompt`, 2026-10-01): this changes the bill, never the words sent, and the report prices every call at list, so no cost comparison between conditions is affected. The provider's default temperature, since it refuses any other; **no seed on any host**. Reasoning `low` (mandatory). Piloted 2026-10-01: $3.63 at list (about $2.29 billed; 48% of input read from cache) for 32 cells, clean. Registered version `anthropic/claude-sonnet-5.5-20260928`. |
 
 **The tiers are product classes, not a capability ranking (2026-09-30).** On the
 Artificial Analysis Intelligence Index, Gemini 3.8 Flash scores at or above Sonnet 5.5 at
@@ -778,6 +794,13 @@ Also declared (2026-09-30):
   and no seed on any host, and Gemini 3.8 Flash and Sonnet 5.5 cannot turn reasoning off.
   Each model keeps one setting across all its conditions, so no hypothesis is affected.
   The exploratory between-model comparison mixes capability with sampling.
+- **"Low" reasoning is not one setting across vendors** (measured in the pilots). At its
+  floor Gemini deliberates on most turns and Sonnet on almost none (§4). Each model is
+  run at the lowest reasoning its provider allows, and the model decides how much of it
+  to use. So in the between-model comparison, capability, sampling and *reasoning
+  behaviour* all differ. This is reported as a finding in its own right, not controlled
+  away: in the pilot, Sonnet, reasoning least, was the model whose tactics depended most
+  on the menu.
 
 ---
 
@@ -893,7 +916,7 @@ baseline agents never make such a move, so the baselines are unchanged. Ledger A
 
 **Blocking — these change what the study can claim:**
 
-- [ ] **C1's parser fairness, and whether C1 runs at all.** A deterministic parser that
+- [x] **C1's parser fairness, and whether C1 runs at all.** A deterministic parser that
       rejects reasonable phrasings makes C1's `malformed_output` rate a measure of
       parser brittleness, not of the free-text interface — and since H1 predicts C1 is
       worst, a brittle parser would *confirm the hypothesis for the wrong reason*. An
@@ -904,6 +927,9 @@ baseline agents never make such a move, so the baselines are unchanged. Ledger A
       strict/lenient re-scoring design and a parser audit rule. **Decided 2026-09-24:**
       C1 runs; all recommendations accepted. **Built 2026-09-24** (C1 slice 2); this
       item closes when the parser is frozen with the rest at `study-freeze`.
+      **Closed at the freeze (2026-10-01).** Across three pilots and three models, the
+      primary parser read every C1 response it was given; none was refused as
+      unreadable.
 - [x] Opponent: Scripted vs Heuristic, decided in the pilot by the §4.4 rule.
       **Scripted** (2026-09-30, second pilot `results/pilot-2`, on the fixed engine). The
       model's best pooled win rate in any scenario was 3/8 (aoe_placement), far below
@@ -916,20 +942,37 @@ baseline agents never make such a move, so the baselines are unchanged. Ledger A
 
 - [x] Whether Claude Sonnet is in the final run. **Yes, Sonnet 5.5** (2026-09-30), on
       `google-vertex/global`, at `low` reasoning and its default temperature (§5).
-- [ ] Pilots for Gemini 3.8 Flash and Sonnet 5.5 (32 cells each), to measure real token
-      use including low-effort reasoning, and to confirm each pinned host behaves as
-      listed. **Then** set the final run's spend cap and key limit.
+- [x] Pilots for Gemini 3.8 Flash and Sonnet 5.5 (32 cells each). **Both clean**
+      (2026-10-01), and every pinned host behaved as listed. Final spend cap **$35**,
+      with the key limit set to the same figure (`examples/study/final.toml`).
 - [x] Gemini 3.8 Flash temperature: **the provider's default** (§4), as Google recommends.
       Pilot grids ready: `examples/study/pilot_gemini.toml`, `pilot_sonnet.toml`.
-- [ ] Exact pinned model strings
-- [ ] Prompt texts and their hashes for all four conditions — note the prompt was split
-      into a shared body plus a per-condition action section on 2026-09-21, so **every
-      hash changed**; they must be recorded from the frozen commit, not from memory
-- [ ] Confirmed per-match call and token counts from the pilot. The dry run estimates
-      the remaining spend from $/cell measured per model x condition over the cells
-      already on disk (a condition not yet run is listed, unpriced), so run a few cells
-      of every condition and dry-run again before committing to the grid.
-- [ ] Citation verification for every work listed in §1
+- [x] Exact pinned model strings. Requested by id, with each id's registered version
+      the one OpenRouter maps it to at the freeze:
+      `nvidia/nemotron-3.5-lightning-20260807`, `google/gemini-3.8-flash-20260902` and
+      `anthropic/claude-sonnet-5.5-20260928`. The mapping is re-checked just before
+      launch. Every call records the model actually served, so a silent change shows
+      in the report.
+- [x] Prompt texts and their hashes for all four conditions, computed from the frozen
+      commit and identical to those recorded by all three pilots:
+      - C1 `a5e673fe69d018f3d8fa7efd1b2e24b1dc7a8f7c75078f0612c4e2cdd9473a25`
+      - C2 `71ce971bc28adc9fd172875953a81032febf170478e3b7695eb0dc863824292a`
+      - C2+M `5d937130cac8a71a8219ef7e4f441c7b0c0eafe80c2bb238be89a26e632edbb1`
+      - C3 `8899de0cb05e6b87b3919700d17001a3e7d52969539d86b359a9870721e999ac`
+      The texts themselves are in `src/arena/interfaces.py` at the tag.
+- [x] Confirmed per-match call and token counts from the pilots. Means, with the
+      per-match range of requests:
+      - Nemotron: 42 requests (9–106), 80k input and 1.2k output tokens
+      - Gemini: 27 requests (7–66), 45k input and 6.5k output tokens
+      - Sonnet: 21 requests (7–55), 49k input and 1.5k output tokens
+      Projected final run at list: about $0.93, $9.32 and $18.17, **about $28.40 in
+      total**.
+- [x] Citation verification for every work listed in §1 (2026-10-01; see §1).
+- [x] Two taxonomy questions deferred to the freeze, both decided on pilot evidence:
+      neither case occurred in any of the three pilots, so nothing changes.
+      - A3: an area spell aimed at a creature keeps `unknown_target`.
+      - A8: the primary parser still reads a trailing justification into the weapon
+        name. The lenient bound already credits it (§7).
 
 **Settled since this list was written:** the AoE scenario is built (§4.1); combatant ids
 are a registered control (§4.2); the invalid-action taxonomy is implemented (§6); H4 is

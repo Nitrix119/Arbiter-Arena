@@ -249,6 +249,8 @@ names where it should be addressed. Append; strike through and date an item when
   `unknown_target` ("Fireball is an AOE spell and requires a target point"), identically for
   C1 and C2. Open only as a taxonomy question: `invalid_target_relation` may be the truer
   category. → decide with the other taxonomy splits at the freeze (prereg §6).
+  *Decided at the freeze (2026-10-01):* it never occurred in three pilots, so it keeps
+  `unknown_target` (prereg §11).
 - **A4. Identifier tie-break with duplicate names.** The resolver tries ids before display
   names, so with two creatures named "Goblin" (`goblin`, `goblin-2`) the spelling `Goblin`
   resolves to `goblin`, though a reader might call it ambiguous. No study roster can hit this
@@ -281,6 +283,8 @@ names where it should be addressed. Append; strike through and date an item when
   *2026-09-24:* the **lenient bound** now drops a trailing justification, so the study's
   upper bound already credits these lines. The primary parser is unchanged, pending pilot
   evidence.
+  *Decided at the freeze (2026-10-01):* it never occurred in three pilots, so the primary
+  parser stays as it is (prereg §11).
 - **A9. ~~A call's arguments reach the transcript unscrubbed, in every condition.~~ Fixed
   2026-09-24** (`4fd3358`). The fix is wider than first logged: the raw `tool_call`, and the
   referee's result (which echoes a bad id back), were also unscrubbed. Everything now passes

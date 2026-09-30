@@ -934,3 +934,28 @@ def test_a_dry_run_will_not_price_an_unbilled_bundle(tmp_path, monkeypatch):
     text = _dry_run(ran, tmp_path)
 
     assert "cost unknown" in text and "reported no token usage" in text
+
+
+def test_the_final_grid_holds_its_registered_settings():
+    """The frozen grid must match prereg §4-§5: a slip here spends money on the wrong
+    run, and nothing downstream would notice."""
+    from src.arena.study import load_grid
+
+    grid = load_grid(Path("examples/study/final.toml"))
+    assert tuple(grid.seeds) == tuple(range(101, 111))  # the registered seeds
+    assert set(grid.seeds).isdisjoint({1, 2})
+    assert grid.opponent == "scripted"
+    assert grid.spend_cap_usd > 0
+    live = {m.id: m for m in grid.models if m.provider == "openrouter"}
+    assert set(live) == {
+        "nvidia/nemotron-3.5-lightning",
+        "google/gemini-3.8-flash",
+        "anthropic/claude-sonnet-5.5",
+    }
+    for model in live.values():
+        assert len(model.hosts) == 1  # one host, fallbacks off
+        assert model.reasoning_config() is not None  # pinned, never host default
+    assert live["nvidia/nemotron-3.5-lightning"].temperature == 0.0
+    assert live["anthropic/claude-sonnet-5.5"].cache_prompt is True
+    baselines = {m.policy for m in grid.models if m.provider == "baseline"}
+    assert baselines == {"scripted", "random", "heuristic"}
