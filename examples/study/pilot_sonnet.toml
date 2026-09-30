@@ -24,13 +24,13 @@ id = "anthropic/claude-sonnet-5.5"
 provider = "openrouter"
 # The provider's default temperature, not sent and recorded as "default" (prereg §4).
 temperature = "default"
-# azure/us's own price: US-regional endpoints list 10% above the global ones
-# (checked 2026-10-01). The spend cap is computed from these, so they must match.
-usd_per_m_input = 2.2
-usd_per_m_output = 11.0
-# Azure (US): 100% uptime over a day when chosen. No host offers a seed for this
-# model, and it refuses any temperature but its default (a 400).
-hosts = ["azure/us"]
+usd_per_m_input = 2.0          # google-vertex/global's listed price, checked 2026-10-01
+usd_per_m_output = 10.0
+# Google Vertex (global): list price and 99.98% uptime over a day. Chosen over
+# azure/us, whose US-regional endpoint lists 10% higher; Azure was first picked for
+# temperature control, which this model refuses on every host (a 400). No host
+# offers a seed for it.
+hosts = ["google-vertex/global"]
 max_tokens = 4096              # recorded; a response cut at this limit is flagged
 # Reasoning is mandatory on this model; "low" is the lowest it allows (prereg §4).
 reasoning = { effort = "low" }
