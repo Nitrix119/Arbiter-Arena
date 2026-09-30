@@ -122,6 +122,9 @@ class ModelSpec:
     #: OpenRouter only: the ``reasoning`` setting for a thinking model, as sorted
     #: items so the spec stays hashable; see :meth:`reasoning_config`.
     reasoning: Tuple[Tuple[str, Any], ...] = ()
+    #: OpenRouter only: mark the system prompt for prompt caching (Anthropic caches
+    #: only what a request marks). Changes the bill, never the prompt.
+    cache_prompt: bool = False
 
     def reasoning_config(self) -> Optional[Dict[str, Any]]:
         return dict(self.reasoning) if self.reasoning else None
@@ -323,6 +326,15 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
                 f"{what}: unknown stumble_style {stumble_style!r}; expected one of "
                 f"{list(STUMBLE_STYLES)}"
             )
+        cache_prompt = entry.get("cache_prompt", False)
+        if not isinstance(cache_prompt, bool):
+            raise GridError(
+                f"{what}.cache_prompt must be true or false; got {cache_prompt!r}"
+            )
+        if cache_prompt and provider != PROVIDER_OPENROUTER:
+            raise GridError(
+                f"{what} ({model_id}): cache_prompt is for OpenRouter models only"
+            )
         hosts = entry.get("hosts", [])
         if hosts and provider != PROVIDER_OPENROUTER:
             raise GridError(f"{what} ({model_id}): hosts is for OpenRouter models only")
@@ -343,6 +355,7 @@ def parse_grid(data: Dict[str, Any]) -> Grid:
                 policy=policy,
                 max_tokens=max_tokens,
                 reasoning=tuple(sorted((reasoning or {}).items())),
+                cache_prompt=cache_prompt,
             )
         )
     if len({m.id for m in models}) != len(models):
@@ -462,6 +475,7 @@ def _openrouter_agent(seat: Seat) -> Agent:
         seed=seat.seed,
         max_tokens=seat.spec.max_tokens,
         reasoning=seat.spec.reasoning_config(),
+        cache_prompt=seat.spec.cache_prompt,
     )
 
 
@@ -613,6 +627,7 @@ def play_cell(
         max_tokens=cell.model.max_tokens,
         hosts=list(cell.model.hosts) or None,
         reasoning=cell.model.reasoning_config(),
+        cache_prompt=cell.model.cache_prompt or None,
     )
     transcript = Transcript()
     try:

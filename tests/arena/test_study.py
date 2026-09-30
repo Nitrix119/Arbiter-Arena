@@ -790,6 +790,19 @@ def test_temperature_may_be_left_to_the_provider_default(tmp_path):
     assert start["temperature"] == "default"
 
 
+def test_cache_prompt_is_a_validated_openrouter_field(tmp_path):
+    grid = _grid(models=[_live_model(cache_prompt=True)], spend_cap_usd=1.0)
+    assert grid.models[0].cache_prompt is True
+    assert (
+        _grid(models=[_live_model()], spend_cap_usd=1.0).models[0].cache_prompt is False
+    )
+
+    with pytest.raises(GridError, match="cache_prompt"):
+        _grid(models=[_live_model(cache_prompt="yes")], spend_cap_usd=1.0)
+    with pytest.raises(GridError, match="OpenRouter"):
+        _grid(models=[{"id": "mock", "provider": "mock", "cache_prompt": True}])
+
+
 def test_the_manifest_records_the_settings_that_ran(tmp_path):
     run_grid(_grid(), tmp_path, echo=lambda _: None)
     (path,) = tmp_path.rglob("seed1.jsonl")
@@ -798,6 +811,7 @@ def test_the_manifest_records_the_settings_that_ran(tmp_path):
     assert start["max_tokens"] == 4096
     assert set(start["versions"]) >= {"python", "lark"}
     assert "hosts" not in start and "reasoning" not in start  # none were set
+    assert "cache_prompt" not in start
 
 
 def test_the_committed_opponent_grid_is_free_and_uses_the_heuristic():

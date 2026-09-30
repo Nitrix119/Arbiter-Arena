@@ -101,6 +101,22 @@ def _usage(response: Any) -> Tuple[Optional[int], Optional[int]]:
     )
 
 
+def _cache_usage(response: Any) -> Tuple[Optional[int], Optional[int]]:
+    """``(cache_read, cache_write)`` tokens from OpenRouter's ``prompt_tokens_details``.
+
+    ``None`` for whichever the provider does not report, never ``0``: an unreported
+    count is not evidence that nothing was cached.
+    """
+    usage = getattr(response, "usage", None)
+    details = getattr(usage, "prompt_tokens_details", None)
+    if isinstance(details, dict):
+        return details.get("cached_tokens"), details.get("cache_write_tokens")
+    return (
+        getattr(details, "cached_tokens", None),
+        getattr(details, "cache_write_tokens", None),
+    )
+
+
 def _first_message(response: Any, model: str, record: RequestRecord) -> Any:
     """Return the first choice's message, or refuse as a *provider* failure.
 
@@ -146,8 +162,12 @@ class OpenRouterAgent(Agent):
         hosts: Sequence[str] = (),
         seed: Optional[int] = None,
         reasoning: Optional[Dict[str, Any]] = None,
+        cache_prompt: bool = False,
     ) -> None:
         super().__init__(name, team)
+        #: Mark the system prompt for prompt caching — for providers that cache only
+        #: what a request marks (Anthropic). Changes cost, never the words sent.
+        self.cache_prompt = cache_prompt
         if client is None:
             if openai is None:
                 raise ImportError(
@@ -185,7 +205,16 @@ class OpenRouterAgent(Agent):
     ) -> Tuple[Optional[ToolCall], RequestRecord]:
         """One OpenRouter (chat-completions) request; return its tool call and cost."""
         system = self.interface.system_prompt()
-        oai_messages = [{"role": "system", "content": system}, *messages]
+        system_message: Dict[str, Any] = {"role": "system", "content": system}
+        if self.cache_prompt:
+            # One breakpoint after the system prompt caches the whole fixed prefix
+            # (tools, then system: the provider's caching order). The words are
+            # unchanged; only the marker is added. Below the provider's minimum the
+            # request simply runs uncached, with no write billed.
+            system_message["content"] = [
+                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+            ]
+        oai_messages = [system_message, *messages]
         # A text condition (C1) offers no tools, and the API refuses `tool_choice`
         # without `tools` — so both are omitted rather than sent empty.
         tool_fields: Dict[str, Any] = {}
@@ -221,10 +250,13 @@ class OpenRouterAgent(Agent):
             **tool_fields,
         )
         input_tokens, output_tokens = _usage(response)
+        cache_read, cache_write = _cache_usage(response)
         record = RequestRecord(
             latency_ms=(time.perf_counter() - started) * 1000.0,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            cache_read_tokens=cache_read,
+            cache_write_tokens=cache_write,
             # The router may serve a different model than the one asked for, so record
             # what actually answered (§3.1), not what we requested.
             served_model=getattr(response, "model", None),

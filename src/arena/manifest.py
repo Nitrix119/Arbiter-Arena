@@ -166,6 +166,8 @@ class Manifest:
     hosts: Optional[List[str]] = None
     #: The reasoning setting sent for a thinking model.
     reasoning: Optional[Dict[str, Any]] = None
+    #: True when the system prompt was marked for prompt caching (absent otherwise).
+    cache_prompt: Optional[bool] = None
     #: Python and package versions (see :func:`package_versions`).
     versions: Dict[str, str] = field(default_factory=dict)
     schema_versions: Dict[str, str] = field(
@@ -200,6 +202,7 @@ class Manifest:
             "max_tokens": self.max_tokens,
             "hosts": list(self.hosts) if self.hosts else None,
             "reasoning": dict(self.reasoning) if self.reasoning is not None else None,
+            "cache_prompt": self.cache_prompt,
             "versions": dict(self.versions) if self.versions else None,
         }
         present = {k: v for k, v in data.items() if v is not None}

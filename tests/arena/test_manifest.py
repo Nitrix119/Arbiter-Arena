@@ -211,3 +211,8 @@ def test_each_condition_has_its_own_stable_fingerprint():
     prints = {name: interface_fingerprint(get_interface(name)) for name in REGISTRY}
     assert len(set(prints.values())) == len(REGISTRY)
     assert prints == {n: interface_fingerprint(get_interface(n)) for n in REGISTRY}
+
+
+def test_a_marked_prompt_cache_is_recorded_and_an_unmarked_one_is_absent():
+    assert Manifest(cache_prompt=True).to_dict()["cache_prompt"] is True
+    assert "cache_prompt" not in Manifest().to_dict()

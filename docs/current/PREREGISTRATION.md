@@ -319,7 +319,7 @@ deliberately.
 |---|---|---|
 | Nemotron 3.5 Lightning | Small open-weight model | **Confirmed.** Paid `coreweave/bf16`, bf16, $0.07/$0.20. Temperature 0 with seed; reasoning off. Piloted twice (2026-09-30). |
 | Gemini 3.8 Flash | Fast commercial model | **Confirmed.** `google-ai-studio`, standard tier, $0.75/$3.75. The provider's default temperature, as Google recommends, with seed. Flex is not used: its 1–15 minute queueing targets and pre-emption do not suit a sequential agent loop. Reasoning `low` (it cannot be turned off). Pilot pending. |
-| Claude Sonnet 5.5 | Flagship commercial model | **Confirmed (2026-09-30).** `azure/us`, $2/$10. The provider's default temperature, since it refuses any other; **no seed on any host**. Reasoning `low` (mandatory). Pilot pending; the budget cap is set after it. |
+| Claude Sonnet 5.5 | Flagship commercial model | **Confirmed (2026-09-30).** `azure/us`, $2.20/$11 (a US-regional endpoint, 10% above list). The system prompt is marked for prompt caching (`cache_prompt`, 2026-10-01): this changes the bill, never the words sent, and the report prices every call at list, so no cost comparison between conditions is affected. The provider's default temperature, since it refuses any other; **no seed on any host**. Reasoning `low` (mandatory). Pilot pending; the budget cap is set after it. |
 
 **The tiers are product classes, not a capability ranking (2026-09-30).** On the
 Artificial Analysis Intelligence Index, Gemini 3.8 Flash scores at or above Sonnet 5.5 at

@@ -62,6 +62,12 @@ class RequestRecord:
     latency_ms: float = 0.0
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
+    #: Input tokens read from, and written to, the provider's prompt cache (both are
+    #: part of ``input_tokens``). ``None`` when the provider does not say. Recorded so
+    #: a run can show its cache works, and that a prefix below the provider's minimum
+    #: wrote nothing: Anthropic then reports 0 for both and bills no write.
+    cache_read_tokens: Optional[int] = None
+    cache_write_tokens: Optional[int] = None
     #: The model the provider says it served — not the string we asked for. §3.1
     #: requires recording it, because a router may substitute a model silently.
     served_model: Optional[str] = None

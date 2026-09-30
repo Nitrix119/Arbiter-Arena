@@ -423,3 +423,55 @@ def test_extra_tool_calls_are_counted_not_silently_dropped():
         agent.decide(_obs())
     assert agent.telemetry.requests[0].extra_tool_calls == 1
     assert agent.telemetry.requests[0].distinct_tool_calls == 2
+
+
+# -- prompt caching (2026-10-01) ------------------------------------------------------
+# Sonnet caches only a prefix the request marks. Cache reads and writes are recorded
+# per request, so the pilot's own data can show the cache works, and that a prompt
+# under the 512-token minimum causes no billed write.
+
+
+def _cached_response(read, write):
+    completion = _response(fn_call("end_turn", "{}"), usage=(900, 20))
+    completion.usage.prompt_tokens_details = SimpleNamespace(
+        cached_tokens=read, cache_write_tokens=write
+    )
+    return completion
+
+
+def test_the_system_prompt_is_marked_for_caching_only_when_asked():
+    plain, cached = FakeClient([_response(fn_call("end_turn", "{}"))]), FakeClient(
+        [_response(fn_call("end_turn", "{}"))]
+    )
+    OpenRouterAgent("O", "a", client=plain).decide(_obs())
+    OpenRouterAgent("O", "a", client=cached, cache_prompt=True).decide(_obs())
+
+    plain_system = plain.calls[0]["messages"][0]
+    assert isinstance(plain_system["content"], str)  # unchanged when not asked
+
+    cached_system = cached.calls[0]["messages"][0]
+    assert cached_system["role"] == "system"
+    assert cached_system["content"] == [
+        {
+            "type": "text",
+            "text": plain_system["content"],  # the same words, only marked
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+
+def test_cache_reads_and_writes_are_recorded_per_request():
+    client = FakeClient([_cached_response(read=640, write=0)])
+    agent = OpenRouterAgent("O", "a", client=client, cache_prompt=True)
+    agent.decide(_obs())
+    (request,) = agent.last_telemetry().requests
+    assert (request.cache_read_tokens, request.cache_write_tokens) == (640, 0)
+
+
+def test_unreported_cache_fields_stay_unknown():
+    agent = OpenRouterAgent(
+        "O", "a", client=FakeClient([_response(fn_call("end_turn", "{}"))])
+    )
+    agent.decide(_obs())
+    (request,) = agent.last_telemetry().requests
+    assert (request.cache_read_tokens, request.cache_write_tokens) == (None, None)

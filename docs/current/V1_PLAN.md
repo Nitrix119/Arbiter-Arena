@@ -982,3 +982,12 @@ Next: the freeze.
   test-first).
 - Observed: prompt caching was **0%** on Gemini (Nemotron on CoreWeave was about 40%).
   To be looked at before the final run.
+
+**Prompt caching (2026-10-01).** Gemini caches nothing because its minimum cacheable
+prefix is about 4,096 tokens and our whole request is 1–2k. Nemotron's host caches
+automatically (~40%). Sonnet caches only what a request marks, from 512 tokens.
+- A per-model grid option, `cache_prompt`, marks the system prompt. That caches the
+  tools and the system prompt, about half of each request, and it is on for Sonnet only.
+- Cache reads and writes are recorded per request.
+- Below the minimum, Anthropic writes nothing and bills nothing extra. The request
+  simply runs uncached.
