@@ -1701,6 +1701,8 @@ def describe(records: List[Dict[str, Any]], *, refused_only: bool = False) -> st
         lines.append(f"[round {round_number}] {record['actor_id']}: {verdict}{extra}")
         if requests:
             first = requests[0]
+            if first.get("reasoning"):
+                lines.append(f"  thought : {_clip(first['reasoning'])!r}")
             if first.get("raw_output"):
                 lines.append(f"  wrote : {_clip(first['raw_output'])!r}")
             if first.get("tool_call"):

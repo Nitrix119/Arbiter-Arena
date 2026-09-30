@@ -494,6 +494,14 @@ names where it should be addressed. Append; strike through and date an item when
   - **Accepted as a known limitation (user decision, 2026-09-30).** It is unlikely to
     affect a between-condition measure measurably. Worth fixing after the study.
     Recorded in prereg §9; the prompt is unchanged.
+- **A33. Show the model's reasoning in the web replay viewer. Open (user request,
+  2026-10-01).**
+  - Transcripts now record each request's `reasoning` text and `reasoning_tokens`,
+    scrubbed, and `study show` prints it as `thought`.
+  - The `/playback` page should show it beside each decision, so a viewer can see what
+    the model considered before it acted. Absent means the model returned none
+    (Nemotron runs with reasoning off).
+  - Frontend only: the data is already in every new transcript.
 - **A32. ~~C1's strict bound measured number formatting.~~ Fixed 2026-10-01** (Gemini
   pilot; user decision).
   - The canonical rendering drops a whole number's `.0`, so `move to x=-80.0 z=0.0`

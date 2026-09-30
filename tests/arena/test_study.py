@@ -681,6 +681,26 @@ def test_a_live_model_priced_at_zero_is_refused():
         _grid(models=[free], spend_cap_usd=1.0)
 
 
+def test_show_prints_what_the_model_thought_before_acting():
+    from src.arena.study_report import describe
+
+    records = [
+        {"kind": "match_start", "model": "m", "teams": {"a": ["hero"]}},
+        {"kind": "turn_start", "round": 1},
+        {
+            "kind": "action",
+            "actor_id": "hero",
+            "call": {"name": "end_turn", "arguments": {}},
+            "result": {"ok": True},
+            "telemetry": {
+                "request_count": 1,
+                "requests": [{"reasoning": "Nothing is in reach, so I end my turn."}],
+            },
+        },
+    ]
+    assert "thought : 'Nothing is in reach, so I end my turn.'" in describe(records)
+
+
 def test_show_reads_a_match_decision_by_decision(tmp_path, capsys):
     run_grid(
         _grid(

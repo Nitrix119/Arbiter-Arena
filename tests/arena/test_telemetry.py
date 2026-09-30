@@ -475,3 +475,60 @@ def test_unreported_cache_fields_stay_unknown():
     agent.decide(_obs())
     (request,) = agent.last_telemetry().requests
     assert (request.cache_read_tokens, request.cache_write_tokens) == (None, None)
+
+
+# -- the model's reasoning (2026-10-01) -------------------------------------------------
+# Reasoning models return their thinking beside the tool call (OpenRouter's
+# `message.reasoning`, or `reasoning_details` parts); Sonnet gives a summary. It is
+# billed either way, so it is recorded, scrubbed like any model text, for reading a
+# match's decisions and, later, for the web replay viewer.
+
+
+def _thinking_response(reasoning=None, details=None, reasoning_tokens=None):
+    completion = _response(fn_call("end_turn", "{}"), usage=(900, 240))
+    message = completion.choices[0].message
+    if reasoning is not None:
+        message.reasoning = reasoning
+    if details is not None:
+        message.reasoning_details = details
+    if reasoning_tokens is not None:
+        completion.usage.completion_tokens_details = SimpleNamespace(
+            reasoning_tokens=reasoning_tokens
+        )
+    return completion
+
+
+def _request(completion):
+    agent = OpenRouterAgent("O", "a", client=FakeClient([completion]))
+    agent.decide(_obs())
+    (request,) = agent.last_telemetry().requests
+    return request
+
+
+def test_reasoning_text_and_its_token_count_are_recorded():
+    request = _request(
+        _thinking_response("The raider is adjacent; attack it.", reasoning_tokens=212)
+    )
+    assert request.reasoning == "The raider is adjacent; attack it."
+    assert request.reasoning_tokens == 212
+
+
+def test_reasoning_is_read_from_its_details_when_there_is_no_plain_field():
+    details = [
+        {"type": "reasoning.summary", "summary": "Close to melee first."},
+        {"type": "reasoning.encrypted", "data": "opaque"},  # nothing readable
+        {"type": "reasoning.text", "text": "Then attack."},
+    ]
+    request = _request(_thinking_response(details=details))
+    assert request.reasoning == "Close to melee first.\nThen attack."
+
+
+def test_no_reasoning_stays_unknown():
+    request = _request(_response(fn_call("end_turn", "{}")))
+    assert (request.reasoning, request.reasoning_tokens) == (None, None)
+
+
+def test_reasoning_is_scrubbed_on_its_way_out():
+    secret = "sk-or-v1-abcdefghijklmnop"
+    request = _request(_thinking_response(f"remember {secret}"))
+    assert secret not in request.to_dict()["reasoning"]

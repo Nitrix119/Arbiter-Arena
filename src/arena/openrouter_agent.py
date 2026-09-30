@@ -117,6 +117,42 @@ def _cache_usage(response: Any) -> Tuple[Optional[int], Optional[int]]:
     )
 
 
+#: ``reasoning_details`` part types that carry readable text, and the key holding it.
+#: ``reasoning.encrypted`` parts are opaque by design and are skipped.
+_READABLE_REASONING = {"reasoning.summary": "summary", "reasoning.text": "text"}
+
+
+def _field(item: Any, key: str) -> Any:
+    """*key* from a dict, an attribute, or a pydantic model's extras."""
+    if isinstance(item, dict):
+        return item.get(key)
+    value = getattr(item, key, None)
+    if value is None:
+        value = (getattr(item, "model_extra", None) or {}).get(key)
+    return value
+
+
+def _reasoning(message: Any, response: Any) -> Tuple[Optional[str], Optional[int]]:
+    """The model's reasoning text and its token count, where the provider gives them.
+
+    OpenRouter returns plain ``message.reasoning`` when it can, and structured
+    ``reasoning_details`` parts otherwise; readable parts are joined in order. Either
+    value is ``None`` when absent.
+    """
+    text = _field(message, "reasoning")
+    if not text:
+        parts = []
+        for detail in _field(message, "reasoning_details") or []:
+            key = _READABLE_REASONING.get(_field(detail, "type"))
+            if key and _field(detail, key):
+                parts.append(str(_field(detail, key)))
+        text = "\n".join(parts) or None
+    usage = getattr(response, "usage", None)
+    details = _field(usage, "completion_tokens_details") if usage else None
+    tokens = _field(details, "reasoning_tokens") if details is not None else None
+    return (str(text) if text else None), tokens
+
+
 def _first_message(response: Any, model: str, record: RequestRecord) -> Any:
     """Return the first choice's message, or refuse as a *provider* failure.
 
@@ -267,6 +303,7 @@ class OpenRouterAgent(Agent):
         # Not `content or None`: a host may answer with content parts rather than a
         # string, and `content` is C1's whole channel — see `message_text`.
         record.raw_output = message_text(getattr(message, "content", None))
+        record.reasoning, record.reasoning_tokens = _reasoning(message, response)
         choice = response.choices[0]
         record.finish_reason = getattr(choice, "finish_reason", None)
 

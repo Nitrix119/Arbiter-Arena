@@ -68,6 +68,11 @@ class RequestRecord:
     #: wrote nothing: Anthropic then reports 0 for both and bills no write.
     cache_read_tokens: Optional[int] = None
     cache_write_tokens: Optional[int] = None
+    #: The model's reasoning, as its provider returns it beside the action (Sonnet: a
+    #: summary; a model with reasoning off: ``None``), and how many output tokens it
+    #: was. Scrubbed at serialisation like every other copy of model text.
+    reasoning: Optional[str] = None
+    reasoning_tokens: Optional[int] = None
     #: The model the provider says it served — not the string we asked for. §3.1
     #: requires recording it, because a router may substitute a model silently.
     served_model: Optional[str] = None
@@ -105,6 +110,7 @@ class RequestRecord:
         """
         data = asdict(self)
         data["raw_output"] = scrub(self.raw_output)
+        data["reasoning"] = scrub(self.reasoning)
         data["error"] = scrub(self.error)
         # The raw call and C1's reading both copy the model's own text.
         data["tool_call"] = scrub_value(self.tool_call)

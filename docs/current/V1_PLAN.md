@@ -991,3 +991,11 @@ automatically (~40%). Sonnet caches only what a request marks, from 512 tokens.
 - Cache reads and writes are recorded per request.
 - Below the minimum, Anthropic writes nothing and bills nothing extra. The request
   simply runs uncached.
+
+**Reasoning is recorded (2026-10-01).**
+- Each request keeps the model's reasoning text, as its provider returns it beside the
+  action (Sonnet: a summary), and its reasoning-token count.
+- It is scrubbed like other model text, and `study show` prints it as `thought`.
+- Nothing is sent back to the model, which never sees its earlier turns, so behaviour
+  is unchanged.
+- Showing it in the web replay viewer is ledger A33 (later).
