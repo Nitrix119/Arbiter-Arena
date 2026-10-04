@@ -501,6 +501,16 @@ names where it should be addressed. Append; strike through and date an item when
   - **Accepted as a known limitation (user decision, 2026-09-30).** It is unlikely to
     affect a between-condition measure measurably. Worth fixing after the study.
     Recorded in prereg §9; the prompt is unchanged.
+- **A35. ~~The audit's decision table listed the baselines as "not computable".~~ Fixed
+  2026-10-05.** They play their own condition, never C1 or C2, so they have no C1
+  comparison to report. `decision_rule` now leaves out a model with neither, and keeps
+  "not computable" for a model genuinely missing one side. Display only.
+- **A34. ~~The run header miscounted its cells.~~ Fixed 2026-10-05.** It printed
+  "6 models x 4 conditions x 4 scenarios x 10 seeds" for the final grid's 600 cells. That
+  counted the baselines as models crossed with every condition, which implies 960. It
+  also priced baseline cells as model calls (~21,000; ~16,800 was right). The header now
+  reads "480 model cells … ; 120 baseline cells …". Display only: the cell count was
+  always right, and no data or cost figure was affected.
 - **A33. Show the model's reasoning in the web replay viewer. Open (user request,
   2026-10-01).**
   - Transcripts now record each request's `reasoning` text and `reasoning_tokens`,

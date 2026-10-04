@@ -376,6 +376,10 @@ def decision_rule(report_dir: Path, result: AuditScore) -> List[str]:
         "|---|---|---|---|---|---|---|---|---|",
     ]
     for model in sorted(by_model):
+        if not by_model[model][C1] and not by_model[model][C2]:
+            # A baseline plays its own condition, never C1 or C2: it has no C1
+            # comparison to report, which is not the same as a missing one (A35).
+            continue
         c2 = _pooled(by_model[model][C2], "first_attempt_valid")
         c1 = _pooled(by_model[model][C1], "first_attempt_valid")
         lenient = _pooled(lenient_by_model[model], "lenient")

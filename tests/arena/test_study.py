@@ -410,6 +410,26 @@ def test_a_dry_run_writes_nothing(tmp_path, capsys):
     assert not out.exists()
 
 
+def test_the_header_counts_model_and_baseline_cells_apart(tmp_path):
+    """Ledger A34: it printed "2 models x 2 conditions x ..." for a grid whose
+    baseline plays one condition, and priced baseline cells as model calls."""
+    from src.arena.study import CALLS_PER_MATCH_ESTIMATE, _dry_run
+
+    grid = _grid(
+        seeds=[1, 2],
+        conditions=[C1, C3],
+        models=[
+            {"id": "mock", "provider": "mock"},
+            {"id": "baseline-scripted", "provider": "baseline", "policy": "scripted"},
+        ],
+    )
+    header = _dry_run(grid, tmp_path).splitlines()[0]
+    assert "6 cells" in header
+    assert "4 model cells: 1 models x 2 conditions x 1 scenarios x 2 seeds" in header
+    assert "2 baseline cells: 1 baselines x 1 scenarios x 2 seeds" in header
+    assert f"~{4 * CALLS_PER_MATCH_ESTIMATE} model calls" in header
+
+
 def test_a_bad_grid_file_exits_with_its_reason(tmp_path, capsys):
     grid_file = tmp_path / "grid.toml"
     grid_file.write_text(

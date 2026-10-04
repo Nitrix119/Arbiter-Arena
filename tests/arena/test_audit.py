@@ -275,3 +275,28 @@ def test_the_decision_rule_compares_fresh_decisions_only(tmp_path):
     row = next(line for line in lines if line.startswith("| m |"))
     assert "| 1.000 | 0.500 | 0.500 |" in row  # C2, C1 primary, C1 lenient
     assert row.endswith("| supported |")
+
+
+def test_the_decision_rule_leaves_out_models_with_no_c1_or_c2(tmp_path):
+    """Ledger A35: the baselines play in their own condition, never C1 or C2, so they
+    have no C1 comparison at all. Listing them as "not computable" read like a gap."""
+    from src.arena.audit import AuditScore, decision_rule
+
+    decisions = [
+        {"model": "m", "condition": c, "fresh": "True", "first_attempt_valid": "True"}
+        for c in ("C1", "C2")
+    ] + [
+        {
+            "model": "baseline-scripted",
+            "condition": "C3",
+            "fresh": "True",
+            "first_attempt_valid": "True",
+        }
+    ]
+    _write_csv(tmp_path / "decisions.csv", decisions)
+    _write_csv(tmp_path / "c1_bounds.csv", [{"model": "m", "lenient": "True"}])
+
+    lines = decision_rule(tmp_path, AuditScore(0, 0, 0, 0, 0, 0, 0.0))
+
+    assert any(line.startswith("| m |") for line in lines)
+    assert not any("baseline-scripted" in line for line in lines)

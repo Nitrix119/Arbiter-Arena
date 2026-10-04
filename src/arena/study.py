@@ -995,12 +995,31 @@ def _dry_run(grid: Grid, out: Path) -> str:
     all_cells = list(cells(grid))
     existing = sum(1 for c in all_cells if c.path(out).exists())
     remaining = len(all_cells) - existing
+    # A baseline plays once per scenario and seed in its own condition, and makes no
+    # model calls, so it is counted apart (ledger A34).
+    n_models = sum(1 for m in grid.models if m.provider != PROVIDER_BASELINE)
+    n_baselines = len(grid.models) - n_models
+    model_cells = (
+        n_models * len(grid.conditions) * len(grid.scenarios) * len(grid.seeds)
+    )
+    parts = [
+        f"{model_cells} model cells: {n_models} models x {len(grid.conditions)} "
+        f"conditions x {len(grid.scenarios)} scenarios x {len(grid.seeds)} seeds"
+    ]
+    if n_baselines:
+        parts.append(
+            f"{len(all_cells) - model_cells} baseline cells: {n_baselines} baselines "
+            f"x {len(grid.scenarios)} scenarios x {len(grid.seeds)} seeds"
+        )
+    model_remaining = sum(
+        1
+        for c in all_cells
+        if c.model.provider != PROVIDER_BASELINE and not c.path(out).exists()
+    )
     lines = [
-        f"{grid.name}: {len(all_cells)} cells "
-        f"({len(grid.models)} models x {len(grid.conditions)} conditions x "
-        f"{len(grid.scenarios)} scenarios x {len(grid.seeds)} seeds); "
+        f"{grid.name}: {len(all_cells)} cells ({'; '.join(parts)}); "
         f"{existing} already done, {remaining} to run "
-        f"(~{remaining * CALLS_PER_MATCH_ESTIMATE} model calls)."
+        f"(~{model_remaining * CALLS_PER_MATCH_ESTIMATE} model calls)."
     ]
     live = [spec for spec in grid.models if spec.provider == PROVIDER_OPENROUTER]
     if live:
