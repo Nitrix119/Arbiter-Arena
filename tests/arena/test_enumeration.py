@@ -226,7 +226,9 @@ def test_the_cap_is_honoured_when_it_does_bite():
 
 
 def test_the_agent_facing_view_hides_the_underlying_call():
-    action = EnumeratedAction("end_turn", "End your turn", None)  # type: ignore[arg-type]
+    action = EnumeratedAction(
+        "end_turn", "End your turn", None  # type: ignore[arg-type]
+    )
     assert action.to_dict() == {"action_id": "end_turn", "label": "End your turn"}
 
 

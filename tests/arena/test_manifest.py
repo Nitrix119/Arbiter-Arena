@@ -182,7 +182,7 @@ def test_booleans_are_not_collapsed_into_numbers():
     assert "true" in canonical_json({"alive": True})
 
 
-# -- the interface fingerprint: everything the model is shown ---------------------------
+# -- the interface fingerprint: everything the model is shown --------------------------
 
 
 def test_the_fingerprint_covers_the_tool_schemas_not_just_the_prompt(monkeypatch):

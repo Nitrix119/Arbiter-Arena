@@ -4,7 +4,6 @@ import random
 
 from src.arena.agent import RandomAgent, ScriptedAgent
 from src.arena.observation import build_observation
-from src.arena.tools import TOOLS
 
 from .conftest import melee_attack
 

@@ -28,7 +28,7 @@ from src.arena.study_report import (
     wilson,
 )
 
-# -- statistics -------------------------------------------------------------------------
+# -- statistics ------------------------------------------------------------------------
 
 
 def test_wilson_matches_known_values():
@@ -53,7 +53,7 @@ def test_empty_denominators_give_no_estimate():
     assert bootstrap_mean([]) is None
 
 
-# -- the registered definitions -----------------------------------------------------------
+# -- the registered definitions --------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -286,7 +286,7 @@ def test_only_the_model_team_is_counted():
     assert [d.actor for d in decisions_of(Path("m.jsonl"), records)] == ["archer"]
 
 
-# -- end to end on a real mock bundle -----------------------------------------------------
+# -- end to end on a real mock bundle --------------------------------------------------
 
 #: Each condition's stumble lands in this code (see test_mock_model.py).
 STUMBLE_CODE = {
@@ -475,7 +475,7 @@ def test_baselines_are_reported_beside_the_models(tmp_path):
     assert "## Registered verdicts" not in summary
 
 
-# -- infrastructure, per condition (review 2026-09-24, H-2) -------------------------------
+# -- infrastructure, per condition (review 2026-09-24, H-2) ----------------------------
 
 
 def test_exclusions_and_provider_retries_are_reported_per_condition(tmp_path):
@@ -548,7 +548,8 @@ def _match(condition, scenario, seed, *, valid, fresh=10, won=False, hp=0.5, sp=
     )
     return Match(
         model="m", condition=condition, scenario=scenario, seed=seed,
-        match=f"{condition}/{scenario}/{seed}", model_won=won, winner="a" if won else "b",
+        match=f"{condition}/{scenario}/{seed}", model_won=won,
+        winner="a" if won else "b",
         rounds=3, model_hp_fraction=hp, turns=3, forfeit_turns=0, decisions=fresh,
         fresh_decisions=fresh, first_attempt_valid=valid, per_call_valid=valid,
         accepted=valid, recovered=0, recovery_eligible=0, spatial_decisions=sn,

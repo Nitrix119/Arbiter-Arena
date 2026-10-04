@@ -20,7 +20,6 @@ from src.arena.telemetry import (
     RequestRecord,
     scrub,
 )
-from src.arena.tools import TOOLS
 from src.arena.transcript import Transcript
 from src.arena.turn_driver import run_turn
 
@@ -477,7 +476,7 @@ def test_unreported_cache_fields_stay_unknown():
     assert (request.cache_read_tokens, request.cache_write_tokens) == (None, None)
 
 
-# -- the model's reasoning (2026-10-01) -------------------------------------------------
+# -- the model's reasoning (2026-10-01) ------------------------------------------------
 # Reasoning models return their thinking beside the tool call (OpenRouter's
 # `message.reasoning`, or `reasoning_details` parts); Sonnet gives a summary. It is
 # billed either way, so it is recorded, scrubbed like any model text, for reading a

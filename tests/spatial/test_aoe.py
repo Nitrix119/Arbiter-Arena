@@ -1,9 +1,8 @@
 """Tests for AoE volume shapes and entity intersection."""
 
 import math
-import pytest
 
-from src.spatial.geometry import BoundingBox, Point3D, Vector3D
+from src.spatial.geometry import Point3D, Vector3D
 from src.spatial.aoe import (
     ConeVolume,
     CubeVolume,
@@ -108,7 +107,8 @@ class TestCylinderVolume:
 
     def test_entity_outside_radius_miss(self):
         cyl = CylinderVolume(center_x=0, center_z=0, base_y=0, radius=5, height=20)
-        # Entity centre at (7,0,7): nearest XZ edge at (4.5,4.5), dist=sqrt(40.5)≈6.36 > 5 → miss
+        # Entity centre at (7,0,7): nearest XZ edge at (4.5,4.5), dist=sqrt(40.5)≈6.36 >
+        # 5 → miss
         entity = _make_entity(7, 0, 7)
         assert not cyl.contains_entity(entity)
 
@@ -155,7 +155,8 @@ class TestConeVolume:
     def test_entity_at_edge_of_half_angle_hit(self):
         # At distance d along axis, radius = d * 0.5
         # Entity at (10, 0, 0), its nearest point along axis is x=10, y=0
-        # r_at_10 = 5; entity starts at y=0, x=10 → corner (10, 0, 0) is on the cone surface
+        # r_at_10 = 5; entity starts at y=0, x=10 → corner (10, 0, 0) is on the cone
+        # surface
         cone = ConeVolume(
             apex=Point3D(0, 0, 0),
             direction=Vector3D(1, 0, 0),
@@ -167,7 +168,8 @@ class TestConeVolume:
     def test_entity_outside_half_angle_miss(self):
         # Cone axis along +X, half-angle=atan(0.5): radius at distance d = d*0.5.
         # Entity (MEDIUM, 5ft) at (10, 8, 0): corners span x=[10,15], y=[8,13], z=[0,5].
-        # Closest corner to axis: (15, 8, 0) → proj=15, perp=8, r_at_15=7.5. 8 > 7.5 → miss.
+        # Closest corner to axis: (15, 8, 0) → proj=15, perp=8, r_at_15=7.5. 8 > 7.5 →
+        # miss.
         # All 14 sample points checked manually — all outside.
         cone = ConeVolume(
             apex=Point3D(0, 0, 0),

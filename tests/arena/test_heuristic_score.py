@@ -66,7 +66,8 @@ def test_secures_available_kill(make_entity, make_combat):
 
 
 def test_score_prefers_finishing_over_chipping(make_entity, make_combat):
-    """Overkill falls out: min(dmg, hp) caps the near-dead target's value, but the kill wins."""
+    """Overkill falls out: min(dmg, hp) caps the near-dead target's value, but the kill
+    wins."""
     a = make_entity("A", team="a", pos=(0, 0, 0), attacks=[_strong_attack()])
     low = make_entity("Low", team="b", pos=(5, 0, 0), hp=3, attacks=[_weak_attack()])
     high = make_entity("High", team="b", pos=(5, 5, 0), hp=30, attacks=[_weak_attack()])
@@ -114,3 +115,12 @@ def test_hidden_capabilities_fall_back_to_generic_threat(make_entity, make_comba
     unknown = features.threat(enemy, known=False)
     assert known != unknown
     assert unknown == features.GENERIC_INCOMING
+
+    # And through the policy path the agent actually uses (ledger A7: this test built
+    # the hidden policy and never used it): an adjacent enemy whose actions are hidden
+    # contributes only the generic estimate to exposure, not its strong attack.
+    at = (0.0, 0.0, 0.0)
+    hidden_exposure = features.exposure_fraction(a, at, combat, policy=hidden)
+    revealed_exposure = features.exposure_fraction(a, at, combat, policy=POLICY)
+    assert hidden_exposure == features.GENERIC_INCOMING / a.max_hp
+    assert revealed_exposure != hidden_exposure

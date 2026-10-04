@@ -7,12 +7,10 @@ HP remain, and that the effect self-terminates when temp HP are depleted.
 
 from unittest.mock import patch
 
-import pytest
 
 from src.models import AbilityScores, StatBlock, Entity, DamageType
 from src.models.damage import Damage
 from src.combat.event_bus import EventBus
-from src.combat.events import EventType
 from src.combat.damage_processor import DamageProcessor
 from src.combat.attack_resolver import AttackResolver
 from src.combat.spell_resolver import SpellResolver
@@ -44,7 +42,7 @@ def _make_entity(name="Fighter", hp=30, ac=15, speed=30, actions=None):
 
 def _make_attacker(name="Goblin"):
     """Create an entity with a melee attack action."""
-    from src.models.action import AttackAction, ActionType
+    from src.models.action import AttackAction
 
     scimitar = AttackAction(
         name="Scimitar",
@@ -249,7 +247,10 @@ class TestArmorOfAgathysSelfTermination:
         # Patch roll_formula at both import sites: action.roll_damage() and
         # effects.deal_damage() use their own imported copies.
         action = attacker.stat_block.actions[0]
-        mock_roll = lambda f: 5 if f == "5" else 10
+
+        def mock_roll(f):
+            return 5 if f == "5" else 10
+
         with (
             patch("src.spells.blocks.rolls.roll_d20", return_value=20),
             patch("src.spells.blocks.damage.roll_formula", side_effect=mock_roll),
@@ -298,7 +299,9 @@ class TestArmorOfAgathysSelfTermination:
         action = attacker.stat_block.actions[0]
 
         # Force hit, scimitar deals 8 damage (> 5 temp HP)
-        mock_roll = lambda f: 5 if f == "5" else 8
+        def mock_roll(f):
+            return 5 if f == "5" else 8
+
         with (
             patch("src.spells.blocks.rolls.roll_d20", return_value=20),
             patch("src.spells.blocks.damage.roll_formula", side_effect=mock_roll),

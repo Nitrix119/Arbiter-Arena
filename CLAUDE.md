@@ -228,7 +228,7 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
 | Run all tests | `pytest tests/ -q` |
 | Run one test | `pytest tests/test_spells.py::TestX::test_y -q` |
 | Format | `black src/ web/ tests/` |
-| Lint | `flake8 src/ web/` |
+| Lint | `flake8 src/ web/ tests/` |
 | Type-check | `mypy src/` |
 | Run a study grid (resumable) | `python -m src.arena.study run GRID.toml --out results/<name>` (`--dry-run` to preview) |
 | Report on a study bundle | `python -m src.arena.study report results/<name>` |

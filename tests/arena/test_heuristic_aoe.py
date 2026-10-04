@@ -7,7 +7,7 @@ from src.arena.heuristic.agent import HeuristicAgent
 from src.arena.heuristic.plan import enumerate_plans
 from src.arena.information_policy import FULL_INFORMATION
 from src.arena.observation import build_observation
-from src.arena.tools import TOOLS, ToolExecutor
+from src.arena.tools import ToolExecutor
 
 from .conftest import force_turn, load_spell, melee_attack
 

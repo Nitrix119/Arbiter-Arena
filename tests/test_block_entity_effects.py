@@ -72,14 +72,14 @@ class TestBlockInstall:
 
     def test_installed_as_a_scope_owned_rider(self):
         victim = _ent("Victim")
-        _bus, dp = _wire(victim)
-        _poison(_bus if "bus" not in dir() else bus, dp, victim)
+        bus, dp = _wire(victim)
+        _poison(bus, dp, victim)
         assert [s.source for s in victim.lifetimes] == ["poison_dot"]
 
     def test_fires_on_turn_start(self):
         victim, other = _ent("Victim"), _ent("Other")
         bus, dp = _wire(victim, other)
-        _poison(_bus if "bus" not in dir() else bus, dp, victim)
+        _poison(bus, dp, victim)
         hp0 = victim.hp
         with patch("src.spells.blocks.damage.roll_formula", return_value=4):
             bus.emit(EventType.TURN_START, entity=victim, round_num=1)
@@ -92,7 +92,7 @@ class TestBlockInstall:
     def test_expires_after_duration(self):
         victim = _ent("Victim", hp=100)
         bus, dp = _wire(victim)
-        _poison(_bus if "bus" not in dir() else bus, dp, victim)
+        _poison(bus, dp, victim)
         hp0 = victim.hp
         with patch("src.spells.blocks.damage.roll_formula", return_value=4):
             for rnd in range(1, 4):  # rounds 1-3: fires, then ticks down
@@ -106,7 +106,7 @@ class TestBlockInstall:
     def test_remove_effect_disposes_the_rider(self):
         victim = _ent("Victim")
         bus, dp = _wire(victim)
-        _poison(_bus if "bus" not in dir() else bus, dp, victim)
+        _poison(bus, dp, victim)
         victim.remove_effect("poison_dot")
         assert victim.lifetimes == []
         with patch("src.spells.blocks.damage.roll_formula", return_value=4):

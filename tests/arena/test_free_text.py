@@ -347,7 +347,7 @@ def test_the_parser_never_looks_at_the_board():
     assert {m for m in imported if m.startswith("src")} <= allowed, imported
 
 
-# -- the lenient bound (offline re-scoring only; prereg §7) ------------------------------
+# -- the lenient bound (offline re-scoring only; prereg §7) ----------------------------
 
 from src.arena.free_text import LENIENT_LAYER, read_lenient  # noqa: E402
 

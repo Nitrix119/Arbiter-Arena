@@ -114,7 +114,8 @@ def test_stable_ids_can_be_turned_off(make_entity):
 
 
 def test_ids_survive_a_real_match(make_entity, make_combat):
-    """Prove the wiring, not just the helper — the seam CLAUDE.md §9 2026-08-08 warns of."""
+    """Prove the wiring, not just the helper — the seam CLAUDE.md §9 2026-08-08 warns
+    of."""
     from src.arena.agent import ScriptedAgent
     from src.arena.match import run_match
     from src.arena.transcript import Transcript
@@ -147,7 +148,8 @@ def test_ids_survive_a_real_match(make_entity, make_combat):
 
 
 def test_assign_is_idempotent(make_entity):
-    """Re-assigning the same roster yields the same ids, so a double call is harmless."""
+    """Re-assigning the same roster yields the same ids, so a double call is
+    harmless."""
     roster = [make_entity("Archer", team="a"), make_entity("Bruiser", team="b")]
     assign_stable_ids(roster)
     first = [e.entity_id for e in roster]

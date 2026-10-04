@@ -1,14 +1,15 @@
-"""End-to-end: the HeuristicAgent fixes the four ScriptedAgent flaws and out-plays it."""
+"""End-to-end: the HeuristicAgent fixes the four ScriptedAgent flaws and out-plays
+it."""
 
 from src.arena.agent import ScriptedAgent
 from src.arena.heuristic.agent import HeuristicAgent
 from src.arena.information_policy import FULL_INFORMATION
 from src.arena.match import run_match
 from src.arena.observation import build_observation
-from src.arena.tools import TOOLS, ToolExecutor
+from src.arena.tools import ToolExecutor
 from src.models import AttackAction, Damage, DamageType
 
-from .conftest import force_turn, melee_attack, ranged_attack
+from .conftest import force_turn, melee_attack
 
 
 def _decide(combat, actor):

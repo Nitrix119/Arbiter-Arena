@@ -1,4 +1,5 @@
-"""The conditions differ in exactly what the study says they differ in — and nothing else.
+"""The conditions differ in exactly what the study says they differ in — and nothing
+else.
 
 §3.1's central claim is that the four conditions vary only in the action section of the
 prompt and the response channel. That claim is the study's internal validity: any other
@@ -308,7 +309,8 @@ def test_a_raw_param_move_by_menu_id_is_refused_at_run_time(name, arguments):
     """The schema no longer offers option_id, but a host need not enforce a schema.
 
     The executor still honours option_id for the baselines, and C2+M's menu used to
-    *show* every move's option_id. So a model that sends one anyway would get C3's format
+    *show* every move's option_id. So a model that sends one anyway would get C3's
+    format
     inside a raw-parameter condition. The guard has to be behavioural, not only a
     schema and a prompt that never mention it (review 2026-09-24, C-3).
     """

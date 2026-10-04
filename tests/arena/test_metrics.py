@@ -1,7 +1,9 @@
 """Tests for transcript metrics — computed from the log, checked against known outcomes.
 
-Transcripts are built in-process (a real scripted match, or hand-assembled record lists for
-precise edge cases) because match logs are git-ignored and must not be a test dependency.
+Transcripts are built in-process (a real scripted match, or hand-assembled record lists
+for
+precise edge cases) because match logs are git-ignored and must not be a test
+dependency.
 """
 
 import pytest
@@ -208,7 +210,8 @@ def test_no_tool_call_counted_separately_from_illegal():
 
 
 def _protect_records(fragile_final_hp):
-    """A protect_squishy-shaped match team 'a' wins, with the fragile unit's final HP set."""
+    """A protect_squishy-shaped match team 'a' wins, with the fragile unit's final HP
+    set."""
     return [
         _match_start(
             [
@@ -296,7 +299,8 @@ def test_kiting_declines_when_ranged_unit_not_unique():
 
 
 def _kiting_records(archer_x_track):
-    """A kiting-shaped match; the archer's x-position at each snapshot follows archer_x_track."""
+    """A kiting-shaped match; the archer's x-position at each snapshot follows
+    archer_x_track."""
     recs = [
         _match_start(
             [
@@ -374,7 +378,7 @@ def test_group_turns_handles_orphan_turn_end_as_skip():
     assert len(turns) == 1 and turns[0].end_cause == "skip"
 
 
-# -- area spells: who each cast caught (H4b) --------------------------------------------
+# -- area spells: who each cast caught (H4b) -------------------------------------------
 
 
 class _CastOnce:

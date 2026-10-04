@@ -191,7 +191,8 @@ def test_success_clears_rejection_feedback(make_entity, make_combat):
 
 
 def test_kite_option_ends_turn_out_of_reach(make_entity, make_combat):
-    """Choosing the kite_range move opens distance and lands the archer out of melee reach."""
+    """Choosing the kite_range move opens distance and lands the archer out of melee
+    reach."""
     archer = make_entity("Archer", team="a", pos=(0, 0, 0), attacks=[ranged_attack()])
     bruiser = make_entity("Bruiser", team="b", pos=(40, 0, 0), attacks=[melee_attack()])
     combat = _started(make_combat, [archer, bruiser], archer)
@@ -227,7 +228,8 @@ def test_transcript_records_turn(make_entity, make_combat):
 
 
 class _RefusedAgent(Agent):
-    """Its every answer is refused by the interface with a code — an invented menu id."""
+    """Its every answer is refused by the interface with a code — an invented menu
+    id."""
 
     def __init__(self):
         super().__init__("Refused", "a")

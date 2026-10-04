@@ -151,7 +151,8 @@ def test_move_candidates_are_all_legal(make_entity, make_combat):
 
 
 def test_toward_melee_backs_off_a_blocking_third_body(make_entity, make_combat):
-    """A standoff point that would land on a third creature is backed off to a clear one."""
+    """A standoff point that would land on a third creature is backed off to a clear
+    one."""
     fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
     goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
     blocker = make_entity("Bystander", team="b", pos=(30, 0, 0))  # sits in the path
@@ -164,8 +165,10 @@ def test_toward_melee_backs_off_a_blocking_third_body(make_entity, make_combat):
         for o in move_candidates(combat, fighter)
         if o.option_id == f"toward_melee:{goblin.entity_id}"
     )
-    # Naive standoff (~54 ft) is unreachable in 30 ft anyway, but the 30 ft point overlaps the
-    # blocker at x=30; the option must be backed off to a clear point and be legal to execute.
+    # Naive standoff (~54 ft) is unreachable in 30 ft anyway, but the 30 ft point
+    # overlaps the
+    # blocker at x=30; the option must be backed off to a clear point and be legal to
+    # execute.
     assert combat.is_destination_clear(fighter, toward.x, toward.y, toward.z)
     assert toward.x <= 25  # clear of the blocker's 27.5–32.5 ft footprint
     combat.move_entity(fighter, toward.x, toward.y, toward.z)  # legal, does not raise

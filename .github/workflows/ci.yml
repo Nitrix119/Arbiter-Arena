@@ -76,7 +76,7 @@ jobs:
 
       - name: Flake8 (lint, 88 chars enforced)
         if: always()
-        run: flake8 src/ web/
+        run: flake8 src/ web/ tests/
 
       - name: Mypy (types)
         if: always()

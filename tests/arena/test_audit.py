@@ -185,7 +185,7 @@ def test_false_rejects_are_weighted_by_the_refused_share(bundle, tmp_path):
     assert low <= point <= high <= share + 1e-9
 
 
-# -- the decision rule and the CLI --------------------------------------------------------
+# -- the decision rule and the CLI -----------------------------------------------------
 
 
 def test_score_reports_the_registered_decision_rule(bundle, tmp_path):

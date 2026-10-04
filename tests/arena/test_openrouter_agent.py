@@ -150,7 +150,8 @@ def test_openrouter_agent_drives_a_real_turn(make_entity, make_combat):
             response(
                 fn_call(
                     "attack",
-                    f'{{"action_name": "Longsword", "defender_id": "{goblin.entity_id}"}}',
+                    '{"action_name": "Longsword", '
+                    f'"defender_id": "{goblin.entity_id}"}}',
                 )
             ),
             response(fn_call("end_turn", "{}")),

@@ -129,7 +129,8 @@ class TestCharmedCannotAttackCharmer:
 class TestCharmedInstanceIndependence:
 
     def test_each_charmed_entity_tracks_own_charmer(self):
-        """Two entities charmed by different charmers each block only their own charmer."""
+        """Two entities charmed by different charmers each block only their own
+        charmer."""
         wizard = load_fighter()
         fighter = load_fighter()
         goblin = load_goblin()

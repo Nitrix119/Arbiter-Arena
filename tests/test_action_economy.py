@@ -18,7 +18,7 @@ from src.models import (
     CastingTimeType,
     CastingTime,
 )
-from src.combat import CombatSystem, CombatState
+from src.combat import CombatSystem
 from src.combat.event_bus import EventBus
 from src.combat.events import EventType
 from src.combat.event_data import TurnEventData

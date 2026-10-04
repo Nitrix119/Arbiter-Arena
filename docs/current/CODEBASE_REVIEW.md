@@ -265,7 +265,11 @@ names where it should be addressed. Append; strike through and date an item when
   Original note: for every scenario attack
   (`_serialize_action` reuse) — token noise in every prompt. Drop empty descriptions. → final
   cleanup (changes prompt hashes; do before the freeze).
-- **A7. Repo hygiene.** CI lints `src/` and `web/` but not `tests/` (one pre-existing E501 in
+- **A7. Repo hygiene.** *Lint half fixed 2026-10-05:* `flake8 tests/` is clean (from 117)
+  and CI now lints `tests/`. This included the `dir()` name hack, the heuristic test that
+  never used its policy (it now checks the policy path), and an unused variable that
+  hid a real bug (A36). The line-ending half is in its own commit. Original note: CI
+  lints `src/` and `web/` but not `tests/` (one pre-existing E501 in
   `tests/arena/test_interfaces.py:1`); working copies have mixed line endings (LF/CRLF warnings
   on files written by tooling) — add a `.gitattributes`. → final cleanup.
   *Measured in the Phase 1 review (2026-09-24):* `flake8 tests/` reports 109 findings (67 E501,
@@ -503,6 +507,17 @@ names where it should be addressed. Append; strike through and date an item when
   - **Accepted as a known limitation (user decision, 2026-09-30).** It is unlikely to
     affect a between-condition measure measurably. Worth fixing after the study.
     Recorded in prereg §9; the prompt is unchanged.
+- **A36. Re-casting Vampiric Touch while concentrating applies its healing twice. Open.**
+  - Found 2026-10-05 while cleaning the test lint (A7): an unused variable turned out to
+    be a missing assertion.
+  - The first cast heals correctly: 6 damage, 3 healing. A re-cast reports 4 healing
+    for 8 damage, but the caster gains 8.
+  - Likely cause: the first cast's healing rider survives the re-cast, so two riders
+    fire. SRD 5.1 ends the old concentration when a new concentration spell is cast.
+  - Pinned by `test_vampiric_touch_recast_heals_once`, a strict xfail that will report
+    an unexpected pass when this is fixed.
+  - It cannot have touched the study: no scenario includes Vampiric Touch, and it
+    appears nowhere in `results/final`.
 - **A35. ~~The audit's decision table listed the baselines as "not computable".~~ Fixed
   2026-10-05.** They play their own condition, never C1 or C2, so they have no C1
   comparison to report. `decision_rule` now leaves out a model with neither, and keeps

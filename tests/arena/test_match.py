@@ -1,6 +1,6 @@
 """Tests for the match runner — a full headless battle, end to end."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from src.arena.agent import Agent, ScriptedAgent
 from src.arena.match import run_match
@@ -42,7 +42,8 @@ def test_scripted_duel_produces_a_winner(make_entity, make_combat):
 
 
 def test_scripted_2v2_makes_no_illegal_moves(make_entity, make_combat):
-    """The heuristic must not trip over occupied space in a crowded fight (the 2v2 bug)."""
+    """The heuristic must not trip over occupied space in a crowded fight (the 2v2
+    bug)."""
     entities = [
         make_entity("A1", team="a", pos=(0, 0, 0), hp=15, attacks=[melee_attack()]),
         make_entity("A2", team="a", pos=(0, 0, 10), hp=15, attacks=[melee_attack()]),

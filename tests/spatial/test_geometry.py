@@ -1,6 +1,5 @@
 """Tests for Point3D, Vector3D, and BoundingBox."""
 
-import math
 import pytest
 
 from src.spatial.geometry import BoundingBox, Point3D, Vector3D

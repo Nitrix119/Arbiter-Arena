@@ -446,7 +446,8 @@ def test_a_missing_ground_coordinate_is_malformed_output_not_a_crash(
 
 
 def test_the_system_prompt_states_the_axis_convention():
-    """Per-tool descriptions are not enough — the convention is stated once, centrally."""
+    """Per-tool descriptions are not enough — the convention is stated once,
+    centrally."""
     from src.arena.llm_common import SYSTEM_PROMPT
 
     lowered = SYSTEM_PROMPT.lower()
@@ -666,7 +667,8 @@ def test_arguments_that_are_not_an_object_are_malformed(make_entity, make_combat
     goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
     combat = _started(make_combat, [fighter, goblin], fighter)
 
-    result = ToolExecutor(combat).apply(fighter, ToolCall("move", [10, 0]))  # type: ignore[arg-type]
+    not_a_dict = ToolCall("move", [10, 0])  # type: ignore[arg-type]
+    result = ToolExecutor(combat).apply(fighter, not_a_dict)
 
     assert result["ok"] is False
     assert result["code"] == "malformed_output"

@@ -23,7 +23,6 @@ from unittest.mock import patch
 
 import pytest
 
-from src.combat.attack_resolver import AttackResolver
 from src.combat.damage_processor import DamageProcessor
 from src.combat.event_bus import EventBus
 from src.combat.spell_resolver import SpellResolver
@@ -84,7 +83,8 @@ def _save_entries(spell):
 
 
 def _make_caster() -> Entity:
-    """Caster with spell_save_dc = 15 (INT 18 +4, proficiency +3, ability=intelligence)."""
+    """Caster with spell_save_dc = 15 (INT 18 +4, proficiency +3,
+    ability=intelligence)."""
     sb = StatBlock(
         name="Caster",
         ability_scores=AbilityScores(
@@ -437,7 +437,8 @@ class TestFireballIntegration:
         assert damage_taken == 24
 
     def test_fireball_independent_saves_per_target(self, wizard, fireball):
-        """Each target in an AoE resolves its own save and takes damage independently."""
+        """Each target in an AoE resolves its own save and takes damage
+        independently."""
         saver = _make_target(hp=500)
         failer = _make_target(hp=500)
         bus = EventBus()

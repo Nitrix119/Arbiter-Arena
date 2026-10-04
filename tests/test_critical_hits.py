@@ -20,7 +20,6 @@ from src.models import (
     DamageType,
 )
 from src.models.action import SpellAction
-from src.models.spell_properties import TargetingType
 from src.combat.event_bus import EventBus
 from src.combat.damage_processor import DamageProcessor
 from src.combat.attack_resolver import AttackResolver

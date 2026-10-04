@@ -81,7 +81,8 @@ def test_scenario_plays_to_completion_offline(name):
         CombatState.ACTIVE,
     )  # ran without raising
     assert result.reason in ("last_standing", "round_cap")
-    # Every action a scripted agent took was legal (no schema/geometry surprises in setup).
+    # Every action a scripted agent took was legal (no schema/geometry surprises in
+    # setup).
     assert result.rounds >= 1
 
 

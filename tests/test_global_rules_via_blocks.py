@@ -136,7 +136,8 @@ class TestNativeGlobalInstall:
             _GLOBAL, event_bus=bus, damage_processor=processor
         )
         assert len(rules) == 7  # every shipped global rule loaded
-        # Resistance fires exactly once (halved, not doubled) — no explicit install call.
+        # Resistance fires exactly once (halved, not doubled) — no explicit install
+        # call.
         entity = _entity(resistances=[DamageType.COLD])
         processor.apply_damage(entity, [Damage(DamageType.COLD, 10)])
         assert entity.hp == 25

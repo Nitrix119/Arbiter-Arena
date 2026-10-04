@@ -7,7 +7,6 @@ from src.arena.heuristic.agent import HeuristicAgent
 from src.arena.heuristic.plan import PlannedAction
 from src.arena.information_policy import FULL_INFORMATION
 from src.arena.observation import build_observation
-from src.arena.tools import TOOLS
 from src.models import AttackAction, Damage, DamageType
 
 from .conftest import force_turn, load_spell

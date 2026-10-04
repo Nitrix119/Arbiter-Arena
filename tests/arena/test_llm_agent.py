@@ -13,7 +13,6 @@ from src.arena import llm_agent as llm_mod
 from src.arena.agent import RejectedResponse
 from src.arena.interfaces import SHARED_PROMPT
 from src.arena.llm_agent import DEFAULT_MODEL, LLMAgent
-from src.arena.tools import TOOLS
 from src.arena.turn_driver import run_turn
 
 from .conftest import force_turn, melee_attack
@@ -45,7 +44,8 @@ class _Messages:
 
 
 class FakeClient:
-    """Minimal stand-in for anthropic.Anthropic: returns queued responses, records calls."""
+    """Minimal stand-in for anthropic.Anthropic: returns queued responses, records
+    calls."""
 
     def __init__(self, responses):
         self.responses = list(responses)
@@ -185,7 +185,8 @@ def test_a_text_condition_sends_no_tool_fields():
 
 
 def test_extra_tool_calls_are_counted():
-    """Ledger A5: parallel calls are disabled, but if two arrive the second is counted."""
+    """Ledger A5: parallel calls are disabled, but if two arrive the second is
+    counted."""
     client = FakeClient(
         [response(tool_use("end_turn", {}), tool_use("attack", {}, block_id="t2"))]
     )

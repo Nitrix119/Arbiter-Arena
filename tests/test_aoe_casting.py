@@ -1,13 +1,11 @@
-"""Integration tests for AoE spell casting: target point, range clamping, and auto-targeting."""
+"""Integration tests for AoE spell casting: target point, range clamping, and auto-
+targeting."""
 
-import math
 import pytest
-from unittest.mock import patch
 
 from src.combat import CombatSystem
 from src.models import Entity, SpellAction
 from src.models.ability import AbilityScores
-from src.models.action_resources import ACTION_COST, BONUS_ACTION_COST
 from src.models.creature_size import CreatureSize
 from src.models.spell_properties import (
     AOEProperties,
@@ -22,7 +20,7 @@ from src.models.spell_properties import (
     TargetingType,
 )
 from src.models.stat_block import StatBlock
-from src.spatial.geometry import Point3D, Vector3D
+from src.spatial.geometry import Point3D
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -253,7 +251,8 @@ class TestAoEAutoTargeting:
         initial_inside = inside.hp
         initial_outside = outside.hp
 
-        # Blast centred at (25, 0, 0); inside's bbox [7.5,12.5] is within 20ft, outside is not
+        # Blast centred at (25, 0, 0); inside's bbox [7.5,12.5] is within 20ft, outside
+        # is not
         combat.resolve_spell(caster, [], spell, target=Point3D(25.0, 0.0, 0.0))
 
         assert inside.hp < initial_inside, "Entity inside radius should take damage"
@@ -304,9 +303,11 @@ class TestRangeClamping:
     def test_target_beyond_range_is_clamped(self):
         """Blast target 200 ft away with a 150 ft range spell — sphere is clamped.
 
-        Range is measured from the caster's token edge: a MEDIUM caster (half-size 2.5 ft)
+        Range is measured from the caster's token edge: a MEDIUM caster (half-size 2.5
+        ft)
         at origin allows clamping up to 152.5 ft from the bbox centre (0, 2.5, 0).
-        Aiming to (200, 0, 0) the clamped sphere centre is approximately (152.47, 1.91, 0).
+        Aiming to (200, 0, 0) the clamped sphere centre is approximately (152.47, 1.91,
+        0).
 
         at_150 (bbox [142.5,147.5]) → nearest point within 20 ft of sphere → inside
         beyond  (bbox [172.5,177.5]) → nearest point ~25 ft from sphere centre → outside
@@ -337,11 +338,13 @@ class TestRangeClamping:
 
         initial_hp = target_entity.hp
         combat.resolve_spell(caster, [], spell, target=Point3D(45.0, 0.0, 0.0))
-        # Sphere at (45, 0, 0) radius 20; entity bbox [37.5,42.5] nearest pt to sphere = (42.5,0,0) dist=2.5 → hit
+        # Sphere at (45, 0, 0) radius 20; entity bbox [37.5,42.5] nearest pt to sphere =
+        # (42.5,0,0) dist=2.5 → hit
         assert target_entity.hp < initial_hp
 
     def test_caster_center_is_used_for_range_not_corner(self):
-        """Range is measured from the caster's bbox centre plus half-size (edge), not corner."""
+        """Range is measured from the caster's bbox centre plus half-size (edge), not
+        corner."""
         # MEDIUM caster at origin: bbox centre at (0, 2.5, 0), half-size = 2.5 ft.
         # Effective range from centre = 150 + 2.5 = 152.5 ft.
         # Target at 150 ft from centre is well within range and must not be clamped.
@@ -364,7 +367,8 @@ class TestRangeClamping:
 
 class TestConeAndLineOrigin:
     def test_cone_origin_is_caster_edge(self):
-        """Cone starts at the caster's token edge; a very distant target just sets direction.
+        """Cone starts at the caster's token edge; a very distant target just sets
+        direction.
 
         A MEDIUM caster at x=0 has a half-size of 2.5 ft, so the cone apex is at
         x≈2.5 and extends 15 ft to x≈17.5 — the nearby entity at x=10 is inside.
@@ -432,7 +436,6 @@ class TestSingleTargetRange:
         combat = _make_combat(caster, target)
         spell = _ranged_spell(range_ft=120)
 
-        initial = target.hp
         combat.resolve_spell(caster, [target], spell, target=Point3D(50.0, 0.0, 0.0))
         # May hit or miss based on dice; just verify no exception and hp may change
         assert isinstance(target.hp, int)
@@ -450,7 +453,8 @@ class TestSingleTargetRange:
 
     def test_touch_spell_succeeds_at_4ft(self):
         caster = _make_entity("Cleric", x=0.0)
-        # Caster centre at (0, 2.5, 0); target centred at x=4, nearest edge at x=1.5 → dist=1.5 ≤ 5 ft touch
+        # Caster centre at (0, 2.5, 0); target centred at x=4, nearest edge at x=1.5 →
+        # dist=1.5 ≤ 5 ft touch
         target = _make_entity("Goblin", x=4.0, hp=20)
         combat = _make_combat(caster, target)
         spell = _touch_spell()
@@ -465,7 +469,8 @@ class TestSingleTargetRange:
 
     def test_touch_spell_fails_beyond_5ft(self):
         caster = _make_entity("Cleric", x=0.0)
-        # Caster centre at (0, 2.5, 0); target centred at x=11, nearest edge at (8.5, 2.5, 0)
+        # Caster centre at (0, 2.5, 0); target centred at x=11, nearest edge at (8.5,
+        # 2.5, 0)
         # Distance = 8.5 > 5
         target = _make_entity("Goblin", x=11.0, hp=20)
         combat = _make_combat(caster, target)
@@ -509,7 +514,8 @@ class TestSingleTargetRange:
 
 class TestZeroVectorEdgeCase:
     def test_target_at_caster_position_does_not_crash(self):
-        """Targeting exactly the caster's position (zero-length vector) uses fallback direction."""
+        """Targeting exactly the caster's position (zero-length vector) uses fallback
+        direction."""
         caster = _make_entity("Wizard", x=0.0)
         combat = _make_combat(caster)
         spell = _cone_spell(length_ft=15)

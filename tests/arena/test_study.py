@@ -581,7 +581,7 @@ def test_the_heuristic_opponent_plays_and_replays(tmp_path):
     assert verify(records, SCENARIOS["alpha_strike"].build).ok
 
 
-# -- baselines (prereg §7; Phase 1 review F6) --------------------------------------------
+# -- baselines (prereg §7; Phase 1 review F6) ------------------------------------------
 
 
 def _baselines(*policies, **study):

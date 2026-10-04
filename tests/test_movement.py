@@ -1,6 +1,5 @@
 """Tests for entity movement (willing and forced) and AoE targeting."""
 
-import math
 import pytest
 
 from src.combat.combat_system import CombatSystem
@@ -329,9 +328,11 @@ class TestPushEntity:
 class TestGetTargetsInAoe:
     def test_fireball_hits_entities_in_radius(self):
         caster = _make_entity("Wizard", x=0.0, team="heroes")
-        # Goblin A centred at x=5: bbox [2.5,7.5], nearest pt to (10,0,0) is (7.5,0,0), dist=2.5 < 20 → hit
+        # Goblin A centred at x=5: bbox [2.5,7.5], nearest pt to (10,0,0) is (7.5,0,0),
+        # dist=2.5 < 20 → hit
         target_a = _make_entity("Goblin A", x=5.0, team="monsters")
-        # Goblin B centred at x=35: bbox [32.5,37.5], nearest pt to (10,0,0) is (32.5,0,0), dist=22.5 > 20 → miss
+        # Goblin B centred at x=35: bbox [32.5,37.5], nearest pt to (10,0,0) is
+        # (32.5,0,0), dist=22.5 > 20 → miss
         target_b = _make_entity("Goblin B", x=35.0, team="monsters")
         combat = _make_combat(caster, target_a, target_b)
 

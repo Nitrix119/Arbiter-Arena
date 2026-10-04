@@ -1,6 +1,5 @@
 """Tests for AST-based expression validation in src/rules/expressions.py."""
 
-import types
 import pytest
 
 import src.rules.expressions as expr_mod

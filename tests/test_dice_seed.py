@@ -8,7 +8,8 @@ class TestContextScopedRng:
 
     def test_seeded_instances_are_isolated_and_reproducible(self):
         # Two RNGs on the same seed, whose rolls are *interleaved*, must each yield the
-        # same stream they would in isolation — one battle's draws never perturb another.
+        # same stream they would in isolation — one battle's draws never perturb
+        # another.
         r1, r2 = dice.new_rng(42), dice.new_rng(42)
         a1 = _roll_under(r1)
         _roll_under(r2)  # interleave a draw from the other instance
