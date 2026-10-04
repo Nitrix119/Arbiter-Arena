@@ -365,33 +365,89 @@ Runner and analysis:
 - [x] Pick the opponent (Scripted vs Heuristic), decide on C2+M, confirm call counts and cost per match.
 - [x] **Freeze:** tag the commit (`study-freeze`), finalise `PREREGISTRATION.md` (hypotheses,
       metrics, exclusions, seeds, prompts plus hashes, models, settings).
-- [ ] Launch the final grid in the background, outside Claude Code. Check once a day.
-- [ ] Baselines through the C3 path (free, fast).
-- [ ] 100% replay verification over the result bundle
-      (`python -m src.arena.study verify results/<name>`).
+- [x] Launch the final grid in the background, outside Claude Code. Check once a day.
+      _(2026-10-04: `examples/study/final.toml` into `results/final`, 600 cells, no
+      exclusions. $29.90 at list, $24.30 billed.)_
+- [x] Baselines through the C3 path (free, fast). _(120 cells, in the same run.)_
+- [x] 100% replay verification over the result bundle
+      (`python -m src.arena.study verify results/<name>`). _(600/600.)_
+- [x] The registered C1 parser audit (prereg §7): 200 blind labels, 2 false accepts
+      (0.010 [0.003, 0.036]), and every verdict stands. _(2026-10-05; drawn as 200
+      accepted items because the parser refused none, prereg §10.)_
+
+**Phase 2 is complete.** The working record of the results is
+`docs/current/FINAL_RUN_FINDINGS.md`; the authoritative numbers are in
+`results/final/report/summary.md` and `audit/audit_report.md`.
+
+**Recommended order from here (2026-10-05).** Phases 3 and 4 interleave; the article is the
+main deliverable.
+1. **Results skeleton and failure story** (Phase 4). Draft the article outline with the
+   method and results sections filled in from `FINAL_RUN_FINDINGS.md`, and pick the
+   failure story with `study show`. Do this while the results are fresh.
+2. **Charts** (A11). Small and separate, and the article needs them.
+3. **Replay viewer** (Phase 3 playback item plus A33). This makes the failure story and the
+   demo GIF showable.
+4. **The user-voice sections** of the article: motivation, surprises, and "what I decided".
+5. **README, ARCHITECTURE, licence/NOTICE, CITATION and CHANGELOG**, then the fresh-clone
+   test.
+6. **Merge to `main`**, then the release bundle and `v1.0.0`.
+
+The ledger session (A30, A36) can come any time after step 1. Run `verify` at the
+`study-freeze` tag after any engine change.
 
 ### Phase 3 — V1 hygiene (parallel with Phase 2 runs; ≈3 sessions, use a cheaper model)
+
+_Status, 2026-10-05: not started as a phase. Some groundwork is done; each item notes what
+remains._
 - [ ] README rewrite: subtitle "a deterministic evaluation harness for tool-using LLM agents",
       60-second quick start, **no-API-key demo command**, result chart (placeholder), limitations.
       Remove stale `RuleEngine`/"future goals" text.
+      _(The subtitle and opening paragraph are done. Still to do: the `RuleEngine` paragraph
+      and "Future Goals" section, which are stale; a quick start; the no-key demo, which
+      exists as `examples/study/demo.toml`; a results chart; limitations.)_
 - [ ] `docs/ARCHITECTURE.md` (one page plus one diagram). Move superseded plans to `docs/archive/`
-      with a "historical" banner.
+      with a "historical" banner. _(`docs/archive/` exists; `ARCHITECTURE.md` does not.)_
 - [ ] Licence change or wording; `NOTICE`/SRD attribution (CC BY 4.0 text); content provenance
-      list; trademark non-affiliation statement.
-- [ ] `CITATION.cff`, `CHANGELOG.md`.
+      list; trademark non-affiliation statement. _(The licence is PolyForm Noncommercial
+      1.0.0; there is no `NOTICE` yet.)_
+- [ ] `CITATION.cff`, `CHANGELOG.md`. _(Neither exists. The version is 0.2.0.)_
 - [ ] Playback page shows condition, raw model output and error code per action.
-- [ ] Fresh-clone test on a clean venv: install, tests, demo command.
+      **Do this together with ledger A33**, showing the model's reasoning ("thought") and visible
+      prose ("said"). The data is already in every transcript, so it is frontend only. It is
+      also what makes the Phase 4 failure story and demo GIF showable.
+- [ ] Fresh-clone test on a clean venv: install, tests, demo command. _(Note the venv
+      lesson from the final run: a plain `python` outside VS Code lacked the dependencies.
+      The quick start should say to use the venv's Python.)_
+- [ ] Merge `feat/interface-study` into `main` by PR. `main` is 102 commits behind, and the
+      V1 definition of done (§5) needs the study on `main` with CI green.
 
 ### Phase 4 — Analyse, write, release (≈3–4 sessions)
 - [ ] Run the report on the frozen bundle, write up H1–H3 as confirmed or not, then exploratory
-      findings.
+      findings. _(The report is run and the verdicts are final, both in
+      `FINAL_RUN_FINDINGS.md`. The write-up itself is still to do.)_
 - [ ] Pick **one failure story**, a replay that illustrates the headline (e.g. fluent reasoning
       leading to an impossible spatial action in C1, vs a legal but weaker choice in C3).
+      _Candidates from the data:_
+      - Sonnet in bare C2 attacking after its action is spent, set against the same seed in
+        C2+M, where the menu rescues it.
+      - The audited Sonnet C1 response whose prose reasons towards one position and whose
+        `ACTION:` commits to a third.
+      - Nemotron in C2 "moving" in place until the failure budget ends its turn.
+      - A free-aim Fireball that catches allies, set against the menu's tagged placement.
+- [ ] Charts (ledger A11): validity by condition per model, friendly fire, and Sonnet's
+      tactics by condition. Draw them from `results/final/report/*.csv` in a separate script,
+      so the harness does not depend on a plotting library.
 - [ ] Article (~2,500–3,500 words), structure below. **Write the motivation, the surprises and the
       "what I decided" sections in your own voice.** That is the ownership evidence the review
       stresses.
-- [ ] Threats to validity: one environment; 2 models; format and affordance confound; menu
-      discretisation; LLM nondeterminism; tactics underpowered; neutral-prompt choice.
+- [ ] Threats to validity: one environment; 3 models; format and affordance confound; menu
+      discretisation; LLM nondeterminism; tactics underpowered (and saturated for Gemini);
+      neutral-prompt choice.
+      Added by the run (prereg §9):
+      - "low" reasoning means different things per vendor
+      - sampling differs between models (only Nemotron runs at temperature 0 with a seed)
+      - no multiplicity correction
+      - A30, moves through hostile creatures not checked
 - [ ] Release bundle: transcripts (non-sensitive), CSVs, prereg, prompts, report. Zenodo DOI optional.
 - [ ] Bump to `1.0.0`, tag `v1.0.0`, GitHub release notes.
 - [ ] Short demo GIF or video; update CV/LinkedIn with the **measured** numbers.
