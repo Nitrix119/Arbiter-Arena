@@ -3,8 +3,8 @@
 > **Status: recorded 2026-10-04, straight after the final run, before the write-up.**
 > This is the working record of what the data shows, kept so it survives session
 > changes. The authoritative numbers are in `results/final/report/summary.md`, with CSVs
-> beside it. **One registered step is still open:** the C1 parser audit (prereg §7),
-> which the C2-vs-C1 verdicts are formally subject to. See "Still to do".
+> beside it. The registered C1 parser audit is **done** (2026-10-05); see "The C1 parser
+> audit".
 
 ## The run
 
@@ -50,6 +50,37 @@ transformative:
 
 For a strong model it barely registers: Gemini is valid 99–100% of the time and wins
 82–90% whatever the interface.
+
+## The C1 parser audit (prereg §7, done 2026-10-05)
+
+The audit was a blind hand-label of 200 fresh C1 first attempts. All were drawn from
+accepted responses, because the parser refused none of the 2,966 (prereg §10,
+2026-10-04). The sample was 74 from Nemotron, 71 from Gemini and 55 from Sonnet. The
+report is `audit/audit_report.md`.
+
+- **False reject:** zero by construction, since no response was refused.
+- **False accept: 2 of 200, a rate of 0.010 [0.003, 0.036].** Neither shows a parser
+  defect. Both are Sonnet, the only model that writes prose around its commands.
+  1. **A dropped minus sign in the label.** The prose says "move west", and the command
+     is `move to x=-38 z=0`, which is west. The parser read it correctly, and the label
+     reads `x=38`.
+  2. **A response that contradicts itself.** The prose weighs moving to (8, 3), then to
+     (11, 4), and then commits to `move to x=10 z=4`. The labeller judged that no single
+     action; the parser took the binding `ACTION:` line. Both readings are defensible.
+- The registered rate is reported **as labelled**: 2 errors. Labels are not edited
+  after the key is unsealed. The note above says that one is likely a labelling slip,
+  which would put the parser's own error nearer 1 in 200.
+
+**The decision rule for C1 < C2:**
+- Nemotron: **supported** on all three checks (C1 0.327 against C2 0.579).
+- Gemini: **not supported**.
+- Sonnet: **not supported**. Its C1 is *above* C2.
+
+Every C1 verdict in the table above therefore stands as registered.
+
+**Sensitivity.** Even if C1 validity were overstated by the false-accept upper bound
+(3.6 points), Sonnet's reversal would hold (0.981 − 0.036 = 0.945 > 0.893), as would
+Nemotron's C1 < C2.
 
 ## Key findings
 
@@ -182,21 +213,15 @@ Gemini (0.82–0.90) plays at about the heuristic's level, as does Sonnet in C3 
 
 ## Still to do
 
-1. **The C1 parser audit** (registered, prereg §7): a blind hand-label of 200 sampled C1
-   decisions.
-   ```
-   .\.venv\Scripts\python.exe -m src.arena.audit sample results/final --out audit/
-   .\.venv\Scripts\python.exe -m src.arena.audit label audit/
-   .\.venv\Scripts\python.exe -m src.arena.audit score audit/ --report results/final/report
-   ```
-   It is unlikely to change anything, since all three bounds agree and nothing was
-   unreadable, but the decision rule includes it.
+1. ~~The C1 parser audit~~: **done** (see above).
 2. **The write-up**, from `results/final/report/` (V1_PLAN Phase 4). Read *DungeonBench*
    (arXiv 2607.29577), which is close to this work.
 3. **Tidy-ups:**
    - A34: the run header prints "6 models × 4 conditions × …" for 600 cells; the
      count is right, the bracketed breakdown misleads.
    - A33: show reasoning in the replay viewer.
+   - A35: the audit's decision-rule table lists the three baselines as "not computable".
+     They have no C1 or C2, so they should be left out.
    - Push the `study-freeze` tag.
 
 ## For a future study

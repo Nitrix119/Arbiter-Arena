@@ -1041,3 +1041,9 @@ exclusions; $29.90 at list, $24.30 billed.
 
 The working record is `docs/current/FINAL_RUN_FINDINGS.md`. Next: the registered C1
 parser audit, then the write-up.
+
+**C1 parser audit (2026-10-05): done.** 200 blind labels gave 2 false accepts, a rate of
+0.010 [0.003, 0.036], with false rejects zero by construction. Neither error shows a
+parser defect: one is a dropped minus sign in a label, the other a self-contradicting
+response. The C1 decision rule keeps every registered verdict. Details are in
+`FINAL_RUN_FINDINGS.md`. Next: the write-up.
