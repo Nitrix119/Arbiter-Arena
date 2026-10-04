@@ -310,7 +310,9 @@ names where it should be addressed. Append; strike through and date an item when
   and `src/arena/heuristic/ga.py` (the GA). Both are seeded, so determinism holds, but the
   stated invariant does not. → final cleanup: route both through `dice.new_rng`, or amend the
   rule to say what it actually protects (game RNG versus agent or analysis streams).
-- **A13. `openrouter_agent.DEFAULT_MODEL` is the known-dead free model**
+- **A13. ~~`openrouter_agent.DEFAULT_MODEL` is the known-dead free model~~ Fixed 2026-10-05:**
+  it now points at the study's live small model, `nvidia/nemotron-3.5-lightning` (cheap,
+  not free), and so do the example and setup guide. Original note:
   (`nvidia/nemotron-nano-9b-v2:free` 404s). The study never uses it, because grids name their
   models, but the example scripts default to it. → final cleanup: drop the default, or point it
   at a live model and say so.

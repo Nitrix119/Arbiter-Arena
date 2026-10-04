@@ -39,9 +39,10 @@ try:  # optional dependency — only this module needs it (pip install -e ".[age
 except ImportError:  # pragma: no cover - exercised via the missing-dep message
     openai = None
 
-DEFAULT_MODEL = (
-    "nvidia/nemotron-nano-9b-v2:free"  # free + tool-capable; override with --model
-)
+# The example scripts' default when no model is named. The study's grids always name
+# their models, so this is never used there. The study's own small model: live, tool-
+# capable and very cheap, but not free (the old free default was retired and 404s).
+DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning"
 DEFAULT_MAX_TOKENS = 4096
 # V1_PLAN §3.2 holds sampling at the provider minimum and records it. Still not
 # deterministic — the study says so rather than claiming otherwise.

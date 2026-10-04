@@ -119,7 +119,7 @@ for cheap experimentation and for surfacing where weaker models fail.
    fails loudly (which is often the point). Pass it with `--model`.
 4. **Run:**
    ```bash
-   python -m examples.arena_openrouter_match --model nvidia/nemotron-nano-9b-v2:free
+   python -m examples.arena_openrouter_match --model nvidia/nemotron-3.5-lightning
    python -m examples.arena_openrouter_match --opponent claude          # cross-provider!
    python -m examples.arena_openrouter_match --opponent openrouter:openai/gpt-4o-mini
    ```
