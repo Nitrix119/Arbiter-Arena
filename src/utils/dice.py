@@ -22,6 +22,10 @@ import contextvars
 from contextlib import contextmanager
 from typing import Iterator, List, Optional, Tuple
 
+#: The RNG type, for annotations elsewhere: code outside this module names it as
+#: ``dice.Rng`` and builds one with :func:`new_rng`, never by importing ``random``.
+Rng = random.Random
+
 # The engine's active RNG. A per-context default keeps today's non-deterministic
 # behaviour when nothing binds a seed. Bind a private RNG via using_rng().
 _current: contextvars.ContextVar[random.Random] = contextvars.ContextVar(

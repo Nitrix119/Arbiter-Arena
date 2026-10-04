@@ -13,7 +13,6 @@ agents don't use but an LLM agent will.
 """
 
 import math
-import random
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
@@ -25,6 +24,7 @@ from src.arena.tools import (
     TOOL_MOVE,
     ToolCall,
 )
+from src.utils import dice
 
 
 class NoToolCallError(RuntimeError):
@@ -235,10 +235,10 @@ class RandomAgent(Agent):
     """
 
     def __init__(
-        self, name: str, team: Optional[str] = None, rng: Optional[random.Random] = None
+        self, name: str, team: Optional[str] = None, rng: Optional[dice.Rng] = None
     ):
         super().__init__(name, team)
-        self._rng = rng or random.Random()
+        self._rng = rng or dice.new_rng()
 
     def reseed(self, seed: int) -> None:
         """Reseed this agent's private choice RNG for a reproducible match."""

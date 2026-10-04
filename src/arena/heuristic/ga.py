@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import os
-import random
 from dataclasses import asdict, dataclass, fields as dataclass_fields
 from datetime import datetime
 from multiprocessing import Pool
@@ -74,7 +73,7 @@ SPEED_WEIGHT = 0.005  # mild preference for faster wins (rounds)
 # ---------------------------------------------------------------------------
 
 
-def random_weights(rng: random.Random) -> HeuristicWeights:
+def random_weights(rng: dice.Rng) -> HeuristicWeights:
     """A weight vector with each gene drawn uniformly from its bound."""
     return HeuristicWeights(
         **{k: rng.uniform(lo, hi) for k, (lo, hi) in WEIGHT_BOUNDS.items()}
@@ -87,7 +86,7 @@ def _clamp(name: str, value: float) -> float:
 
 
 def crossover(
-    a: HeuristicWeights, b: HeuristicWeights, rng: random.Random
+    a: HeuristicWeights, b: HeuristicWeights, rng: dice.Rng
 ) -> HeuristicWeights:
     """Uniform crossover: each gene taken from one parent or the other at random."""
     return HeuristicWeights(
@@ -99,7 +98,7 @@ def crossover(
 
 
 def mutate(
-    weights: HeuristicWeights, rng: random.Random, *, rate: float, sigma: float
+    weights: HeuristicWeights, rng: dice.Rng, *, rate: float, sigma: float
 ) -> HeuristicWeights:
     """Gaussian mutation: perturb each gene with probability *rate*, clamped to its
     bound."""
@@ -248,7 +247,7 @@ def run_ga(config: GAConfig, *, log_path: Optional[str] = None) -> GAResult:
     generation's fitness; because elites are re-evaluated on each generation's fresh
     seeds, a champion earns its place on new dice rather than lucky ones.
     """
-    rng = random.Random(config.ga_seed)
+    rng = dice.new_rng(config.ga_seed)
     population = _init_population(config, rng)
     logger = _RunLogger(config, log_path)
     champion: Optional[Tuple[HeuristicWeights, float, int]] = None
@@ -277,7 +276,7 @@ def run_ga(config: GAConfig, *, log_path: Optional[str] = None) -> GAResult:
         logger.close()
 
 
-def _init_population(config: GAConfig, rng: random.Random) -> List[HeuristicWeights]:
+def _init_population(config: GAConfig, rng: dice.Rng) -> List[HeuristicWeights]:
     population: List[HeuristicWeights] = []
     if config.seed_the_default:
         population.append(DEFAULT_WEIGHTS)
@@ -303,7 +302,7 @@ def _evaluate_population(
 def _next_generation(
     evaluated: List[Tuple[HeuristicWeights, float, List[Dict[str, object]]]],
     config: GAConfig,
-    rng: random.Random,
+    rng: dice.Rng,
 ) -> List[HeuristicWeights]:
     """Elitism + tournament selection + crossover + mutation. ``evaluated`` is sorted
     desc."""
@@ -326,7 +325,7 @@ def _next_generation(
 def _tournament(
     evaluated: List[Tuple[HeuristicWeights, float, List[Dict[str, object]]]],
     k: int,
-    rng: random.Random,
+    rng: dice.Rng,
 ) -> HeuristicWeights:
     contenders = [rng.choice(evaluated) for _ in range(k)]
     return max(contenders, key=lambda item: item[1])[0]

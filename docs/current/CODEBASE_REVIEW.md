@@ -302,7 +302,10 @@ names where it should be addressed. Append; strike through and date an item when
 - **A11. Plots deferred.** V1_PLAN asked the report for 2–3 plots. They would add matplotlib,
   and the study's claims rest on the tables, so the report is text and CSV only for now.
   → Phase 4 (write-up): plot from `report/*.csv`, ideally in a separate script.
-- **A12. Two older modules import `random` directly**, against CLAUDE.md §7 ("`dice.py` is
+- **A12. ~~Two older modules import `random` directly~~ Fixed 2026-10-05:** both now go
+  through `dice.new_rng`, with `dice.Rng` for annotations (the same `random.Random`, so
+  no stream changes). `tests/test_dice.py` fails if any module but `dice.py` imports
+  `random`. Original note:, against CLAUDE.md §7 ("`dice.py` is
   the only module that touches `random`"): `src/arena/agent.py` (RandomAgent's own stream)
   and `src/arena/heuristic/ga.py` (the GA). Both are seeded, so determinism holds, but the
   stated invariant does not. → final cleanup: route both through `dice.new_rng`, or amend the
