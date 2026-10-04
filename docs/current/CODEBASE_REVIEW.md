@@ -265,7 +265,9 @@ names where it should be addressed. Append; strike through and date an item when
   Original note: for every scenario attack
   (`_serialize_action` reuse) — token noise in every prompt. Drop empty descriptions. → final
   cleanup (changes prompt hashes; do before the freeze).
-- **A7. Repo hygiene.** *Lint half fixed 2026-10-05:* `flake8 tests/` is clean (from 117)
+- **A7. ~~Repo hygiene.~~ Fixed 2026-10-05.** *Line endings:* `.gitattributes` declares LF
+  (CRLF for `.bat`/`.cmd`); the repository was already LF, and the working copy was
+  refreshed to match, ending the per-commit CRLF warnings. *Lint:* `flake8 tests/` is clean (from 117)
   and CI now lints `tests/`. This included the `dir()` name hack, the heuristic test that
   never used its policy (it now checks the policy path), and an unused variable that
   hid a real bug (A36). The line-ending half is in its own commit. Original note: CI
