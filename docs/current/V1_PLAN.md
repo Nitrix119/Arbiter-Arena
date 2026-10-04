@@ -1030,3 +1030,14 @@ exploratory, not data. At `low` effort, Gemini deliberates every turn and Sonnet
 never. C3's menu appears to stand in for the deliberation Sonnet skips, and C2's
 tool-call format removes the reasoning Sonnet writes out loud in C1 (cf. Tam et al.,
 2024). There is a list of what to check in the final run.
+
+**Final run (2026-10-04): complete.** `results/final`: 600/600 matches, 100% replay, no
+exclusions; $29.90 at list, $24.30 billed.
+- Nemotron supports H1 (the full ordering), H2 and H3.
+- Gemini is at the ceiling.
+- Sonnet reverses H1's C2 > C1 step: it fails only in bare C2, and is rescued either by
+  reasoning in prose (C1) or by seeing the menu (C2+M, C3).
+- The menu also prevents friendly fire.
+
+The working record is `docs/current/FINAL_RUN_FINDINGS.md`. Next: the registered C1
+parser audit, then the write-up.
