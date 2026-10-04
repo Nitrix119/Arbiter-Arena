@@ -870,6 +870,26 @@ noise only. The registered coverage figures (§4.1.1) were re-measured and are
 unchanged. The pilot is re-run on the fixed engine, and the §4.4 choices are read from
 that re-run. Ledger A29.
 
+### 2026-10-04 — The parser audit labels 200 accepted items, as its stratum is empty
+
+Recorded after the final run and **before any audit label exists**.
+
+The registered audit (§7) hand-labels "200 C1 first-attempt outputs", drawn half from
+responses the parser accepted and half from those it refused, "all of a stratum if it
+has fewer". In the final run the parser refused **none** of the 2,966 fresh C1 first
+attempts. So the refused stratum is empty, and the half-and-half draw would yield only
+100 items.
+
+To keep the registered sample of 200 hand-labelled outputs, the sample is drawn with
+`--n 400`, which gives 200 accepted items (user decision). Nothing else changes:
+- the labeller is still blind
+- the labels and scoring are as registered
+- the false-accept rate is weighted as before
+- the false-reject rate is zero by construction, because no response was refused, so
+  check (c) of the C1 rule adds nothing to C1's validity
+
+The choice depends on no result: it was made before any item was labelled.
+
 ### 2026-10-01 — Trailing zeros no longer cost a C1 command its layer
 
 Found by the Gemini pilot, before the freeze. The canonical rendering writes a whole
