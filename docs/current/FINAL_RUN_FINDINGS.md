@@ -114,6 +114,17 @@ Nemotron's C1 < C2.
   model's working, not through parsing failures. Our addition is that *showing the
   options* compensates for the lost working.
 
+- **Refinement (measured 2026-10-05).** Sonnet's prose rate is 53% of decisions in C1,
+  against 26% in C2, 24% in C2+M and 27% in C3. C2 and C2+M write the same amount of
+  prose, so what separates C2's failure from C2+M's recovery is **the menu, not the
+  prose**. The two rescues are distinct: working it out in the open (C1), or being shown
+  the options (C2+M and C3).
+- **Failure story: kiting, seed 108.** In C2 the archer shoots and ends its turn without
+  moving, explaining "I can't do both in one action, so I'll attack now": it confuses one
+  tool call per response with one action per turn. It dies. In C2+M, the same seed, it
+  sees "actions 0" beside listed moves, retreats, and wins on 12/18 HP. Written up in
+  `ARTICLE_DRAFT.md` §7.
+
 ### 2. "Low" reasoning effort means different things per vendor
 
 - Gemini at `low` deliberates briefly on most turns, at ~185–330 output tokens per
