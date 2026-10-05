@@ -1,5 +1,9 @@
 # Spell System — Open Decisions & Questions
 
+> **Historical.** This document is archived: it records a plan or decision as it
+> stood at the time, and may not match the code. For the current design, see
+> [ARCHITECTURE.md](../ARCHITECTURE.md) and `docs/current/`.
+
 > **Purpose.** Every question, decision point, and place where the design in
 > [SPELL_SYSTEM_DESIGN.md](SPELL_SYSTEM_DESIGN.md) needs *your* input, collated so you can answer
 > each in one pass. Where I have a view I've marked a **Recommendation**; where I don't, the options

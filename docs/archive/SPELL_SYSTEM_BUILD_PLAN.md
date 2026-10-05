@@ -1,5 +1,9 @@
 # Spell System — Build Plan for the Remaining Work
 
+> **Historical.** This document is archived: it records a plan or decision as it
+> stood at the time, and may not match the code. For the current design, see
+> [ARCHITECTURE.md](../ARCHITECTURE.md) and `docs/current/`.
+
 > **Scope: only what remains.** Stages 1–3 and E6 are done (the "pure additions" to the *existing*
 > engine). This document plans the second half: **building the new block-based spell system** and
 > retiring the old one. It uses the current committed state as its base and supersedes the roadmap in

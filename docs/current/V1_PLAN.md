@@ -411,8 +411,9 @@ remains._
       `RuleEngine`, and no "Future Goals". The chart is still to add once A11 exists.
       Follow-up: `examples/spells/SPELL_DEFINITION_GUIDE.md` still documents the deleted
       `effects` pipeline; the README now points to `BLOCK_REFERENCE.md` instead.)_
-- [ ] `docs/ARCHITECTURE.md` (one page plus one diagram). Move superseded plans to `docs/archive/`
-      with a "historical" banner. _(`docs/archive/` exists; `ARCHITECTURE.md` does not.)_
+- [x] `docs/ARCHITECTURE.md` (one page plus one diagram). Move superseded plans to `docs/archive/`
+      with a "historical" banner. _(2026-10-06: written, with a Mermaid diagram; every
+      archived doc now carries the banner.)_
 - [x] Licence change or wording; `NOTICE`/SRD attribution (CC BY 4.0 text); content provenance
       list; trademark non-affiliation statement. _(2026-10-06: Apache-2.0; `NOTICE` names the
       SRD-derived content directories. Every spell was checked against SRD 5.1: Armor

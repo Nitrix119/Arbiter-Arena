@@ -1,5 +1,9 @@
 # A Strong, Tunable Heuristic Opponent — Plan & Thoughts
 
+> **Historical.** This document is archived: it records a plan or decision as it
+> stood at the time, and may not match the code. For the current design, see
+> [ARCHITECTURE.md](../ARCHITECTURE.md) and `docs/current/`.
+
 > **Purpose.** Design notes for replacing the naive `ScriptedAgent` with a *good* — ideally
 > nasty — generic heuristic: the fixed, deterministic yardstick that LLMs are benchmarked
 > against (see [AGENT_ARENA_PLAN.md](../current/AGENT_ARENA_PLAN.md), [AGENT_ARENA_DECISIONS.md](AGENT_ARENA_DECISIONS.md)).

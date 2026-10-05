@@ -1,5 +1,9 @@
 # Spell System Design — From Vision to Implementation
 
+> **Historical.** This document is archived: it records a plan or decision as it
+> stood at the time, and may not match the code. For the current design, see
+> [ARCHITECTURE.md](../ARCHITECTURE.md) and `docs/current/`.
+
 > **Status: design agreed, implementation not yet started (2026-08-22).** This document takes the
 > intent in [SPELL_SYSTEM_VISION.md](../current/SPELL_SYSTEM_VISION.md) and makes it concrete: it pins the
 > *current* mechanics down to the function level, specifies **precisely how you add a new spell and a

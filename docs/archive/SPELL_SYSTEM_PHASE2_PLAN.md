@@ -1,5 +1,9 @@
 # Spell System — Phase 2+ Plan & Handoff
 
+> **Historical.** This document is archived: it records a plan or decision as it
+> stood at the time, and may not match the code. For the current design, see
+> [ARCHITECTURE.md](../ARCHITECTURE.md) and `docs/current/`.
+
 > **Purpose: a clean handoff.** Phase 1 of the block-system rewrite is **done**. This document is the
 > authoritative forward plan for **Phase 2 and beyond**, written so a fresh session can take over with
 > only this file and the code. It records (1) exactly where the code sits now, (2) every deviation

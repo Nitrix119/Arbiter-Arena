@@ -80,6 +80,8 @@ observation ──► interface (C1 / C2 / C2+M / C3) ──► validator ──
 - **Replay verification**: `study verify` re-runs each match from its recorded actions and checks every state hash.
 - **Baselines**: Random, Scripted and a utility-scoring Heuristic agent play through the same paths, for free.
 
+The full picture, with a diagram, is in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ---
 
 ## The engine

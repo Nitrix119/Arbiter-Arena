@@ -1,5 +1,9 @@
 # Spell System — Phase 3 Plan & "What's Genuinely Left"
 
+> **Historical.** This document is archived: it records a plan or decision as it
+> stood at the time, and may not match the code. For the current design, see
+> [ARCHITECTURE.md](../ARCHITECTURE.md) and `docs/current/`.
+
 > **Purpose.** Phase 2 of the block-system rewrite is **complete**: every shipped spell, every
 > `rules/global/*` rule, and **weapon attacks** now resolve on the block engine (`src/spells/`). This
 > document is the authoritative forward plan for **Phase 3** — retiring the legacy machinery and finishing
