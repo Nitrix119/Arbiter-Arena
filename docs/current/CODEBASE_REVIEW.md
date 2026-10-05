@@ -533,8 +533,9 @@ names where it should be addressed. Append; strike through and date an item when
   also priced baseline cells as model calls (~21,000; ~16,800 was right). The header now
   reads "480 model cells … ; 120 baseline cells …". Display only: the cell count was
   always right, and no data or cost figure was affected.
-- **A33. Show the model's reasoning in the web replay viewer. Open (user request,
-  2026-10-01).**
+- **A33. ~~Show the model's reasoning in the web replay viewer.~~ Done 2026-10-06**
+  (user request, 2026-10-01). The `/playback` decision panel shows each request's
+  thought, said, called and read, beside the referee's verdict and code.
   - Transcripts now record each request's `reasoning` text and `reasoning_tokens`,
     scrubbed, and `study show` prints it as `thought`.
   - The `/playback` page should show it beside each decision, so a viewer can see what

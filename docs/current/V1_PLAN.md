@@ -414,10 +414,16 @@ remains._
       `examples/spells/` is actually in SRD 5.1.)_
 - [x] `CITATION.cff`, `CHANGELOG.md`. _(2026-10-06, both at 1.0.0. `pyproject.toml` stays
       at 0.2.0 until the release bump.)_
-- [ ] Playback page shows condition, raw model output and error code per action.
+- [x] Playback page shows condition, raw model output and error code per action.
       **Do this together with ledger A33**, showing the model's reasoning ("thought") and visible
       prose ("said"). The data is already in every transcript, so it is frontend only. It is
       also what makes the Phase 4 failure story and demo GIF showable.
+      _(2026-10-06: done with A33. A decision panel shows the verdict, its code and
+      reason, and each request's thought, said, called and read; the caption shows
+      model, condition, scenario and seed. `/playback?match=<file>&step=<n>` opens a
+      transcript in `web/static/matches/` at a step, so the failure story can be
+      linked to. Checked headlessly on demo transcripts; not yet on a real model's
+      reasoning.)_
 - [ ] Fresh-clone test on a clean venv: install, tests, demo command. _(Note the venv
       lesson from the final run: a plain `python` outside VS Code lacked the dependencies.
       The quick start should say to use the venv's Python.)_

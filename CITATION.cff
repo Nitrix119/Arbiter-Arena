@@ -12,7 +12,7 @@ authors:
     alias: Nitrix119
 version: 1.0.0
 license: Apache-2.0
-repository-code: "https://github.com/Nitrix119/DnD-Auto-Battler"
+repository-code: "https://github.com/Nitrix119/Arbiter-Arena"
 keywords:
   - LLM agents
   - tool use

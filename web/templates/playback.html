@@ -21,12 +21,18 @@
 
     <!-- Top-center: round/turn + a description of the current step -->
     <div id="pb-caption">
+        <!-- Study matches only: model · condition · scenario · seed · opponent -->
+        <div id="pb-meta" hidden></div>
         <div id="pb-round">—</div>
         <div id="pb-desc">Loading match…</div>
     </div>
 
     <!-- Left: scrollable event log; click a row to jump there -->
     <div id="pb-timeline"></div>
+
+    <!-- Left, under the timeline: the model's side of the current decision.
+         Shown only for matches with a model in them (study transcripts). -->
+    <div id="pb-decision" hidden></div>
 
     <!-- Right: one card per combatant (built by playback.js) -->
     <div id="combatant-panels"></div>
