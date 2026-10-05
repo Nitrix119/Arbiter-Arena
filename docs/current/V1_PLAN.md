@@ -400,12 +400,17 @@ The ledger session (A30, A36) can come any time after step 1. Run `verify` at th
 
 _Status, 2026-10-05: not started as a phase. Some groundwork is done; each item notes what
 remains._
-- [ ] README rewrite: subtitle "a deterministic evaluation harness for tool-using LLM agents",
+- [x] README rewrite: subtitle "a deterministic evaluation harness for tool-using LLM agents",
       60-second quick start, **no-API-key demo command**, result chart (placeholder), limitations.
       Remove stale `RuleEngine`/"future goals" text.
       _(The subtitle and opening paragraph are done. Still to do: the `RuleEngine` paragraph
       and "Future Goals" section, which are stale; a quick start; the no-key demo, which
       exists as `examples/study/demo.toml`; a results chart; limitations.)_
+      _(2026-10-06: rewritten harness-first: quick start with the no-key demo, the study
+      with the validity table, limitations, an engine section without the deleted
+      `RuleEngine`, and no "Future Goals". The chart is still to add once A11 exists.
+      Follow-up: `examples/spells/SPELL_DEFINITION_GUIDE.md` still documents the deleted
+      `effects` pipeline; the README now points to `BLOCK_REFERENCE.md` instead.)_
 - [ ] `docs/ARCHITECTURE.md` (one page plus one diagram). Move superseded plans to `docs/archive/`
       with a "historical" banner. _(`docs/archive/` exists; `ARCHITECTURE.md` does not.)_
 - [x] Licence change or wording; `NOTICE`/SRD attribution (CC BY 4.0 text); content provenance
