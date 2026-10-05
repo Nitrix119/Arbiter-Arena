@@ -408,10 +408,12 @@ remains._
       exists as `examples/study/demo.toml`; a results chart; limitations.)_
 - [ ] `docs/ARCHITECTURE.md` (one page plus one diagram). Move superseded plans to `docs/archive/`
       with a "historical" banner. _(`docs/archive/` exists; `ARCHITECTURE.md` does not.)_
-- [ ] Licence change or wording; `NOTICE`/SRD attribution (CC BY 4.0 text); content provenance
-      list; trademark non-affiliation statement. _(The licence is PolyForm Noncommercial
-      1.0.0; there is no `NOTICE` yet.)_
-- [ ] `CITATION.cff`, `CHANGELOG.md`. _(Neither exists. The version is 0.2.0.)_
+- [x] Licence change or wording; `NOTICE`/SRD attribution (CC BY 4.0 text); content provenance
+      list; trademark non-affiliation statement. _(2026-10-06: Apache-2.0; `NOTICE` names the
+      SRD-derived content directories. Still open: confirm every spell in
+      `examples/spells/` is actually in SRD 5.1.)_
+- [x] `CITATION.cff`, `CHANGELOG.md`. _(2026-10-06, both at 1.0.0. `pyproject.toml` stays
+      at 0.2.0 until the release bump.)_
 - [ ] Playback page shows condition, raw model output and error code per action.
       **Do this together with ledger A33**, showing the model's reasoning ("thought") and visible
       prose ("said"). The data is already in every transcript, so it is frontend only. It is

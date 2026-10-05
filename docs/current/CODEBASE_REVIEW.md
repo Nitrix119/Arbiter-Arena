@@ -174,6 +174,9 @@ catalogue remains.)_
   and the README agree — free for any noncommercial use, no monetization. The
   `egg-info/PKG-INFO` "Future Enhancements" note is a regenerated build artifact and refreshes on
   the next build.
+  _(2026-10-06 — superseded: relicensed to **Apache-2.0**, as decided in Phase 0
+  (V1_PLAN §4). `NOTICE` carries the SRD 5.1 CC BY 4.0 attribution and the trademark
+  statement.)_
 
 ## 6. Prioritized repair roadmap
 

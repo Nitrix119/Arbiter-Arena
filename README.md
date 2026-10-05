@@ -152,9 +152,9 @@ pytest tests/ -v
 
 ## License
 
-Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+Licensed under the [Apache License 2.0](LICENSE). The SRD 5.1 game content stays under CC BY 4.0. Both attributions are in [NOTICE](NOTICE).
 
-You may use, modify, and share this project for any **noncommercial** purpose — personal, hobby, research, and educational use are all welcome. **Commercial use (monetizing this work) is not permitted.** See the [LICENSE](LICENSE) file for the full terms.
+To cite the software or the study, see [CITATION.cff](CITATION.cff).
 
 ---
 
