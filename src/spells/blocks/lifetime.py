@@ -70,7 +70,7 @@ def lifetime(block: Block, inv: Invocation) -> None:
 def end_lifetime(block: Block, inv: Invocation) -> None:
     """End the effect whose rider is firing — dispose its owning lifetime scope.
 
-    Used by a self-terminating effect (Armor of Agathys ends when its temp HP is
+    Used by a self-terminating effect (Rime Ward ends when its temp HP is
     gone). Disposing the scope revokes every grant it owns and unsubscribes its
     riders. A no-op outside a trigger firing (no owning scope).
     """

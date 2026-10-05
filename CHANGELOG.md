@@ -25,6 +25,8 @@ The release that ships the action-interface study.
 ### Changed
 - Licensed under Apache-2.0 (was PolyForm Noncommercial 1.0.0). SRD 5.1
   attribution and the trademark notice are in `NOTICE`.
+- The test spell Armor of Agathys, which is not in SRD 5.1, is replaced by an
+  original spell with the same mechanics, Rime Ward.
 
 ### Fixed
 - Adjacent creatures were refused as overlapping (A29).

@@ -410,8 +410,8 @@ remains._
       with a "historical" banner. _(`docs/archive/` exists; `ARCHITECTURE.md` does not.)_
 - [x] Licence change or wording; `NOTICE`/SRD attribution (CC BY 4.0 text); content provenance
       list; trademark non-affiliation statement. _(2026-10-06: Apache-2.0; `NOTICE` names the
-      SRD-derived content directories. Still open: confirm every spell in
-      `examples/spells/` is actually in SRD 5.1.)_
+      SRD-derived content directories. Every spell was checked against SRD 5.1: Armor
+      of Agathys was not, and is now the original "Rime Ward", same mechanics.)_
 - [x] `CITATION.cff`, `CHANGELOG.md`. _(2026-10-06, both at 1.0.0. `pyproject.toml` stays
       at 0.2.0 until the release bump.)_
 - [x] Playback page shows condition, raw model output and error code per action.

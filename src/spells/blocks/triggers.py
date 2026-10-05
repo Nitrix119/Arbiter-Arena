@@ -1,7 +1,7 @@
 """Trigger blocks — subscribe a `then` sub-program to a combat event.
 
 A reactive rider (Colossus Slayer's bonus die on a hit, Vampiric Touch's heal on
-the caster's necrotic damage, Armor of Agathys' retaliation) is a ``then``
+the caster's necrotic damage, Rime Ward's retaliation) is a ``then``
 sub-program bound to an EventBus event. When the ``trigger`` block runs during a
 cast it captures its defining caster + collaborators, subscribes a handler, and —
 if a lifetime scope is open (a concentration/duration ``lifetime`` block) —

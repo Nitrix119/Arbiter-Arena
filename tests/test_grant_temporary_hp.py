@@ -3,7 +3,7 @@
 Regression coverage for a bug where the step called a non-existent
 `Entity.gain_temporary_hp`, so any spell using the documented
 `grant_temporary_hp` step crashed with AttributeError at runtime.  The existing
-armor_of_agathys test only asserted JSON structure and never executed this
+rime_ward test only asserted JSON structure and never executed this
 branch, so it did not catch the crash. Runs the block engine (the only engine),
 covering a literal amount, an expression amount, and current vs self targeting.
 """

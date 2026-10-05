@@ -110,7 +110,7 @@ def _iter_event_refs(value: Any) -> Iterator[str]:
     """Yield every top-level ``event.<attr>`` name referenced anywhere in *value*.
 
     Strings that are not valid Python expressions carry no references (a plain
-    literal such as ``"COLD"`` or ``"Armor of Agathys"`` is not an expression).
+    literal such as ``"COLD"`` or ``"Rime Ward"`` is not an expression).
     """
     if isinstance(value, str):
         try:

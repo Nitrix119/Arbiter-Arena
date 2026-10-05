@@ -1,6 +1,6 @@
-"""Tests for the Armor of Agathys spell and entity effect.
+"""Tests for the Rime Ward spell and entity effect.
 
-Verifies that casting Armor of Agathys grants temporary HP, deals cold
+Verifies that casting Rime Ward grants temporary HP, deals cold
 retaliation damage when the warded entity is hit by an attack while temp
 HP remain, and that the effect self-terminates when temp HP are depleted.
 """
@@ -73,18 +73,16 @@ def _setup(*entities):
 
 
 def _load_spell():
-    return StatBlockLoader.load_spell_from_json(
-        str(SPELLS_DIR / "armor_of_agathys.json")
-    )
+    return StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "rime_ward.json"))
 
 
 # -- Loading tests ------------------------------------------------------------
 
 
-class TestArmorOfAgathysLoading:
+class TestRimeWardLoading:
 
     def test_loads_native_program(self):
-        """Armor of Agathys is a native program: a lifetime granting temp HP with a
+        """Rime Ward is a native program: a lifetime granting temp HP with a
         retaliation trigger (its effect is inline, not a separate entity-effect file).
         """
         spell = _load_spell()
@@ -116,10 +114,10 @@ class TestArmorOfAgathysLoading:
 # -- Temp HP grant tests ------------------------------------------------------
 
 
-class TestArmorOfAgathysTempHP:
+class TestRimeWardTempHP:
 
     def test_grants_temp_hp_on_cast(self):
-        """Casting Armor of Agathys should grant 5 temp HP to the caster."""
+        """Casting Rime Ward should grant 5 temp HP to the caster."""
         caster = _make_entity()
         bus, engine, dp, ar, spell_res = _setup(caster)
 
@@ -151,7 +149,7 @@ class TestArmorOfAgathysTempHP:
 # -- Retaliation tests --------------------------------------------------------
 
 
-class TestArmorOfAgathysRetaliation:
+class TestRimeWardRetaliation:
 
     def test_attacker_takes_cold_damage_on_hit(self):
         """A creature that hits the warded entity should take 5 cold damage."""
@@ -230,7 +228,7 @@ class TestArmorOfAgathysRetaliation:
 # -- Self-termination tests ---------------------------------------------------
 
 
-class TestArmorOfAgathysSelfTermination:
+class TestRimeWardSelfTermination:
 
     def test_effect_removed_when_temp_hp_depleted_by_attack(self):
         """The effect should auto-remove when temp HP reach 0 from attack damage."""

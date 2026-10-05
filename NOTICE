@@ -18,6 +18,10 @@ creature stat blocks under examples/creatures/, the spells under
 examples/spells/, and the rules under rules/. The CC BY 4.0 licence, not the
 Apache License, governs the SRD material itself.
 
+Some content is the project's own, written for testing, and not from the SRD:
+the "Rime Ward" spell (examples/spells/rime_ward.json) and the debug and test
+creatures. It is licensed under the Apache License like the code.
+
 ---------------------------------------------------------------------------
 Trademarks
 ---------------------------------------------------------------------------
