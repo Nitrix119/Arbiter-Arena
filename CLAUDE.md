@@ -292,6 +292,19 @@ leave a brief note here.
 - **Rule going forward:** the concrete, testable rule.
 ```
 
+### 2026-10-07 — Green CI on fresh dependencies, while every page returned 500
+- **Context:** The V1 fresh-clone test, run just before merging the study to `main`.
+- **What went wrong:** the web extra floors `fastapi` but sets no ceiling. So a fresh
+  install resolved Starlette 1.x, which removed `TemplateResponse(name, {"request":
+  ...})`, and `/`, `/battle` and `/playback` all returned 500.
+  - CI installs fresh too, so it ran the broken version and stayed green, because no test
+    requested a page.
+  - The developer's older venv only raised a deprecation warning, so nobody saw it.
+- **Rule going forward:** every route a user opens needs at least one test that requests
+  it and checks the status. Those are the tests that notice when a dependency upgrade
+  breaks something. Treat a deprecation warning from a dependency as a failure that hasn't
+  happened yet, and fix it while it is still only a warning.
+
 ### 2026-09-30 — A test pinned a boundary convention that broke the rules
 - **Context:** The Phase 2 pilot, the first live data. The engine refused 141 moves as
   overlapping another creature when the two only touched: plain D&D adjacency.

@@ -46,6 +46,17 @@ class TestAppCreation:
 # ---------------------------------------------------------------------------
 
 
+class TestPages:
+    # Starlette 1.0 removed TemplateResponse(name, {"request": ...}), and a fresh
+    # install resolves it, so every page 500'd while the JSON API stayed green.
+    # Only a real GET of each page shows that.
+    @pytest.mark.parametrize("path", ["/", "/battle", "/playback"])
+    def test_page_renders(self, client, path):
+        resp = client.get(path)
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/html")
+
+
 class TestCreatureEndpoints:
     def test_list_creatures(self, client):
         r = client.get("/api/creatures")
