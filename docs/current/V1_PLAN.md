@@ -430,11 +430,23 @@ remains._
       transcript in `web/static/matches/` at a step, so the failure story can be
       linked to. Checked headlessly on demo transcripts; not yet on a real model's
       reasoning.)_
-- [ ] Fresh-clone test on a clean venv: install, tests, demo command. _(Note the venv
+- [x] Fresh-clone test on a clean venv: install, tests, demo command. _(Note the venv
       lesson from the final run: a plain `python` outside VS Code lacked the dependencies.
       The quick start should say to use the venv's Python.)_
+      _(2026-10-07: run from a GitHub clone of `90d4141` into `E:\arena-clone`, on a new
+      python.org 3.13 venv. Install, 1712 tests, and the four demo commands all passed:
+      60/60 matches in 11 s, verify 100%. It found one blocker. A fresh install
+      resolves Starlette 1.x, which removed the old `TemplateResponse` form, so `/`,
+      `/battle` and `/playback` all returned 500. No test requested a page, so CI was
+      green. Fixed test-first (`TestPages`). Also: a free-threaded `python3.13t` cannot
+      build `watchfiles`, so `py -3` can pick an interpreter that fails to install.
+      Playback checked by eye on both a loaded file and the deep link.)_
 - [ ] Merge `feat/interface-study` into `main` by PR. `main` is 102 commits behind, and the
       V1 definition of done (§5) needs the study on `main` with CI green.
+      _(2026-10-07: PR #7 is open, 109 commits, with no conflicts. CI is green on
+      `90d4141`: tests on py3.11 and py3.13, plus format, lint and types. Use a merge
+      commit, not squash, so the pre-registration freeze and `study-freeze` stay in
+      `main`'s history. Tick this box once it is merged.)_
 
 ### Phase 4 — Analyse, write, release (≈3–4 sessions)
 - [ ] Run the report on the frozen bundle, write up H1–H3 as confirmed or not, then exploratory
