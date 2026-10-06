@@ -391,7 +391,8 @@ main deliverable.
 4. **The user-voice sections** of the article: motivation, surprises, and "what I decided".
 5. **README, ARCHITECTURE, licence/NOTICE, CITATION and CHANGELOG**, then the fresh-clone
    test.
-6. **Merge to `main`**, then the release bundle and `v1.0.0`.
+6. ~~**Merge to `main`**~~ **Done 2026-10-07** (PR #7, `fa3b90d`). Then the release
+   bundle and `v1.0.0`.
 
 The ledger session (A30, A36) can come any time after step 1. Run `verify` at the
 `study-freeze` tag after any engine change.
@@ -441,12 +442,14 @@ remains._
       green. Fixed test-first (`TestPages`). Also: a free-threaded `python3.13t` cannot
       build `watchfiles`, so `py -3` can pick an interpreter that fails to install.
       Playback checked by eye on both a loaded file and the deep link.)_
-- [ ] Merge `feat/interface-study` into `main` by PR. `main` is 102 commits behind, and the
+- [x] Merge `feat/interface-study` into `main` by PR. `main` is 102 commits behind, and the
       V1 definition of done (§5) needs the study on `main` with CI green.
       _(2026-10-07: PR #7 is open, 109 commits, with no conflicts. CI is green on
       `90d4141`: tests on py3.11 and py3.13, plus format, lint and types. Use a merge
       commit, not squash, so the pre-registration freeze and `study-freeze` stay in
-      `main`'s history. Tick this box once it is merged.)_
+      `main`'s history. Merged 2026-10-07 as `fa3b90d`, by merge commit, with
+      the Starlette fix; CI green on `main`. Phase 4 continues on
+      `docs/phase4-writeup`.)_
 
 ### Phase 4 — Analyse, write, release (≈3–4 sessions)
 - [ ] Run the report on the frozen bundle, write up H1–H3 as confirmed or not, then exploratory
@@ -488,7 +491,7 @@ production tool-using agents; (9) limitations; (10) reproduce it.
 ---
 
 ## 5. V1.0.0 definition of done
-- [ ] `main` contains all arena, RNG and study work; CI green with a badge.
+- [x] `main` contains all arena, RNG and study work; CI green with a badge.
 - [ ] `pip install -e ".[web,dev]"`, then one no-key command runs a match and writes a verifiable transcript.
 - [ ] One documented command reproduces the report from the published bundle.
 - [ ] Pre-registration frozen *before* the final-run commit (visible in git history).

@@ -1,5 +1,7 @@
 # Arbiter Arena
 
+[![CI](https://github.com/Nitrix119/Arbiter-Arena/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nitrix119/Arbiter-Arena/actions/workflows/ci.yml)
+
 **A deterministic evaluation harness for tool-using LLM agents, built on an SRD 5.1-compatible tactical combat engine.**
 
 An agent proposes an action; the engine validates it against the rules, executes it, and records exactly what happened and why — so an agent's reliability can be measured rather than eyeballed. Every match is seeded, recorded as a JSONL transcript, and replays to the same states, so any result can be re-checked and any single decision inspected.
