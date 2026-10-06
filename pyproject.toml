@@ -52,6 +52,11 @@ agents = [
     "anthropic>=0.40.0",
     "openai>=1.0",
 ]
+# The write-up's charts (tools/plot_study.py). Kept out of the harness: the report is
+# text and CSV, and nothing under src/ imports a plotting library.
+plots = [
+    "matplotlib>=3.8",
+]
 
 [project.urls]
 homepage = "https://github.com/Nitrix119/arbiter-arena"

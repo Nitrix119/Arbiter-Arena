@@ -385,7 +385,8 @@ main deliverable.
    `docs/current/ARTICLE_DRAFT.md`, about 2,900 words. The method and results are drafted;
    the [YOUR VOICE] sections are left with notes. The failure story is Sonnet, kiting,
    seed 108, C2 against C2+M.
-2. **Charts** (A11). Small and separate, and the article needs them.
+2. ~~**Charts** (A11)~~ **Done 2026-10-07:** `tools/plot_study.py` writes
+   `docs/figures/{validity,friendly_fire,sonnet_tactics}.{svg,png}`.
 3. **Replay viewer** (Phase 3 playback item plus A33). This makes the failure story and the
    demo GIF showable.
 4. **The user-voice sections** of the article: motivation, surprises, and "what I decided".
@@ -464,9 +465,16 @@ remains._
         `ACTION:` commits to a third.
       - Nemotron in C2 "moving" in place until the failure budget ends its turn.
       - A free-aim Fireball that catches allies, set against the menu's tagged placement.
-- [ ] Charts (ledger A11): validity by condition per model, friendly fire, and Sonnet's
+- [x] Charts (ledger A11): validity by condition per model, friendly fire, and Sonnet's
       tactics by condition. Draw them from `results/final/report/*.csv` in a separate script,
       so the harness does not depend on a plotting library.
+      _(2026-10-07: `tools/plot_study.py`, behind a `[plots]` extra. It reuses the
+      report's own estimators at the same seed, so every value matches `summary.md`.
+      The palette was checked for colour blindness, and each condition is also named
+      on its axis. The README shows the validity chart.
+      The friendly-fire headline was corrected before it shipped: Nemotron still hits
+      allies in C2+M, so only choosing from the menu (C3) ends friendly fire for
+      every model.)_
 - [ ] Article (~2,500–3,500 words), structure below. **Write the motivation, the surprises and the
       "what I decided" sections in your own voice.** That is the ownership evidence the review
       stresses.

@@ -308,7 +308,9 @@ names where it should be addressed. Append; strike through and date an item when
   per decision as a cost covariate, but nothing wrote it, and a report could only have
   recovered it by replaying. `DecisionTelemetry.menu_length` now holds the number of legal
   options shown (menu conditions only), set by `ActionInterface.menu_length`.
-- **A11. Plots deferred.** V1_PLAN asked the report for 2–3 plots. They would add matplotlib,
+- **A11. ~~Plots deferred~~ Done 2026-10-07:** `tools/plot_study.py` (the `[plots]` extra)
+  draws the three write-up charts from `report/matches.csv`, reusing the report's
+  estimators; nothing under `src/` imports matplotlib. Original note: V1_PLAN asked the report for 2–3 plots. They would add matplotlib,
   and the study's claims rest on the tables, so the report is text and CSV only for now.
   → Phase 4 (write-up): plot from `report/*.csv`, ideally in a separate script.
 - **A12. ~~Two older modules import `random` directly~~ Fixed 2026-10-05:** both now go

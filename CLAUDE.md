@@ -235,6 +235,7 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
 | Verify a bundle replays (must be 100%) | `python -m src.arena.study verify results/<name>` |
 | Read one match, decision by decision | `python -m src.arena.study show <transcript.jsonl> [--refused]` |
 | No-key demo of the whole pipeline | `python -m src.arena.study run examples/study/demo.toml --out results/demo` |
+| Draw the write-up's charts | `pip install -e ".[plots]"`, then `python tools/plot_study.py results/<name> --out docs/figures` |
 | C1 parser audit | `python -m src.arena.audit sample results/<name> --out audit/` → `… label audit/` → `… score audit/ --report results/<name>/report` |
 
 - **Check exit codes, not tails.** In a chained command, never pipe a check through `tail`/`head`

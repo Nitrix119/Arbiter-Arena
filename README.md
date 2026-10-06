@@ -53,7 +53,9 @@ The design, hypotheses, metrics and exclusions were frozen before the final run,
 | Gemini 3.8 Flash | 0.991 | 0.986 | 0.999 | 1.000 |
 | Claude Sonnet 5.5 | 0.981 | 0.893 | 0.979 | 1.000 |
 
-Constraining the interface raises validity as predicted, but how much depends on the model. For the weakest model it is transformative (its win rate rises from 32% to 62%); for the strongest it barely registers. Sonnet reverses one predicted step: it is worse with bare tool calls than with prose. The full write-up, charts and a worked failure case are in progress; the working record is [FINAL_RUN_FINDINGS.md](docs/current/FINAL_RUN_FINDINGS.md).
+![First-attempt validity by condition for each model, with 95% intervals](docs/figures/validity.png)
+
+Constraining the interface raises validity as predicted, but how much depends on the model. For the weakest model it is transformative (its win rate rises from 32% to 62%); for the strongest it barely registers. Sonnet reverses one predicted step: it is worse with bare tool calls than with prose. The full write-up and a worked failure case are in progress; the working record is [FINAL_RUN_FINDINGS.md](docs/current/FINAL_RUN_FINDINGS.md).
 
 ### Limitations
 
