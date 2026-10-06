@@ -7,7 +7,7 @@ from src.arena.heuristic.agent import HeuristicAgent
 from src.arena.heuristic.plan import enumerate_plans
 from src.arena.information_policy import FULL_INFORMATION
 from src.arena.observation import build_observation
-from src.arena.tools import TOOLS, ToolExecutor
+from src.arena.tools import ToolExecutor
 
 from .conftest import force_turn, load_spell, melee_attack
 
@@ -98,7 +98,7 @@ def test_caster_casts_aoe_and_it_resolves(make_entity, make_combat, registry_wit
     force_turn(combat, caster)
 
     agent = HeuristicAgent("Mage", "a", combat)
-    call = agent.decide(build_observation(combat, caster), TOOLS)
+    call = agent.decide(build_observation(combat, caster))
     assert call.name == "cast_spell" and "target_point" in call.arguments
     result = ToolExecutor(combat).apply(caster, call, FULL_INFORMATION)
     assert result["ok"] is True

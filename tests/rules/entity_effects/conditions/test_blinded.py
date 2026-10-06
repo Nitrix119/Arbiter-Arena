@@ -7,7 +7,7 @@ and that attack rolls against a blinded entity receive advantage.
 import os
 from unittest.mock import patch
 
-from src.models import Entity, Damage, DamageType
+from src.models import Entity
 from src.combat import EventBus, EventType
 from src.combat.damage_processor import DamageProcessor
 from src.loaders import StatBlockLoader

@@ -13,10 +13,10 @@ agents don't use but an LLM agent will.
 """
 
 import math
-import random
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
+from src.arena.telemetry import DecisionTelemetry
 from src.arena.tools import (
     TOOL_ATTACK,
     TOOL_CAST_SPELL,
@@ -24,6 +24,7 @@ from src.arena.tools import (
     TOOL_MOVE,
     ToolCall,
 )
+from src.utils import dice
 
 
 class NoToolCallError(RuntimeError):
@@ -34,6 +35,76 @@ class NoToolCallError(RuntimeError):
     budget and fed back — rather than a crash, so one flaky model response can't abort
     a whole match.
     """
+
+
+class ProviderError(NoToolCallError):
+    """The *provider* failed, rather than the model choosing badly.
+
+    An empty or malformed response envelope — no ``choices``, an error body — is
+    infrastructure, and the study excludes matches only for infrastructure
+    (``docs/current/V1_PLAN.md`` §3.5), never for bad model behaviour. Separating it
+    here is what makes that exclusion rule applyable after the fact; lumping it in
+    with "the model returned prose" would quietly count a rate-limited request as a
+    reasoning failure.
+
+    Subclasses :class:`NoToolCallError` so the turn driver's existing handling — count
+    it, feed it back, never crash the match — applies unchanged.
+
+    Carries the failed request's :class:`~src.arena.telemetry.RequestRecord` when the
+    adapter has one: a request that failed still took time and may still have been
+    billed, and a timeout's latency is exactly the number worth seeing.
+    """
+
+    def __init__(self, message: str, record: Optional[Any] = None) -> None:
+        super().__init__(message)
+        self.record = record
+
+
+#: SDK packages whose exceptions are infrastructure, not model behaviour or our bugs.
+_INFRA_MODULES = ("openai", "anthropic", "httpx", "httpcore")
+
+
+def is_infrastructure_error(exc: BaseException) -> bool:
+    """True for a provider, network or timeout failure — never for our own bug.
+
+    One definition for both places that act on it: the per-request retry in
+    :mod:`src.arena.llm_common`, and the study runner's match exclusion (prereg §8).
+    A :class:`ProviderError` is infrastructure by construction.
+    """
+    if isinstance(exc, (ProviderError, ConnectionError, TimeoutError)):
+        return True
+    return type(exc).__module__.split(".")[0] in _INFRA_MODULES
+
+
+class RejectedResponse(NoToolCallError):
+    """The model answered, but its study condition refused the answer, with a code.
+
+    Distinct from "said nothing": a C3 ``choose`` naming an id that is not on the list
+    is an *attempt* at a target that does not exist — the same ``unknown_target`` a C2
+    model gets for an invented entity id — and a C1 line the grammar cannot read is
+    ``malformed_output``. Raising this rather than returning ``None`` from
+    ``interpret`` keeps both out of the correction retry (C2's executor rejections get
+    no free second try either) and lets the turn driver log the real code and the call
+    that was attempted.
+
+    Subclasses :class:`NoToolCallError` so every existing handler still contains it.
+
+    Carries the request's :class:`~src.arena.telemetry.RequestRecord` when it is raised
+    from inside a request (an adapter refusing arguments it cannot decode), so a
+    refused response is still costed.
+    """
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        call: Optional[ToolCall],
+        record: Optional[Any] = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.call = call
+        self.record = record
 
 
 class Agent(ABC):
@@ -49,6 +120,9 @@ class Agent(ABC):
         self.name = name
         self.team = team
         self.notes = ""
+        #: Populated by :func:`~src.arena.llm_common.decide_one_action` for agents that
+        #: call a provider; stays ``None`` for the deterministic ones.
+        self.telemetry: Optional[DecisionTelemetry] = None
 
     def remember(self, text: str) -> None:
         """Store a capped scratchpad note to carry to the agent's next turn."""
@@ -62,11 +136,26 @@ class Agent(ABC):
         draws does not reshuffle agent decisions. Deterministic agents ignore it.
         """
 
+    def last_telemetry(self) -> Optional[DecisionTelemetry]:
+        """Cost and latency for the most recent :meth:`decide`, if measured.
+
+        ``None`` for the deterministic agents: they cost nothing and call nobody, so
+        there is nothing to report and their transcripts carry no telemetry key. The
+        turn driver reads this after every decision — including one that raised, since
+        a failed request still spent tokens.
+        """
+        return self.telemetry
+
     @abstractmethod
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
-        """Return one action to attempt, given the current observation."""
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
+        """Return one action to attempt, given the current observation.
+
+        No ``tools`` argument: what an agent may emit is its own business. For an LLM
+        adapter that is its :class:`~src.arena.interfaces.ActionInterface` (the study
+        condition); for a deterministic agent it is hard-coded. The turn driver used to
+        pass the tool schemas through, but no agent ever read them — and once the
+        condition owns them, a driver-supplied list would be actively wrong.
+        """
 
 
 # ---------------------------------------------------------------------------
@@ -146,18 +235,16 @@ class RandomAgent(Agent):
     """
 
     def __init__(
-        self, name: str, team: Optional[str] = None, rng: Optional[random.Random] = None
+        self, name: str, team: Optional[str] = None, rng: Optional[dice.Rng] = None
     ):
         super().__init__(name, team)
-        self._rng = rng or random.Random()
+        self._rng = rng or dice.new_rng()
 
     def reseed(self, seed: int) -> None:
         """Reseed this agent's private choice RNG for a reproducible match."""
         self._rng.seed(seed)
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
         la = observation["legal_actions"]
         enemy_ids = {e["entity_id"] for e in observation["enemies"]}
         candidates: List[ToolCall] = [ToolCall(TOOL_END_TURN, {})]
@@ -190,9 +277,7 @@ class ScriptedAgent(Agent):
     end the turn. A fixed skill benchmark for LLM agents to be measured against.
     """
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
         self_view = observation["self"]
         enemies = observation["enemies"]
         enemy_ids = {e["entity_id"] for e in enemies}

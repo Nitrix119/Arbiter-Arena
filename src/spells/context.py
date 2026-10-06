@@ -137,7 +137,7 @@ class Invocation:
     event_data: Optional[Dict[str, Any]] = None
 
     # The lifetime scope that owns the currently-firing trigger, so a rider can end
-    # its own effect (an ``end_lifetime`` block disposes it — e.g. Armor of Agathys
+    # its own effect (an ``end_lifetime`` block disposes it — e.g. Rime Ward
     # ending when its temp HP is gone). None outside a trigger firing.
     owning_scope: Optional[LifetimeScope] = None
 

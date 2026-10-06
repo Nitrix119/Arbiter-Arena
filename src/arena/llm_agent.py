@@ -25,14 +25,18 @@ Anthropic-specific request.
 * **Neutral prompt (A2)** and **notes scratchpad (B3)** — both in :mod:`llm_common`.
 """
 
+import time
 from types import ModuleType
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.arena.agent import Agent
+from src.arena.interfaces import C2_MENU, ActionInterface, get_interface
 from src.arena.llm_common import (
-    SYSTEM_PROMPT,
     decide_one_action,
-)  # noqa: F401 (re-export)
+    distinct_call_count,
+    message_text,
+)
+from src.arena.telemetry import RequestRecord
 from src.arena.tools import ToolCall
 
 # Declared Optional up front so the ImportError fallback below type-checks.
@@ -60,6 +64,7 @@ class LLMAgent(Agent):
         model: str = DEFAULT_MODEL,
         effort: str = DEFAULT_EFFORT,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        interface: Optional[ActionInterface] = None,
         client: Any = None,
     ) -> None:
         super().__init__(name, team)
@@ -75,30 +80,64 @@ class LLMAgent(Agent):
         self.model = model
         self.effort = effort
         self.max_tokens = max_tokens
+        #: The study condition. Held on the agent, not passed by the turn driver:
+        #: which interface a model is given is the thing under test, and the driver
+        #: must stay ignorant of it.
+        self.interface = interface or get_interface(C2_MENU)
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
-        return decide_one_action(self._request_action, self, observation, tools)
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
+        return decide_one_action(
+            self._request_action, self, observation, self.interface
+        )
 
     def _request_action(
         self, messages: List[Dict[str, Any]], api_tools: List[Dict[str, Any]]
-    ) -> Optional[ToolCall]:
-        """One Anthropic request; return the single tool call, or None if the model
-        made none."""
+    ) -> Tuple[Optional[ToolCall], RequestRecord]:
+        """One Anthropic request; return its tool call (or None) and what it cost."""
+        # A text condition (C1) offers no tools, and the API refuses `tool_choice`
+        # without `tools` — so both are omitted rather than sent empty.
+        tool_fields: Dict[str, Any] = {}
+        if api_tools:
+            tool_fields = {
+                "tools": api_tools,
+                "tool_choice": {"type": "auto", "disable_parallel_tool_use": True},
+            }
+        started = time.perf_counter()
         response = self._client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
-            system=SYSTEM_PROMPT,
+            system=self.interface.system_prompt(),
             messages=messages,
-            tools=api_tools,
-            tool_choice={"type": "auto", "disable_parallel_tool_use": True},
             thinking={"type": "adaptive"},
             output_config={"effort": self.effort},
+            **tool_fields,
         )
+        usage = getattr(response, "usage", None)
+        record = RequestRecord(
+            latency_ms=(time.perf_counter() - started) * 1000.0,
+            input_tokens=getattr(usage, "input_tokens", None),
+            output_tokens=getattr(usage, "output_tokens", None),
+            served_model=getattr(response, "model", None),
+            finish_reason=getattr(response, "stop_reason", None),
+        )
+
+        call: Optional[ToolCall] = None
+        uses: List[Tuple[str, Any]] = []
         for block in response.content:
-            if getattr(block, "type", None) == "tool_use":
+            if getattr(block, "type", None) != "tool_use":
+                continue
+            if call is not None:
+                uses.append((block.name, dict(block.input)))
+                record.extra_tool_calls += 1  # counted (A5); refused if different
+            else:
+                uses.append((block.name, dict(block.input)))
+                record.tool_call = {"name": block.name, "arguments": dict(block.input)}
                 # SDK returns block.input as a dict; copy so `note` can be popped
                 # safely.
-                return ToolCall(block.name, dict(block.input), call_id=block.id)
-        return None
+                call = ToolCall(block.name, dict(block.input), call_id=block.id)
+        record.distinct_tool_calls = distinct_call_count(uses)
+        # Thinking blocks are deliberately not recorded: they are not the model's
+        # answer, they are large, and some providers forbid storing them.
+        # `message_text` skips them, as it does for the OpenRouter adapter.
+        record.raw_output = message_text(response.content)
+        return call, record

@@ -5,6 +5,8 @@ they prove the executor really dispatches to the engine and shapes/gates results
 that it echoes a hand-built dict.
 """
 
+import pytest
+
 from src.arena.information_policy import InformationPolicy
 from src.arena.tools import TOOLS, ToolCall, ToolExecutor
 from src.models.action_resources import ActionCost
@@ -191,7 +193,11 @@ def test_move_without_option_or_coords_is_structured_error(make_entity, make_com
 
     result = ToolExecutor(combat).apply(fighter, ToolCall("move", {}))
     assert result["ok"] is False
-    assert "option_id" in result["error"]
+    assert result["code"] == "malformed_output"
+    # Names what a model condition may send, and never advertises the baselines'
+    # option_id path to a model (review 2026-09-24, C-3).
+    assert "x" in result["error"] and "z" in result["error"]
+    assert "option_id" not in result["error"]
 
 
 # -- end_turn ----------------------------------------------------------------
@@ -332,3 +338,378 @@ def test_unknown_tool_is_structured_error(make_entity, make_combat):
 def test_cost_constant_sanity():
     # Guards the melee fixture's cost assumption used across tests.
     assert ActionCost(actions=1).actions == 1
+
+
+# -- aiming an area spell ----------------------------------------------------
+
+
+def _fireball_fight(make_entity, make_combat, registry_with):
+    fireball = load_spell("fireball.json")
+    wizard = make_entity(
+        "Wizard",
+        team="a",
+        pos=(0, 0, 0),
+        known_spells=[fireball.name],
+        spellcasting_ability="intelligence",
+        spell_slot_defaults={"3": 2},
+    )
+    goblin = make_entity("Goblin", team="b", pos=(0, 0, 40), hp=30)
+    combat = _started(
+        make_combat, [wizard, goblin], wizard, registry=registry_with(fireball)
+    )
+    return combat, wizard, goblin, fireball
+
+
+def test_target_point_schema_only_requires_keys_the_executor_reads():
+    """The schema and the code must agree on which coordinates are mandatory.
+
+    They did not: the schema required ``x``/``y`` while the executor read ``x``/``z``,
+    so a model obeying the schema exactly — naming a ground point as x/y — hit a
+    KeyError. y is the *vertical* axis, which a ground-level aim never needs.
+    """
+    schema = next(t for t in TOOLS if t["name"] == "cast_spell")["input_schema"]
+    point = schema["properties"]["target_point"]
+
+    assert set(point["required"]) == {"x", "z"}
+    assert "y" not in point["required"]
+    # Every axis says which way it points, so the convention is not guesswork.
+    for axis, direction in (("x", "east"), ("y", "up"), ("z", "south")):
+        assert direction in point["properties"][axis]["description"]
+
+
+def test_aiming_with_ground_coordinates_succeeds(
+    make_entity, make_combat, registry_with
+):
+    combat, wizard, goblin, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(
+        wizard,
+        ToolCall(
+            "cast_spell",
+            {"spell_name": "Fireball", "target_point": {"x": 0, "z": 40}},
+        ),
+    )
+
+    assert result["ok"] is True, result
+    assert [r["target_id"] for r in result["results"]] == [goblin.entity_id]
+
+
+def test_an_explicit_vertical_coordinate_is_still_honoured(
+    make_entity, make_combat, registry_with
+):
+    combat, wizard, goblin, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(
+        wizard,
+        ToolCall(
+            "cast_spell",
+            {"spell_name": "Fireball", "target_point": {"x": 0, "y": 0, "z": 40}},
+        ),
+    )
+    assert result["ok"] is True, result
+
+
+def test_aiming_high_above_the_target_misses_it(
+    make_entity, make_combat, registry_with
+):
+    """Proves y is read as the vertical axis, not ignored."""
+    combat, wizard, goblin, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(
+        wizard,
+        ToolCall(
+            "cast_spell",
+            {"spell_name": "Fireball", "target_point": {"x": 0, "y": 100, "z": 40}},
+        ),
+    )
+    assert result["ok"] is True
+    assert result["results"] == []  # the blast went off far overhead
+
+
+def test_a_missing_ground_coordinate_is_malformed_output_not_a_crash(
+    make_entity, make_combat, registry_with
+):
+    """The old failure mode: a model names a 2-D point as x/y and omits z."""
+    combat, wizard, _, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(
+        wizard,
+        ToolCall(
+            "cast_spell",
+            {"spell_name": "Fireball", "target_point": {"x": 0, "y": 40}},
+        ),
+    )
+
+    assert result["ok"] is False
+    assert result["code"] == "malformed_output"
+    assert "z" in result["error"]  # names the coordinate it wanted
+
+
+def test_the_system_prompt_states_the_axis_convention():
+    """Per-tool descriptions are not enough — the convention is stated once,
+    centrally."""
+    from src.arena.llm_common import SYSTEM_PROMPT
+
+    lowered = SYSTEM_PROMPT.lower()
+    assert "east" in lowered and "south" in lowered
+    assert "ground plane" in lowered
+
+
+# -- identifier resolution (shared by every raw-parameter condition) ----------
+
+
+def _duel(make_entity, make_combat, registry=None, **mage_kwargs):
+    mage = make_entity(
+        "Mage", team="a", pos=(0, 0, 0), attacks=[melee_attack("Dagger")], **mage_kwargs
+    )
+    raider = make_entity("Raider 1", team="b", pos=(5, 0, 0), hp=40)
+    return mage, raider, _started(make_combat, [mage, raider], mage, registry)
+
+
+@pytest.mark.parametrize("written", ["raider-1", "Raider 1", "RAIDER_1", "raider–1"])
+def test_a_target_resolves_however_it_is_written(make_entity, make_combat, written):
+    mage, raider, combat = _duel(make_entity, make_combat)
+    result = ToolExecutor(combat).apply(
+        mage, ToolCall("attack", {"action_name": "Dagger", "defender_id": written})
+    )
+    assert result["ok"], result
+    assert result["target_id"] == raider.entity_id
+
+
+def test_an_attack_name_resolves_however_it_is_cased(make_entity, make_combat):
+    mage, raider, combat = _duel(make_entity, make_combat)
+    result = ToolExecutor(combat).apply(
+        mage, ToolCall("attack", {"action_name": "dagger", "defender_id": "raider-1"})
+    )
+    assert result["ok"], result
+
+
+def test_a_spell_name_resolves_however_it_is_cased(
+    make_entity, make_combat, registry_with
+):
+    mage, raider, combat = _duel(
+        make_entity,
+        make_combat,
+        registry_with(load_spell("fireball.json")),
+        known_spells=["Fireball"],
+        spell_slot_defaults={"3": 1},
+        spellcasting_ability="intelligence",
+    )
+    result = ToolExecutor(combat).apply(
+        mage,
+        ToolCall(
+            "cast_spell", {"spell_name": "FIRE BALL", "target_point": {"x": 5, "z": 30}}
+        ),
+    )
+    assert result["ok"], result
+    assert result["spell"] == "Fireball"  # reported by its real name
+
+
+def test_an_invented_target_is_never_repaired(make_entity, make_combat):
+    mage, raider, combat = _duel(make_entity, make_combat)
+    result = ToolExecutor(combat).apply(
+        mage, ToolCall("attack", {"action_name": "Dagger", "defender_id": "raider-3"})
+    )
+    assert result["code"] == "unknown_target"
+
+
+def test_an_invented_attack_is_never_repaired(make_entity, make_combat):
+    mage, raider, combat = _duel(make_entity, make_combat)
+    result = ToolExecutor(combat).apply(
+        mage, ToolCall("attack", {"action_name": "Dagge", "defender_id": "raider-1"})
+    )
+    assert result["code"] == "unknown_action"
+
+
+def test_an_ambiguous_name_is_refused_not_guessed(make_entity, make_combat):
+    """Two creatures a reader could not tell apart by this spelling: refuse."""
+    mage = make_entity(
+        "Mage", team="a", pos=(0, 0, 0), attacks=[melee_attack("Dagger")]
+    )
+    one = make_entity("Wolf A", team="b", pos=(5, 0, 0))
+    two = make_entity("WolfA", team="b", pos=(0, 0, 5))  # ids wolf-a / wolfa: one key
+    combat = _started(make_combat, [mage, one, two], mage)
+    result = ToolExecutor(combat).apply(
+        mage, ToolCall("attack", {"action_name": "Dagger", "defender_id": "WOLF A"})
+    )
+    assert result["code"] == "unknown_target"
+    assert "ambiguous" in result["error"].lower()
+
+
+# -- wrongly-typed arguments (review 2026-09-24, C-2) --------------------------
+#
+# A model's arguments arrive as whatever JSON it wrote. Every shape below used to either
+# crash the executor with a TypeError (which stops the study grid as a harness bug) or
+# land in engine_error, the bucket that must stay at zero. A null optional argument is
+# the OpenAI-style convention for "not given"; anything else of the wrong type is the
+# model's formatting failure.
+
+
+def _fireball_call(**args):
+    return ToolCall("cast_spell", {"spell_name": "Fireball", **args})
+
+
+_AIM = {"x": 0, "z": 40}
+
+
+@pytest.mark.parametrize(
+    "call, code",
+    [
+        (_fireball_call(target_point=_AIM, target_ids=None), None),
+        (_fireball_call(target_point=_AIM, slot_level=None), None),
+        (_fireball_call(target_point={"x": 0, "y": None, "z": 40}), None),
+        (_fireball_call(target_point={"x": "0", "z": "40 ft"}), None),
+        (_fireball_call(target_point=_AIM, slot_level="3"), None),
+        (_fireball_call(target_point=_AIM, slot_level=3.0), None),
+        (_fireball_call(target_point="x=0 z=40"), "malformed_output"),
+        (_fireball_call(target_point=[0, 0, 40]), "malformed_output"),
+        (_fireball_call(target_point={"x": "far", "z": 40}), "malformed_output"),
+        (_fireball_call(target_point={"x": True, "z": 40}), "malformed_output"),
+        (_fireball_call(target_point={"x": float("nan"), "z": 40}), "malformed_output"),
+        (_fireball_call(target_point=_AIM, slot_level="three"), "malformed_output"),
+        (_fireball_call(target_point=_AIM, slot_level=3.5), "malformed_output"),
+        (_fireball_call(target_point=_AIM, target_ids=5), "malformed_output"),
+        (_fireball_call(target_point=_AIM, target_ids=[5]), "malformed_output"),
+        (ToolCall("cast_spell", {"spell_name": None}), "malformed_output"),
+        (ToolCall("cast_spell", {"spell_name": ["Fireball"]}), "malformed_output"),
+    ],
+    ids=[
+        "null-target-ids",
+        "null-slot",
+        "null-y",
+        "numeric-strings",
+        "slot-string",
+        "slot-float",
+        "point-as-string",
+        "point-as-list",
+        "coordinate-word",
+        "coordinate-bool",
+        "coordinate-nan",
+        "slot-word",
+        "slot-fraction",
+        "target-ids-number",
+        "target-ids-of-numbers",
+        "null-spell",
+        "spell-as-list",
+    ],
+)
+def test_cast_arguments_of_the_wrong_type_are_coded_never_a_crash(
+    make_entity, make_combat, registry_with, call, code
+):
+    combat, wizard, _, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(wizard, call)
+
+    if code is None:
+        assert result["ok"] is True, result
+    else:
+        assert result["ok"] is False
+        assert result["code"] == code, result
+
+
+@pytest.mark.parametrize(
+    "args, code",
+    [
+        ({"x": "10 ft", "z": "0"}, None),
+        ({"x": 10, "y": None, "z": 0}, None),
+        ({"x": None, "z": 0}, "malformed_output"),
+        ({"x": "five", "z": 0}, "malformed_output"),
+        ({"x": float("nan"), "z": 0}, "malformed_output"),
+        ({"x": float("inf"), "z": 0}, "malformed_output"),
+        ({"x": {"feet": 10}, "z": 0}, "malformed_output"),
+    ],
+    ids=["strings-with-unit", "null-y", "null-x", "word", "nan", "inf", "object"],
+)
+def test_move_arguments_of_the_wrong_type_are_coded_never_a_crash(
+    make_entity, make_combat, args, code
+):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0))
+    goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    result = ToolExecutor(combat).apply(fighter, ToolCall("move", args))
+
+    if code is None:
+        assert result["ok"] is True, result
+        assert (fighter.x, fighter.z) == (10, 0)
+    else:
+        assert result["ok"] is False
+        assert result["code"] == code, result
+        assert (fighter.x, fighter.z) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"action_name": "Longsword", "defender_id": None},
+        {"action_name": None, "defender_id": "goblin"},
+        {"action_name": "Longsword", "defender_id": ["goblin"]},
+        {"action_name": 7, "defender_id": "goblin"},
+    ],
+    ids=["null-defender", "null-attack", "defender-as-list", "attack-as-number"],
+)
+def test_attack_arguments_of_the_wrong_type_are_malformed(
+    make_entity, make_combat, args
+):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0), hp=30)
+    combat = _started(make_combat, [fighter, goblin], fighter)
+    args = {k: (goblin.entity_id if v == "goblin" else v) for k, v in args.items()}
+
+    result = ToolExecutor(combat).apply(fighter, ToolCall("attack", args))
+
+    assert result["ok"] is False
+    assert result["code"] == "malformed_output", result
+
+
+def test_arguments_that_are_not_an_object_are_malformed(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0))
+    goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    not_a_dict = ToolCall("move", [10, 0])  # type: ignore[arg-type]
+    result = ToolExecutor(combat).apply(fighter, not_a_dict)
+
+    assert result["ok"] is False
+    assert result["code"] == "malformed_output"
+
+
+# -- out-of-range area aim (review 2026-09-24, H-4) ----------------------------------
+
+
+def test_an_area_aim_beyond_range_is_refused_not_moved(
+    make_entity, make_combat, registry_with
+):
+    """SRD: an area spell is centred on "a point you choose within range".
+
+    The engine clamps an over-range aim onto the edge of range, which silently repairs
+    a spatial error in the raw-parameter conditions — the category H2 counts — while
+    the menu condition can never make one. The arena refuses it instead, and the
+    refusal costs nothing: no slot, no action.
+    """
+    combat, wizard, goblin, fireball = _fireball_fight(
+        make_entity, make_combat, registry_with
+    )
+    slots_before = dict(wizard.spell_slots.remaining)
+
+    result = ToolExecutor(combat).apply(
+        wizard, _fireball_call(target_point={"x": 0, "z": 400})
+    )
+
+    assert result["ok"] is False
+    assert result["code"] == "out_of_range"
+    assert "150" in result["error"]  # states the range it was measured against
+    assert dict(wizard.spell_slots.remaining) == slots_before
+    assert wizard.resources.actions == 1
+
+
+def test_an_area_aim_at_the_edge_of_range_is_accepted(
+    make_entity, make_combat, registry_with
+):
+    combat, wizard, _, _ = _fireball_fight(make_entity, make_combat, registry_with)
+
+    result = ToolExecutor(combat).apply(
+        wizard, _fireball_call(target_point={"x": 0, "z": 150})
+    )
+
+    assert result["ok"] is True, result

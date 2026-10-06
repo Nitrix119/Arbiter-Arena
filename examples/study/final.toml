@@ -1,0 +1,76 @@
+# The confirmatory run (V1_PLAN Phase 2), frozen at the `study-freeze` tag.
+# 3 models x 4 conditions x 4 scenarios x 10 seeds = 480 model matches, plus the free
+# baselines. Every setting here is registered in PREREGISTRATION.md §4-§5.
+#
+#   python -m src.arena.study run examples/study/final.toml --out results/final --dry-run
+#   python -m src.arena.study run examples/study/final.toml --out results/final
+#   python -m src.arena.study verify results/final     # must be 100%
+#   python -m src.arena.study report results/final
+#
+# Before launching, confirm OpenRouter still maps each model id to the dated version
+# registered in prereg §5 (its `canonical_slug`). Every call records the model served.
+# Live runs cost money: never start one without an explicit go-ahead. Resumable; run it
+# in the background, outside Claude Code (~10-12 hours).
+
+[study]
+name = "final"
+seeds = [101, 102, 103, 104, 105, 106, 107, 108, 109, 110]  # disjoint from the pilot's
+scenarios = ["kiting", "alpha_strike", "protect_squishy", "aoe_placement"]
+conditions = ["C1", "C2", "C2+M", "C3"]
+opponent = "scripted"          # settled by the pilot's §4.4 rule
+# About $28.40 at list from the pilots, with 25% headroom. The runner prices at list and
+# ignores cache discounts, so it never under-counts the bill: with the key's limit set to
+# the same figure, the grid always stops first.
+spend_cap_usd = 35.0
+max_attempts = 3
+backoff_seconds = 30
+
+# -- Nemotron 3.5 Lightning: small open-weight model --------------------------------
+[[models]]
+id = "nvidia/nemotron-3.5-lightning"   # registered version: ...-20260807
+provider = "openrouter"
+temperature = 0.0
+usd_per_m_input = 0.07         # coreweave/bf16's listed price
+usd_per_m_output = 0.20
+hosts = ["coreweave/bf16"]
+max_tokens = 4096
+reasoning = { enabled = false }  # optional on this model; the provider minimum is off
+
+# -- Gemini 3.8 Flash: fast commercial model ----------------------------------------
+[[models]]
+id = "google/gemini-3.8-flash"         # registered version: ...-20260902
+provider = "openrouter"
+temperature = "default"        # Google advises against lowering it on Gemini 3
+usd_per_m_input = 0.75         # google-ai-studio, standard tier (not Flex)
+usd_per_m_output = 3.75
+hosts = ["google-ai-studio"]
+max_tokens = 4096
+reasoning = { effort = "low" }  # mandatory on this model; low is its floor
+
+# -- Claude Sonnet 5.5: flagship commercial model -----------------------------------
+[[models]]
+id = "anthropic/claude-sonnet-5.5"     # registered version: ...-20260928
+provider = "openrouter"
+temperature = "default"        # refuses any other value (a 400); no host offers a seed
+usd_per_m_input = 2.0          # google-vertex/global's listed price
+usd_per_m_output = 10.0
+hosts = ["google-vertex/global"]
+max_tokens = 4096
+reasoning = { effort = "low" }  # mandatory on this model; low is its floor
+cache_prompt = true            # Anthropic caches only a marked prefix; the bill only
+
+# -- The free baselines (prereg §4) --------------------------------------------------
+[[models]]
+id = "baseline-scripted"
+provider = "baseline"
+policy = "scripted"
+
+[[models]]
+id = "baseline-random"
+provider = "baseline"
+policy = "random"
+
+[[models]]
+id = "baseline-heuristic"
+provider = "baseline"
+policy = "heuristic"

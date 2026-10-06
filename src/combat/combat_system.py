@@ -5,6 +5,17 @@ import math
 from dataclasses import dataclass
 from typing import Any, Callable, List, NamedTuple, Optional, Tuple, TypeVar
 
+from src.errors import (
+    ACTION_ECONOMY_SPENT,
+    DESTINATION_BLOCKED,
+    INSUFFICIENT_RESOURCE,
+    INVALID_TARGET_RELATION,
+    NO_EFFECT,
+    NOT_YOUR_TURN,
+    UNKNOWN_ACTION,
+    UNKNOWN_TARGET,
+    RuleViolation,
+)
 from src.utils import dice
 from src.models.entity import Entity
 from src.models.action import Action, AttackAction, SpellAction
@@ -34,9 +45,28 @@ from .initiative import InitiativeTracker
 from .damage_processor import DamageProcessor
 from .attack_resolver import AttackResolver
 from .spell_resolver import SpellResolver
-from .turn_manager import TurnManager
+from .turn_manager import TurnManager, sides_standing
 
 _F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def _shortfall_code(entity: Entity, cost: ActionCost) -> str:
+    """Name *which* resource an unaffordable *cost* ran out of.
+
+    "You already acted this turn" and "you have no feet of movement left" are
+    different failures to an agent and are counted separately by the study's
+    invalid-action taxonomy, so the refusal distinguishes them rather than lumping
+    both under one code. Checks the actual shortfall, not the cost's shape, since an
+    action may demand several kinds at once.
+    """
+    r = entity.resources
+    if r is not None and (
+        r.actions < cost.actions
+        or r.bonus_actions < cost.bonus_actions
+        or r.reactions < cost.reactions
+    ):
+        return ACTION_ECONOMY_SPENT
+    return INSUFFICIENT_RESOURCE
 
 
 def _with_rng(method: _F) -> _F:
@@ -54,6 +84,23 @@ def _with_rng(method: _F) -> _F:
     def wrapper(self: "CombatSystem", *args: Any, **kwargs: Any) -> Any:
         with dice.using_rng(self.rng):
             return method(self, *args, **kwargs)
+
+    return wrapper  # type: ignore[return-value]
+
+
+def _decides_fight(method: _F) -> _F:
+    """End combat as soon as *method* leaves at most one side standing.
+
+    A real fight is over the moment the last enemy falls, not at the end of the
+    round — so every action that can kill checks straight away, rather than leaving
+    the winners to act against nobody until someone ends a turn.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self: "CombatSystem", *args: Any, **kwargs: Any) -> Any:
+        result = method(self, *args, **kwargs)
+        self._end_if_decided()
+        return result
 
     return wrapper  # type: ignore[return-value]
 
@@ -171,7 +218,10 @@ class CombatSystem:
                 "set combat.spell_registry before looking up spells"
             )
         if spell_name not in entity.stat_block.known_spells:
-            raise ValueError(f"{entity.name} does not know the spell {spell_name!r}")
+            raise RuleViolation(
+                UNKNOWN_ACTION,
+                f"{entity.name} does not know the spell {spell_name!r}",
+            )
         return self._spell_registry.get(spell_name)
 
     @property
@@ -247,6 +297,7 @@ class CombatSystem:
         )
         self._turn_manager.start()
 
+    @_decides_fight
     @_with_rng
     def resolve_attack(
         self, attacker: Entity, defender: Entity, action: AttackAction
@@ -271,9 +322,10 @@ class CombatSystem:
         check_attack_range(attacker, defender, action)
 
         if not attacker.can_afford(action.cost):
-            raise ValueError(
+            raise RuleViolation(
+                _shortfall_code(attacker, action.cost),
                 f"{attacker.name} cannot afford {action.name}: "
-                f"have {attacker.resources}, need {action.cost}"
+                f"have {attacker.resources}, need {action.cost}",
             )
         attacker.spend_resources(action.cost)
 
@@ -286,6 +338,7 @@ class CombatSystem:
             self._log_action(attacker, log_msg)
         return hit, total_damage, roll_detail
 
+    @_decides_fight
     @_with_rng
     def resolve_spell(
         self,
@@ -331,24 +384,27 @@ class CombatSystem:
         """
         self._assert_active(caster)
         if not caster.can_afford(action.cost):
-            raise ValueError(
+            raise RuleViolation(
+                _shortfall_code(caster, action.cost),
                 f"{caster.name} cannot afford {action.name}: "
-                f"have {caster.resources}, need {action.cost}"
+                f"have {caster.resources}, need {action.cost}",
             )
         # Determine the slot level to cast at (upcasting). Defaults to the
         # spell's base level; a slot below the base level is invalid.
         cast_level = action.spell_level if slot_level is None else slot_level
         if action.spell_level and cast_level < action.spell_level:
-            raise ValueError(
+            raise RuleViolation(
+                INVALID_TARGET_RELATION,
                 f"Cannot cast {action.name} (level {action.spell_level}) "
-                f"with a level-{cast_level} slot"
+                f"with a level-{cast_level} slot",
             )
         # Validate spell slots before targeting so an out-of-range error cannot
         # mask a "no slots remaining" condition, and vice versa.
         if cast_level and cast_level > 0 and caster.spell_slots is not None:
             if not caster.spell_slots.can_afford(cast_level):
-                raise ValueError(
-                    f"{caster.name} has no level-{cast_level} spell slots remaining"
+                raise RuleViolation(
+                    INSUFFICIENT_RESOURCE,
+                    f"{caster.name} has no level-{cast_level} spell slots remaining",
                 )
 
         # Validate targeting and range BEFORE spending resources so that an
@@ -357,8 +413,9 @@ class CombatSystem:
 
         if action.targeting_type == TargetingType.AOE:
             if target is None:
-                raise ValueError(
-                    f"{action.name} is an AOE spell and requires a target point"
+                raise RuleViolation(
+                    UNKNOWN_TARGET,
+                    f"{action.name} is an AOE spell and requires a target point",
                 )
             origin, direction = derive_aoe_origin(caster, action, target)
             # SpellAction.__post_init__ guarantees aoe is set for AOE targeting.
@@ -390,6 +447,7 @@ class CombatSystem:
             for i, (hit, damage, _, roll_detail, healing, healed) in enumerate(results)
         ]
 
+    @_decides_fight
     @_with_rng
     def resolve_legendary_action(
         self,
@@ -510,13 +568,17 @@ class CombatSystem:
         Raises:
             ValueError: If *entity_id* is provided but not active.
         """
+        if self.state == CombatState.ENDED:
+            # Already decided (mid-turn, at the killing blow): nothing to advance. The
+            # web UI's "end turn" after a kill lands here and then reads the end.
+            return
         if entity_id is not None:
             entity = next(
                 (e for e in self.combatants if e.entity_id == entity_id),
                 None,
             )
             if entity is None:
-                raise ValueError(f"Unknown entity_id: {entity_id!r}")
+                raise RuleViolation(UNKNOWN_TARGET, f"Unknown entity_id: {entity_id!r}")
             self._assert_active(entity)
         # Set by start_combat(); end_turn is only reachable once combat is active.
         assert self._turn_manager is not None, "Combat has not been started"
@@ -526,6 +588,11 @@ class CombatSystem:
         else:
             self._log_action(self._turn_manager.get_current_entity(), "takes turn")
 
+    def _end_if_decided(self) -> None:
+        """End combat if it is running and at most one side is left standing."""
+        if self.state == CombatState.ACTIVE and sides_standing(self.combatants) <= 1:
+            self.end_combat()
+
     def end_combat(self) -> None:
         """End the combat encounter."""
         self.state = CombatState.ENDED
@@ -533,6 +600,8 @@ class CombatSystem:
 
         if len(alive) == 1:
             self._log_action(alive[0], "wins the battle!")
+        elif alive and sides_standing(alive) == 1:
+            self._log_action(None, f"Team {alive[0].team} wins the battle!")
         elif len(alive) == 0:
             self._log_action(None, "Combat ended with no survivors")
         else:
@@ -571,7 +640,10 @@ class CombatSystem:
         if entity.entity_id not in self.active_entity_ids:
             current = self.initiative_tracker.get_current_entity()
             whose = current.name if current else "nobody"
-            raise ValueError(f"It is not {entity.name}'s turn (active: {whose})")
+            raise RuleViolation(
+                NOT_YOUR_TURN,
+                f"It is not {entity.name}'s turn (active: {whose})",
+            )
 
     def get_alive_entities(self) -> List[Entity]:
         """Get all entities still in the fight."""
@@ -638,21 +710,43 @@ class CombatSystem:
             ValueError: If it is not the entity's turn.
             ValueError: If the entity lacks sufficient movement resources.
             ValueError: If the destination overlaps an alive entity.
+            ValueError: If the move would change the entity's altitude (y).
         """
         self._assert_active(entity)
+        if new_y != entity.y:
+            # Flight is not modelled and no creature has a fly speed, and the SRD
+            # gives a creature without one no way up through the air — so a willing
+            # move keeps its height. Checked before the cost, so a move into the air
+            # is never misread as spent movement. Forced movement (push_entity) is
+            # not flight and is not bound by this.
+            raise RuleViolation(
+                DESTINATION_BLOCKED,
+                f"{entity.name} cannot fly: a move must stay at y={entity.y:g} "
+                "(its ground level); give x and z only",
+            )
         distance = math.sqrt(
             (new_x - entity.x) ** 2 + (new_y - entity.y) ** 2 + (new_z - entity.z) ** 2
         )
         cost_ft = round(distance, FEET_DP)
+        if cost_ft == 0:
+            # A move that goes nowhere changes no state. Accepted, it was a free
+            # "valid" action a model could repeat until the per-turn cap (ledger A31).
+            # Anything too short to charge counts too: it would move for free.
+            raise RuleViolation(
+                NO_EFFECT,
+                f"{entity.name} is already at ({entity.x:g}, {entity.y:g}, "
+                f"{entity.z:g}): that move would go nowhere",
+            )
         movement_cost = ActionCost(movement=cost_ft)
 
         if not entity.can_afford(movement_cost):
             # Entity.__post_init__ always populates resources; can_afford would
             # already have failed above were it None.
             assert entity.resources is not None
-            raise ValueError(
+            raise RuleViolation(
+                _shortfall_code(entity, movement_cost),
                 f"{entity.name} cannot afford to move {cost_ft} ft "
-                f"(has {entity.resources.movement} ft remaining)"
+                f"(has {entity.resources.movement} ft remaining)",
             )
 
         self._check_movement_overlap(entity, new_x, new_y, new_z)
@@ -737,9 +831,10 @@ class CombatSystem:
             if other is moving:
                 continue
             if new_bbox.overlaps(other.bounding_box):
-                raise ValueError(
+                raise RuleViolation(
+                    DESTINATION_BLOCKED,
                     f"{moving.name} cannot move to ({new_x}, {new_y}, {new_z}): "
-                    f"destination overlaps {other.name}"
+                    f"destination overlaps {other.name}",
                 )
 
     # ------------------------------------------------------------------

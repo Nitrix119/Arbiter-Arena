@@ -1,4 +1,5 @@
-"""The self-play GA: genome ops, fitness, reproducibility, and a small end-to-end run."""
+"""The self-play GA: genome ops, fitness, reproducibility, and a small end-to-end
+run."""
 
 import json
 import random
@@ -10,7 +11,8 @@ from src.arena.heuristic.score import DEFAULT_WEIGHTS, HeuristicWeights
 
 
 def test_weight_bounds_cover_every_weight_field():
-    """A new HeuristicWeights field without a bound here would go un-evolved — guard it."""
+    """A new HeuristicWeights field without a bound here would go un-evolved — guard
+    it."""
     assert set(ga.WEIGHT_BOUNDS) == set(ga.weight_bound_names())
 
 
@@ -78,7 +80,8 @@ def test_evaluate_reports_one_record_per_scenario_seed():
 
 
 def test_match_is_reproducible_from_weights_and_seed():
-    """(weights, scenario, seed) fully determines the battle — the log-regeneration promise."""
+    """(weights, scenario, seed) fully determines the battle — the log-regeneration
+    promise."""
     a = ga.regenerate_match(DEFAULT_WEIGHTS, "alpha_strike", 42)
     b = ga.regenerate_match(DEFAULT_WEIGHTS, "alpha_strike", 42)
     assert (a.winner, a.rounds, a.hp_fraction) == (b.winner, b.rounds, b.hp_fraction)
@@ -107,7 +110,8 @@ def test_small_ga_run_completes_and_logs(tmp_path):
     kinds = {r["kind"] for r in records}
     assert {"run_start", "generation", "individual", "champion", "run_end"} <= kinds
 
-    # Every individual of every generation is logged with its full weight vector, fitness,
+    # Every individual of every generation is logged with its full weight vector,
+    # fitness,
     # and one match record per (scenario, seed).
     individuals = [r for r in records if r["kind"] == "individual"]
     assert len(individuals) == 6 * 3

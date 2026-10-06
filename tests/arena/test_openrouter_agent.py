@@ -6,9 +6,13 @@ import pytest
 
 from src.arena import credentials
 from src.arena import openrouter_agent as ora
-from src.arena.llm_common import SYSTEM_PROMPT
+from src.arena.agent import NoToolCallError, ProviderError, RejectedResponse
+from src.arena.error_codes import MALFORMED_OUTPUT, PROVIDER_ERROR
+from src.arena.interfaces import C1, C2, SHARED_PROMPT, get_interface
+from src.arena.llm_common import PROVIDER_ATTEMPTS
 from src.arena.openrouter_agent import DEFAULT_MODEL, OpenRouterAgent, _to_openai_tools
 from src.arena.tools import TOOLS
+from src.arena.transcript import Transcript
 from src.arena.turn_driver import run_turn
 
 from .conftest import force_turn, melee_attack
@@ -62,7 +66,7 @@ def test_decide_parses_tool_call_and_json_arguments():
     )
     agent = OpenRouterAgent("O", "a", client=client)
 
-    call = agent.decide(_obs(), TOOLS)
+    call = agent.decide(_obs())
 
     assert call.name == "attack"
     assert call.arguments == {
@@ -74,11 +78,15 @@ def test_decide_parses_tool_call_and_json_arguments():
 
 def test_request_shape_is_well_formed():
     client = FakeClient([response(fn_call("end_turn", "{}"))])
-    OpenRouterAgent("O", "a", client=client).decide(_obs(), TOOLS)
+    agent = OpenRouterAgent("O", "a", client=client)
+    agent.decide(_obs())
     kwargs = client.calls[0]
 
     assert kwargs["model"] == DEFAULT_MODEL
-    assert kwargs["messages"][0] == {"role": "system", "content": SYSTEM_PROMPT}
+    system = kwargs["messages"][0]
+    assert system["role"] == "system"
+    assert system["content"] == agent.interface.system_prompt()
+    assert SHARED_PROMPT in system["content"]
     assert kwargs["tool_choice"] == "auto"
     assert "extra_headers" in kwargs
     # end_turn tool was augmented with the note field (shared helper) and OpenAI-shaped.
@@ -90,7 +98,7 @@ def test_note_is_captured_and_stripped():
     client = FakeClient([response(fn_call("end_turn", '{"note": "kite next turn"}'))])
     agent = OpenRouterAgent("O", "a", client=client)
 
-    call = agent.decide(_obs(), TOOLS)
+    call = agent.decide(_obs())
 
     assert call.name == "end_turn"
     assert "note" not in call.arguments
@@ -103,7 +111,7 @@ def test_retries_once_when_no_tool_call():
     )  # first: no tool call
     agent = OpenRouterAgent("O", "a", client=client)
 
-    call = agent.decide(_obs(), TOOLS)
+    call = agent.decide(_obs())
 
     assert call.name == "end_turn"
     assert len(client.calls) == 2
@@ -112,8 +120,8 @@ def test_retries_once_when_no_tool_call():
 def test_raises_after_retry_with_no_tool_call():
     client = FakeClient([response(), response()])
     agent = OpenRouterAgent("O", "a", client=client)
-    with pytest.raises(RuntimeError, match="no tool call"):
-        agent.decide(_obs(), TOOLS)
+    with pytest.raises(RuntimeError, match="no usable action"):
+        agent.decide(_obs())
 
 
 def test_missing_dependency_gives_clear_error(monkeypatch):
@@ -142,7 +150,8 @@ def test_openrouter_agent_drives_a_real_turn(make_entity, make_combat):
             response(
                 fn_call(
                     "attack",
-                    f'{{"action_name": "Longsword", "defender_id": "{goblin.entity_id}"}}',
+                    '{"action_name": "Longsword", '
+                    f'"defender_id": "{goblin.entity_id}"}}',
                 )
             ),
             response(fn_call("end_turn", "{}")),
@@ -156,3 +165,419 @@ def test_openrouter_agent_drives_a_real_turn(make_entity, make_combat):
     assert outcome.forced_end is False
     assert len(client.calls) == 2
     assert combat.get_current_entity() is not fighter
+
+
+# -- provider failures (CODEBASE_REVIEW A1) ----------------------------------
+
+
+def _broken(**fields):
+    """A response envelope a struggling free host really returns."""
+    return SimpleNamespace(**fields)
+
+
+@pytest.mark.parametrize(
+    "envelope",
+    [
+        _broken(choices=None),  # observed live, 2026-09-15
+        _broken(choices=[]),
+        _broken(error={"message": "rate limited", "code": 429}),  # no choices at all
+        _broken(choices=[SimpleNamespace(message=None)]),
+    ],
+    ids=["choices-none", "choices-empty", "error-body", "message-none"],
+)
+def test_broken_envelope_is_a_provider_error_not_a_crash(envelope):
+    """A malformed payload must not abort the match with a TypeError.
+
+    `response.choices[0]` on any of these raised and killed a whole match; a four-day
+    background grid cannot die on one flaky response. It is retried, and only an
+    envelope that stays broken on every attempt surfaces as a ProviderError.
+    """
+    agent = OpenRouterAgent("O", "a", client=FakeClient([envelope] * PROVIDER_ATTEMPTS))
+
+    with pytest.raises(ProviderError):
+        agent.decide(_obs())
+
+
+def test_provider_error_is_distinguishable_from_a_model_with_nothing_to_say():
+    """The two failures look alike and must not be counted alike.
+
+    An empty payload is infrastructure (a §3.5 exclusion); a well-formed reply with no
+    tool call is the model's own behaviour, which is never an exclusion. Both are
+    NoToolCallError so the turn driver handles them identically — only the type
+    differs.
+    """
+    chatty = OpenRouterAgent("O", "a", client=FakeClient([response(), response()]))
+    with pytest.raises(NoToolCallError) as chatty_exc:
+        chatty.decide(_obs())
+    assert not isinstance(chatty_exc.value, ProviderError)
+
+    broken = OpenRouterAgent(
+        "O", "a", client=FakeClient([_broken(choices=None)] * PROVIDER_ATTEMPTS)
+    )
+    with pytest.raises(ProviderError):
+        broken.decide(_obs())
+
+
+def test_provider_error_reports_the_error_body_and_the_model():
+    agent = OpenRouterAgent(
+        "O",
+        "a",
+        model="vendor/flaky:free",
+        client=FakeClient(
+            [_broken(error={"message": "upstream 502"})] * PROVIDER_ATTEMPTS
+        ),
+    )
+    with pytest.raises(ProviderError, match="vendor/flaky:free") as exc:
+        agent.decide(_obs())
+    assert "upstream 502" in str(exc.value)
+
+
+def test_a_flaky_response_is_retried_and_costs_the_model_nothing(
+    make_entity, make_combat
+):
+    """One broken envelope is retried with the same request, invisibly to the model.
+
+    The turn goes on with no failure charged, and the failed attempt is kept as cost
+    in ``provider_failures`` — the end-to-end assertion behind A1 and review H-2.
+    """
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0), hp=30)
+    combat = make_combat([fighter, goblin])
+    combat.start_combat()
+    force_turn(combat, fighter)
+
+    transcript = Transcript()
+    client = FakeClient([_broken(choices=None), response(fn_call("end_turn", "{}"))])
+    agent = OpenRouterAgent("O", "a", client=client)
+
+    outcome = run_turn(combat, fighter, agent, transcript=transcript)
+
+    assert outcome.failures == 0
+    assert outcome.forced_end is False
+    (action,) = transcript.records_of("action")
+    assert action["result"]["ok"] is True
+    assert action["telemetry"]["request_count"] == 1
+    assert len(action["telemetry"]["provider_failures"]) == 1
+
+
+def test_a_response_that_stays_broken_is_a_provider_error(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0), hp=30)
+    combat = make_combat([fighter, goblin])
+    combat.start_combat()
+    force_turn(combat, fighter)
+
+    transcript = Transcript()
+    client = FakeClient(
+        [_broken(choices=None)] * PROVIDER_ATTEMPTS
+        + [response(fn_call("end_turn", "{}"))]
+    )
+    outcome = run_turn(
+        combat, fighter, OpenRouterAgent("O", "a", client=client), transcript=transcript
+    )
+
+    assert outcome.failures == 1
+    failed = [r for r in transcript.records_of("action") if r["result"]["ok"] is False]
+    assert [r["result"]["code"] for r in failed] == [PROVIDER_ERROR]
+
+
+def test_a_text_condition_sends_no_tool_fields():
+    """C1 offers no tools; `tool_choice` without `tools` is an API error, so both go."""
+    message = SimpleNamespace(tool_calls=None, content="ACTION: end turn")
+    client = FakeClient([SimpleNamespace(choices=[SimpleNamespace(message=message)])])
+    agent = OpenRouterAgent("O", "a", client=client)
+
+    call, record = agent._request_action([{"role": "user", "content": "go"}], [])
+
+    kwargs = client.calls[0]
+    assert "tools" not in kwargs
+    assert "tool_choice" not in kwargs
+    assert "parallel_tool_calls" not in kwargs
+    assert call is None
+    assert record.raw_output == "ACTION: end turn"
+
+
+def test_a_pinned_host_and_seed_are_sent_and_the_served_host_recorded():
+    """One model id can be served by several hosts; the study pins and records it."""
+    served = response(fn_call("end_turn", "{}"))
+    served.provider = "DeepInfra"
+    client = FakeClient([served])
+    agent = OpenRouterAgent("O", "a", client=client, hosts=["DeepInfra"], seed=7)
+
+    agent.decide(_obs())
+    kwargs = client.calls[0]
+
+    assert kwargs["extra_body"] == {
+        "provider": {"order": ["DeepInfra"], "allow_fallbacks": False}
+    }
+    assert kwargs["seed"] == 7
+    assert agent.telemetry.requests[0].served_provider == "DeepInfra"
+
+
+def test_without_hosts_routing_is_left_alone_but_still_recorded():
+    served = response(fn_call("end_turn", "{}"))
+    served.model_extra = {"provider": "Together"}
+    client = FakeClient([served])
+    agent = OpenRouterAgent("O", "a", client=client)
+
+    agent.decide(_obs())
+    assert "extra_body" not in client.calls[0] and "seed" not in client.calls[0]
+    assert agent.telemetry.requests[0].served_provider == "Together"
+
+
+# -- malformed tool-call arguments (review 2026-09-24, C-1) --------------------
+
+
+@pytest.mark.parametrize("empty", ["", "   "], ids=["empty", "whitespace"])
+def test_empty_arguments_are_an_empty_object(empty):
+    """Some hosts send ``""`` for a tool with no arguments — a transport convention."""
+    agent = OpenRouterAgent(
+        "O", "a", client=FakeClient([response(fn_call("end_turn", empty))])
+    )
+
+    assert agent.decide(_obs()).arguments == {}
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    ["{bad json", '{"x": 1', "null", "[1, 2]", '"a string"', "42"],
+    ids=["unparseable", "truncated", "null", "list", "string", "number"],
+)
+def test_unusable_arguments_are_malformed_output_not_a_crash(arguments):
+    """Arguments that are not a JSON object are the model's formatting failure.
+
+    They used to escape as ``JSONDecodeError``/``TypeError``, which the study runner
+    treats as a harness bug and stops the whole grid on. They are a coded refusal,
+    counted like any other, and the attempted text is kept.
+    """
+    agent = OpenRouterAgent(
+        "O", "a", client=FakeClient([response(fn_call("move", arguments))])
+    )
+
+    with pytest.raises(RejectedResponse) as exc:
+        agent.decide(_obs())
+
+    assert exc.value.code == MALFORMED_OUTPUT
+    assert exc.value.call.name == "move"
+    assert exc.value.call.arguments == {"raw_arguments": arguments}
+    # The request still cost something, and a refusal must not hide that.
+    assert agent.last_telemetry().request_count == 1
+
+
+def test_unusable_arguments_cost_a_failure_but_not_the_match(make_entity, make_combat):
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0), hp=30)
+    combat = make_combat([fighter, goblin])
+    combat.start_combat()
+    force_turn(combat, fighter)
+
+    transcript = Transcript()
+    client = FakeClient(
+        [response(fn_call("attack", "{bad")), response(fn_call("end_turn", "{}"))]
+    )
+    outcome = run_turn(
+        combat, fighter, OpenRouterAgent("O", "a", client=client), transcript=transcript
+    )
+
+    assert outcome.failures == 1
+    assert outcome.forced_end is False
+    failed = [r for r in transcript.records_of("action") if not r["result"]["ok"]]
+    assert [r["result"]["code"] for r in failed] == [MALFORMED_OUTPUT]
+    assert failed[0]["telemetry"]["request_count"] == 1
+
+
+def test_reasoning_and_max_tokens_are_sent_beside_the_pinned_host():
+    """A thinking model's reasoning budget is a sampling setting like temperature.
+
+    Left to host defaults it can differ between hosts and change silently, so the
+    grid pins it and the adapter sends it (review 2026-09-24, M-1).
+    """
+    client = FakeClient([response(fn_call("end_turn", "{}"))])
+    agent = OpenRouterAgent(
+        "O",
+        "a",
+        client=client,
+        hosts=["DeepInfra"],
+        reasoning={"effort": "low"},
+        max_tokens=2048,
+    )
+
+    agent.decide(_obs())
+    kwargs = client.calls[0]
+
+    assert kwargs["extra_body"] == {
+        "provider": {"order": ["DeepInfra"], "allow_fallbacks": False},
+        "reasoning": {"effort": "low"},
+    }
+    assert kwargs["max_tokens"] == 2048
+
+
+def test_no_reasoning_setting_sends_none():
+    client = FakeClient([response(fn_call("end_turn", "{}"))])
+    OpenRouterAgent("O", "a", client=client).decide(_obs())
+    assert "extra_body" not in client.calls[0]
+
+
+# -- several calls in one response (review 2026-09-24, prereg §6) -----------------
+
+
+def test_two_different_calls_are_malformed_output_not_the_first_one_run():
+    """C1 refuses two different actions; C2 must not quietly run the first."""
+    client = FakeClient(
+        [
+            response(
+                fn_call("end_turn", "{}"),
+                fn_call("attack", '{"action_name": "Bite", "defender_id": "g1"}', "t2"),
+            )
+        ]
+    )
+    agent = OpenRouterAgent("O", "a", client=client)
+
+    with pytest.raises(RejectedResponse) as refused:
+        agent.decide(_obs())
+
+    assert refused.value.code == MALFORMED_OUTPUT
+    assert refused.value.call.name == "end_turn"
+    assert len(client.calls) == 1  # a coded refusal, not the correction re-prompt
+    record = agent.telemetry.requests[0]
+    assert (record.distinct_tool_calls, record.extra_tool_calls) == (2, 1)
+
+
+def test_an_identical_repeated_call_is_one_action():
+    client = FakeClient(
+        [
+            response(
+                fn_call("attack", '{"action_name": "Bite", "defender_id": "g1"}'),
+                fn_call("attack", '{"defender_id": "g1", "action_name": "Bite"}', "t2"),
+            )
+        ]
+    )
+    agent = OpenRouterAgent("O", "a", client=client)
+
+    call = agent.decide(_obs())
+
+    assert call.name == "attack"
+    record = agent.telemetry.requests[0]
+    assert (record.distinct_tool_calls, record.extra_tool_calls) == (1, 1)
+
+
+def test_parallel_tool_calls_are_asked_off_whenever_tools_are_sent():
+    client = FakeClient([response(fn_call("end_turn", "{}"))])
+    OpenRouterAgent("O", "a", client=client).decide(_obs())
+    assert client.calls[0]["parallel_tool_calls"] is False
+
+
+# -- response shapes a real host sends that a well-formed mock never does ------------
+# The A14 slice closed this class for tool *arguments*; these are the two remaining
+# envelope shapes, both of which crashed the adapter and so stopped the whole grid
+# (`play_cell` re-raises anything that is not infrastructure).
+
+
+@pytest.mark.parametrize(
+    "content, expected",
+    [
+        ("ACTION: end turn", "ACTION: end turn"),
+        ([{"type": "text", "text": "ACTION: end turn"}], "ACTION: end turn"),
+        (
+            [
+                {"type": "text", "text": "Closing in."},
+                {"type": "text", "text": "ACTION: end turn"},
+            ],
+            "Closing in.\nACTION: end turn",
+        ),
+        # A part object rather than a dict, as an SDK may model it.
+        (
+            [SimpleNamespace(type="text", text="ACTION: end turn")],
+            "ACTION: end turn",
+        ),
+        # A bare string inside the list, and a single part as a dict.
+        (["ACTION: end turn"], "ACTION: end turn"),
+        ({"type": "text", "text": "ACTION: end turn"}, "ACTION: end turn"),
+        # Reasoning traces and other non-text parts are not the answer.
+        (
+            [
+                {"type": "thinking", "thinking": "hmm"},
+                {"type": "text", "text": "ACTION: end turn"},
+            ],
+            "ACTION: end turn",
+        ),
+        # Nothing readable at all: no action, which is the correction path.
+        ([{"type": "image", "source": {}}], None),
+        ([], None),
+        ("", None),
+        (None, None),
+        (17, None),
+    ],
+)
+def test_content_parts_are_read_as_the_text_the_model_wrote(content, expected):
+    """C1's entire channel is ``message.content``, so its shape must not crash.
+
+    A host that wraps the answer in content parts is a transport convention, not a
+    model choice — the same reason ``decode_arguments`` reads an empty-string argument
+    as ``{}``. Charging C1's ``malformed_output`` rate for its host's serialisation
+    would make H1 partly a function of which host OpenRouter routed to.
+    """
+    message = SimpleNamespace(tool_calls=None, content=content)
+    # Twice: with nothing readable the loop sends its one correction re-prompt.
+    client = FakeClient(
+        [SimpleNamespace(choices=[SimpleNamespace(message=message)], model="m")] * 2
+    )
+    agent = OpenRouterAgent("O", "a", client=client, interface=get_interface(C1))
+
+    try:
+        agent.decide(_obs())
+    except NoToolCallError:
+        pass  # nothing readable; the loop's own business
+    assert agent.last_telemetry().requests[0].raw_output == expected
+
+
+def test_a_content_parts_envelope_parses_into_a_real_c1_action():
+    message = SimpleNamespace(
+        tool_calls=None, content=[{"type": "text", "text": "ACTION: end turn"}]
+    )
+    client = FakeClient(
+        [SimpleNamespace(choices=[SimpleNamespace(message=message)], model="m")]
+    )
+    agent = OpenRouterAgent("O", "a", client=client, interface=get_interface(C1))
+
+    call = agent.decide(_obs())
+
+    assert call.name == "end_turn"
+
+
+def test_a_tool_call_entry_with_no_function_is_refused_not_a_crash():
+    """Unreadable, but the model *did* answer, so it is a counted refusal.
+
+    ``no_tool_call`` would be wrong twice over: it is the bucket for a response that
+    attempted nothing, and it grants a free correction the other refusal paths do not
+    (the unfairness closed for C3's invented ids in `4b1198b`).
+    """
+    message = SimpleNamespace(
+        tool_calls=[SimpleNamespace(id="tc1", function=None)], content=None
+    )
+    client = FakeClient(
+        [SimpleNamespace(choices=[SimpleNamespace(message=message)], model="m")]
+    )
+    agent = OpenRouterAgent("O", "a", client=client, interface=get_interface(C2))
+
+    with pytest.raises(RejectedResponse) as raised:
+        agent.decide(_obs())
+
+    assert raised.value.code == MALFORMED_OUTPUT
+    assert agent.last_telemetry().request_count == 1  # recorded, not lost
+
+
+def test_an_unreadable_entry_alongside_a_good_call_does_not_hide_the_call():
+    message = SimpleNamespace(
+        tool_calls=[
+            SimpleNamespace(id="tc1", function=None),
+            fn_call("end_turn", "{}", call_id="tc2"),
+        ],
+        content=None,
+    )
+    client = FakeClient(
+        [SimpleNamespace(choices=[SimpleNamespace(message=message)], model="m")]
+    )
+    agent = OpenRouterAgent("O", "a", client=client, interface=get_interface(C2))
+
+    assert agent.decide(_obs()).name == "end_turn"

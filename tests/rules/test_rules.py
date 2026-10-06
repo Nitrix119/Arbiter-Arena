@@ -163,7 +163,8 @@ class TestConcentrationRule:
         assert concentrating_entity.concentrating_on == "Bless"
 
     def test_dc_scales_with_damage_high(self, bus, engine, concentrating_entity):
-        """High damage → DC rises above minimum. Same roll that passed above now fails."""
+        """High damage → DC rises above minimum. Same roll that passed above now
+        fails."""
         with patch("src.spells.blocks.global_effects.roll_d20", return_value=10):
             bus.emit(
                 EventType.DAMAGE_DEALT,

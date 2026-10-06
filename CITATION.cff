@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software or its study data, please cite it as below."
+title: "Arbiter Arena: a deterministic evaluation harness for tool-using LLM agents"
+abstract: >-
+  An SRD 5.1-compatible tactical combat engine and a deterministic evaluation
+  harness for tool-using LLM agents, with a pre-registered study of how an
+  agent's action interface affects its reliability, cost and tactics.
+type: software
+authors:
+  - family-names: Nilson
+    given-names: Logan
+    alias: Nitrix119
+version: 1.0.0
+license: Apache-2.0
+repository-code: "https://github.com/Nitrix119/Arbiter-Arena"
+keywords:
+  - LLM agents
+  - tool use
+  - evaluation harness
+  - action interface
+  - deterministic simulation

@@ -1,6 +1,7 @@
 """Expected-value primitives — parity with the engine and exact analytic values.
 
-The parity test (``expected_formula`` vs a large sample of ``roll_formula``) is the guard
+The parity test (``expected_formula`` vs a large sample of ``roll_formula``) is the
+guard
 that keeps an estimate honest against the real roller; the rest pin the exact to-hit /
 crit / save math the scorer depends on, using the real spell programs from
 ``examples/spells``.

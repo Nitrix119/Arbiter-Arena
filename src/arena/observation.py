@@ -15,16 +15,24 @@ bridge applies; it does not belong in the agent's view.
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from src.arena.action_space import legal_actions
+from src.arena.enumeration import DEFAULT_MAX_ACTIONS, enumerate_legal_actions
 from src.arena.information_policy import (
     FULL_INFORMATION,
     HP_EXACT,
     InformationPolicy,
     bucket_hp,
 )
+from src.models.action import AttackAction
 from src.models.entity import Entity
+from src.spatial.range_check import effective_range_ft
 
 if TYPE_CHECKING:
     from src.combat.combat_system import CombatSystem
+
+
+#: The flat menu's length cap (a §3.1 cost covariate), read at call time so a test can
+#: lower it. A cap that bites removes real options, so it is flagged, never silent.
+MENU_CAP = DEFAULT_MAX_ACTIONS
 
 
 def _position(entity: Entity) -> dict:
@@ -113,6 +121,67 @@ def _serialize_enemy(entity: Entity, policy: InformationPolicy) -> Dict[str, Any
     return view
 
 
+def _spell_capability(combat: "CombatSystem", name: str) -> Dict[str, Any]:
+    """What a known spell *is*: level, targeting, reach and area — never whether it
+    can be cast right now.
+
+    A spell the combat cannot resolve (no registry, or absent from it) is still named:
+    the creature knows it, and hiding it would be the observation deciding legality.
+    """
+    registry = combat.spell_registry
+    if registry is None or name not in registry:
+        return {"name": name}
+    spell = registry.get(name)
+    return {
+        "name": spell.name,
+        "spell_level": spell.spell_level,
+        "targeting": spell.targeting_type.value,
+        "range_ft": effective_range_ft(spell),
+        "area": (
+            {"shape": spell.aoe.shape.value, "size_ft": spell.aoe.size_ft}
+            if spell.aoe is not None
+            else None
+        ),
+    }
+
+
+def _capabilities(combat: "CombatSystem", entity: Entity) -> Dict[str, Any]:
+    """A friendly creature's own attacks and spells, as static facts.
+
+    **Shown in every condition**, because it is what the creature *is*, not what is
+    legal. Before this existed, a creature's own attack and spell names appeared only
+    in the legal-action menu, so the no-menu conditions (C1, C2) had to guess the
+    exact names the executor matches — and C2 → C2+M measured "being told what you
+    are" on top of the affordance it exists to isolate. Affordability, slots and
+    targets stay in the menu, where they belong.
+
+    Kept out of :func:`_serialize_ally` on purpose: :func:`snapshot_state` reuses that
+    helper and feeds the per-turn state hash, which static fields would change.
+    """
+    return {
+        "attacks": [
+            _without_empty_description(_serialize_action(a))
+            for a in entity.stat_block.actions + entity.granted_actions
+            if isinstance(a, AttackAction)
+        ],
+        "spells": [
+            _spell_capability(combat, name) for name in entity.stat_block.known_spells
+        ],
+    }
+
+
+def _without_empty_description(view: Dict[str, Any]) -> Dict[str, Any]:
+    """Drop a blank description: shown in every observation, it is only noise (A6)."""
+    if not view.get("description"):
+        view.pop("description", None)
+    return view
+
+
+def _friendly(combat: "CombatSystem", entity: Entity) -> Dict[str, Any]:
+    """The full view of a friendly creature, plus what it can do."""
+    return {**_serialize_ally(entity), "capabilities": _capabilities(combat, entity)}
+
+
 def build_observation(
     combat: "CombatSystem",
     entity: Entity,
@@ -126,20 +195,34 @@ def build_observation(
         policy: What this agent may learn about its enemies. Defaults to
             :data:`~src.arena.information_policy.FULL_INFORMATION`.
 
-    The returned dict has: ``round``/``turn``/``state``/``is_my_turn``, ``self`` (full),
-    ``allies`` (full), ``enemies`` (policy-filtered), and ``legal_actions`` (the menu of
-    what *entity* may do now).
+    The returned dict has: ``round``/``turn``/``state``/``is_my_turn``, ``self`` and
+    ``allies`` (full, each with its ``capabilities``), ``enemies`` (policy-filtered),
+    ``legal_actions`` (the menu of what *entity* may do now) and ``enumerated_actions``
+    (the same options flattened).
+    An :class:`~src.arena.interfaces.ActionInterface` decides which of the last two a
+    given study condition actually sees — this function shows everything.
     """
     current = combat.get_current_entity()
+    menu = legal_actions(combat, entity)
+    enumerated = enumerate_legal_actions(combat, entity, max_actions=None)
     return {
         "state": combat.state.name,
         "round": combat.round,
         "turn": combat.turn,
         "is_my_turn": current is not None and current.entity_id == entity.entity_id,
-        "self": _serialize_ally(entity),
-        "allies": [_serialize_ally(a) for a in combat.get_allies(entity)],
+        "self": _friendly(combat, entity),
+        "allies": [_friendly(combat, a) for a in combat.get_allies(entity)],
         "enemies": [_serialize_enemy(e, policy) for e in combat.get_enemies(entity)],
-        "legal_actions": legal_actions(combat, entity).to_dict(),
+        "legal_actions": menu.to_dict(),
+        # The same options flattened into one choosable list, for the enumerated
+        # condition. Built here, unconditionally, so this module stays ignorant of
+        # which condition is running; each ActionInterface decides what to show.
+        # Carries live EnumeratedAction objects, not dicts — the interface needs the
+        # ToolCall each id resolves to, and shows only `action_id`/`label`.
+        "enumerated_actions": enumerated[:MENU_CAP],
+        # Harness metadata: whether a cap (actions or aim points) removed real
+        # options. Recorded per decision; every condition strips it before showing.
+        "menu_truncated": len(enumerated) > MENU_CAP or menu.truncated,
     }
 
 

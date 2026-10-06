@@ -108,7 +108,6 @@ class TestSpellRegistry:
 
     def test_scan_duplicate_raises_value_error(self, tmp_path):
         """Two JSON files defining the same spell name should raise ValueError."""
-        import shutil
 
         src = Path(SPELLS_DIR) / "firebolt.json"
         (tmp_path / "a.json").write_text(src.read_text())

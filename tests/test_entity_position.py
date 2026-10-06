@@ -6,7 +6,7 @@ from src.models.creature_size import CreatureSize
 from src.models.entity import Entity
 from src.models.stat_block import StatBlock
 from src.models.ability import AbilityScores
-from src.spatial.geometry import BoundingBox, Point3D
+from src.spatial.geometry import Point3D
 
 
 def _make_stat_block(size: CreatureSize = CreatureSize.MEDIUM) -> StatBlock:

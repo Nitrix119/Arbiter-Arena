@@ -62,7 +62,14 @@ function describeAction(entities, rec) {
     const res = rec.result || {};
 
     if (res.ok === false) {
-        return { caption: `${actor}: illegal ${call.name} (${res.error ?? "?"})`, fx: null };
+        // The code is the taxonomy the study counts; the prose reason is in the
+        // decision panel. Older transcripts carry no code, so fall back to it.
+        const why = res.code ?? res.error ?? "?";
+        return { caption: `${actor}: REFUSED ${call.name} (${why})`, fx: null, tone: "refused" };
+    }
+
+    if (call.name === "end_turn") {
+        return { caption: `${actor} ends the turn`, fx: null };
     }
 
     if (call.name === "attack") {
@@ -104,11 +111,35 @@ function describeAction(entities, rec) {
 }
 
 /**
+ * The model's side of one decision: what it thought, wrote and called on each
+ * request, and how the referee ruled. `null` for a deterministic agent, which
+ * calls no provider and so logs no telemetry.
+ */
+export function decisionOf(rec) {
+    const telemetry = rec.telemetry;
+    if (!telemetry) return null;
+    const res = rec.result || {};
+    return {
+        ok: res.ok !== false,
+        code: res.code ?? null,
+        error: res.error ?? null,
+        requests: (telemetry.requests || []).map((r) => ({
+            thought: r.reasoning || null,
+            said: r.raw_output || null,
+            called: r.tool_call ?? null,
+            read: r.interpretation ?? null,
+            providerError: r.error || null,
+        })),
+    };
+}
+
+/**
  * Fold a transcript's records into ordered playback steps.
  *
  * @param {Array<object>} records - parsed transcript records (see transcript.py).
  * @returns {{steps: Array, statBlocks: object, teams: object, meta: object}}
- *   `steps[i]` = { recordIndex, round, turn, currentId, entities, caption, fx }.
+ *   `steps[i]` = { recordIndex, round, turn, currentId, entities, caption, fx,
+ *   tone, decision }; `decision` is `decisionOf` the step's action, else null.
  *   `entities` is a per-step deep copy keyed by id (so scrubbing backward is exact).
  *   `statBlocks` maps entity id → the static stat block logged at match_start
  *   (empty when the transcript predates that logging).
@@ -163,8 +194,10 @@ export function buildSteps(records) {
             }
             case "action": {
                 const call = rec.call || {};
-                // end_turn carries no visible change — fold nothing, add no step.
-                if (call.name === "end_turn") break;
+                const decision = decisionOf(rec);
+                // end_turn changes nothing on the board, so it earns a step only when
+                // a model decided it: then what the model was thinking is worth seeing.
+                if (call.name === "end_turn" && !decision) break;
 
                 const { caption, fx, tone } = describeAction(entities, rec);
                 // Apply the visible effect to the running fold.
@@ -186,6 +219,7 @@ export function buildSteps(records) {
                     caption,
                     fx,
                     tone: tone ?? null,
+                    decision,
                 });
                 break;
             }
@@ -212,7 +246,16 @@ export function buildSteps(records) {
         }
     }
 
-    return { steps, statBlocks, teams, meta: { seed: start.seed, roundCap: start.round_cap } };
+    // The study fields are absent from a plain arena match; they read as undefined.
+    const meta = {
+        seed: start.seed,
+        roundCap: start.round_cap,
+        model: start.model,
+        condition: start.condition,
+        scenario: start.scenario,
+        opponent: start.opponent,
+    };
+    return { steps, statBlocks, teams, meta };
 }
 
 /** Global bounding box (in cells) over every step, for camera auto-fit. */

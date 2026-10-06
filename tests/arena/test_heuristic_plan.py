@@ -80,7 +80,7 @@ def test_every_move_used_is_a_legal_candidate(make_entity, make_combat):
     assert used <= legal_ids
 
 
-# --- disengage gating: melee holds ground, ranged/escapable units may open range --------
+# --- disengage gating: melee holds ground, ranged/escapable units may open range ------
 
 
 def _move_ids(plans):

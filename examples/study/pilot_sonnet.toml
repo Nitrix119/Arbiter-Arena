@@ -1,0 +1,40 @@
+# Phase 2 pilot for Claude Sonnet 5.5: 1 model x 4 conditions x 4 scenarios x 2 seeds = 32
+# matches (~$5.50 before reasoning). It measures real token use, including low-effort
+# reasoning, and confirms the pinned host behaves as listed, before the final run's
+# spend cap is set (prereg §11). The baselines already ran in results/pilot-2.
+#
+#   python -m src.arena.study run examples/study/pilot_sonnet.toml --out results/pilot-sonnet --dry-run
+#   python -m src.arena.study run examples/study/pilot_sonnet.toml --out results/pilot-sonnet
+#
+# Live runs cost money: never start one without an explicit go-ahead.
+# The pilot is not data (prereg §4.4); the final run uses seeds 101-110.
+
+[study]
+name = "pilot-sonnet"
+seeds = [1, 2]
+scenarios = ["kiting", "alpha_strike", "protect_squishy", "aoe_placement"]
+conditions = ["C1", "C2", "C2+M", "C3"]
+opponent = "scripted"          # settled by the Nemotron pilot (prereg §4.4)
+spend_cap_usd = 9.0            # below the $10 key limit, so the grid stops cleanly first
+max_attempts = 3
+backoff_seconds = 30
+
+[[models]]
+id = "anthropic/claude-sonnet-5.5"
+provider = "openrouter"
+# The provider's default temperature, not sent and recorded as "default" (prereg §4).
+temperature = "default"
+usd_per_m_input = 2.0          # google-vertex/global's listed price, checked 2026-10-01
+usd_per_m_output = 10.0
+# Google Vertex (global): list price and 99.98% uptime over a day. Chosen over
+# azure/us, whose US-regional endpoint lists 10% higher; Azure was first picked for
+# temperature control, which this model refuses on every host (a 400). No host
+# offers a seed for it.
+hosts = ["google-vertex/global"]
+max_tokens = 4096              # recorded; a response cut at this limit is flagged
+# Reasoning is mandatory on this model; "low" is the lowest it allows (prereg §4).
+reasoning = { effort = "low" }
+# Anthropic caches only a prefix the request marks: tools + system prompt, about half
+# of each request. Reads bill at 0.1x input; a prefix under Sonnet 5.5's 512-token
+# minimum just runs uncached, with no write billed. Reads and writes are recorded.
+cache_prompt = true

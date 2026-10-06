@@ -174,6 +174,9 @@ catalogue remains.)_
   and the README agree — free for any noncommercial use, no monetization. The
   `egg-info/PKG-INFO` "Future Enhancements" note is a regenerated build artifact and refreshes on
   the next build.
+  _(2026-10-06 — superseded: relicensed to **Apache-2.0**, as decided in Phase 0
+  (V1_PLAN §4). `NOTICE` carries the SRD 5.1 CC BY 4.0 attribution and the trademark
+  statement.)_
 
 ## 6. Prioritized repair roadmap
 
@@ -211,7 +214,13 @@ after P1 adds a spell-JSON schema validator (E4) so the skill gets structured fe
 
 ### Arena adjacent problems (noted, not yet fixed)
 
-- **A1. `OpenRouterAgent` crashes on a malformed API response.**
+- **A1. ~~`OpenRouterAgent` crashes on a malformed API response.~~ Fixed 2026-09-21** (`6a83459`).
+  *The live-model preflight it called for exists since 2026-09-24 (`study run` preflight).*
+  `_first_message` refuses a broken envelope as a `ProviderError` — a `NoToolCallError` subclass,
+  so the turn driver's existing counted-failure handling applies unchanged. It is a *subclass*
+  rather than a plain `None` return because the study must tell infrastructure (a §3.5 exclusion)
+  from a model with nothing to say (never an exclusion); the two are recorded as `provider_error`
+  and `no_tool_call`. The live-model preflight noted below is still outstanding. Original report:
   `openrouter_agent.py:_request_action` does `response.choices[0].message` unguarded; a free model
   that returns `choices=None` (error/empty payload — observed live with
   `nvidia/nemotron-3-super-120b-a12b:free`, 2026-09-15) raises `TypeError` and aborts the whole
@@ -220,3 +229,344 @@ after P1 adds a spell-JSON schema validator (E4) so the skill gets structured fe
   as a counted failure) rather than crash. Belongs with the batch-runner robustness work — a batch
   must survive one flaky response. Same fragility class as the dead default model
   (`DEFAULT_MODEL = nvidia/nemotron-nano-9b-v2:free` 404s; needs a live-model preflight).
+
+#### Interface-study ledger (C1 work, opened 2026-09-24)
+
+Problems noticed while building the conditions, logged here so they are fixed deliberately in
+a later slice or the final cleanup rather than folded silently into unrelated commits. Each
+names where it should be addressed. Append; strike through and date an item when fixed.
+
+- **A2. ~~First-attempt validity must count the correction re-prompt as a failure.~~
+  Implemented 2026-09-24** in `study_report` (`first_attempt_valid` = accepted in one
+  request), and defined in PREREGISTRATION §6. Original note: A decision
+  whose first response contained no action gets one free re-prompt (`decide_one_action`), so a
+  decision can succeed "eventually" after a failed first attempt that no rejection records. The
+  H1 metric must treat `request_count > 1` *or* any rejection as first-attempt invalid, in
+  every condition alike. → slice 3 (analysis script).
+- **A3. `cast <area spell> at <creature>` sends `target_ids` to an AoE spell.** C1 reads that
+  phrasing into exactly the call a C2 model would send (parity holds), but how the engine
+  answers an AoE spell given targets and no point is unverified — if it is `engine_error`, both
+  conditions are being charged for an engine gap rather than a model error. → checked in C1
+  slice 2 (parser corpus); outcome recorded here.
+  *Checked 2026-09-24:* not an engine gap — the engine refuses with a **typed** code,
+  `unknown_target` ("Fireball is an AOE spell and requires a target point"), identically for
+  C1 and C2. Open only as a taxonomy question: `invalid_target_relation` may be the truer
+  category. → decide with the other taxonomy splits at the freeze (prereg §6).
+  *Decided at the freeze (2026-10-01):* it never occurred in three pilots, so it keeps
+  `unknown_target` (prereg §11).
+- **A4. Identifier tie-break with duplicate names.** The resolver tries ids before display
+  names, so with two creatures named "Goblin" (`goblin`, `goblin-2`) the spelling `Goblin`
+  resolves to `goblin`, though a reader might call it ambiguous. No study roster can hit this
+  (`test_every_identifier_in_a_scenario_has_its_own_key`); revisit if duplicate names enter the
+  study.
+- **A5. ~~Multiple tool calls are handled differently per provider.~~ Fixed 2026-09-24**
+  (`4fd3358`): both adapters count `extra_tool_calls` per request. Original note: Anthropic disables parallel
+  tool use; OpenRouter's adapter silently takes the first of several calls. That is a provider
+  asymmetry inside C2/C2+M/C3 and discards evidence. Record the count of extra calls per
+  request so the analysis can see it. → final cleanup (before the pilot).
+- **A6. ~~Capability entries carry an empty `description`~~ Fixed 2026-09-24** (`4fd3358`).
+  Original note: for every scenario attack
+  (`_serialize_action` reuse) — token noise in every prompt. Drop empty descriptions. → final
+  cleanup (changes prompt hashes; do before the freeze).
+- **A7. ~~Repo hygiene.~~ Fixed 2026-10-05.** *Line endings:* `.gitattributes` declares LF
+  (CRLF for `.bat`/`.cmd`); the repository was already LF, and the working copy was
+  refreshed to match, ending the per-commit CRLF warnings. *Lint:* `flake8 tests/` is clean (from 117)
+  and CI now lints `tests/`. This included the `dir()` name hack, the heuristic test that
+  never used its policy (it now checks the policy path), and an unused variable that
+  hid a real bug (A36). The line-ending half is in its own commit. Original note: CI
+  lints `src/` and `web/` but not `tests/` (one pre-existing E501 in
+  `tests/arena/test_interfaces.py:1`); working copies have mixed line endings (LF/CRLF warnings
+  on files written by tooling) — add a `.gitattributes`. → final cleanup.
+  *Measured in the Phase 1 review (2026-09-24):* `flake8 tests/` reports 109 findings (67 E501,
+  31 F401, 5 F841, 2 E731). There are also 4 F821s from a `dir()`-based name hack in
+  `tests/test_block_entity_effects.py` that works at run time but should simply use the bound
+  name. `tests/arena/test_heuristic_score.py::test_hidden_capabilities_fall_back_to_generic_threat`
+  builds a hidden-capability policy and never uses it, so it checks `features.threat` directly
+  rather than the policy path its name claims. Line endings: 4 files are mixed.
+- **A8. C1 reads a trailing justification into the final name.** `ACTION: attack raider-1
+  with Dagger since it's adjacent` parses with the weapon "Dagger since it's adjacent", which
+  the executor refuses as `unknown_action`, though a reader would find the action. Pinned in
+  the corpus as a known boundary rather than patched with a clause heuristic before any real
+  output exists. → Phase 2 pilot: if it occurs, add a published tolerance before the freeze
+  (and it is exactly what the §7 audit's false-reject rate would expose).
+  *2026-09-24:* the **lenient bound** now drops a trailing justification, so the study's
+  upper bound already credits these lines. The primary parser is unchanged, pending pilot
+  evidence.
+  *Decided at the freeze (2026-10-01):* it never occurred in three pilots, so the primary
+  parser stays as it is (prereg §11).
+- **A9. ~~A call's arguments reach the transcript unscrubbed, in every condition.~~ Fixed
+  2026-09-24** (`4fd3358`). The fix is wider than first logged: the raw `tool_call`, and the
+  referee's result (which echoes a bad id back), were also unscrubbed. Everything now passes
+  `scrub_value` at the transcript boundary. Original note: The secret
+  scrub runs on `RequestRecord` fields at serialisation, but `Transcript.action` logs
+  `call.arguments` as-is — so a model that echoes a key-shaped string into an end-turn `note`,
+  a name, or (C1) an unreadable line's `text` would write it to disk. C1's `interpretation`
+  field is scrubbed (added with it, 2026-09-24); the arguments path is older and shared.
+  → final cleanup: scrub string arguments at the transcript boundary, with a test that writes
+  a real transcript and greps it (the 2026-09-21 lesson).
+- **A10. ~~Menu length was never recorded.~~ Fixed 2026-09-24.** Prereg §2 records menu length
+  per decision as a cost covariate, but nothing wrote it, and a report could only have
+  recovered it by replaying. `DecisionTelemetry.menu_length` now holds the number of legal
+  options shown (menu conditions only), set by `ActionInterface.menu_length`.
+- **A11. Plots deferred.** V1_PLAN asked the report for 2–3 plots. They would add matplotlib,
+  and the study's claims rest on the tables, so the report is text and CSV only for now.
+  → Phase 4 (write-up): plot from `report/*.csv`, ideally in a separate script.
+- **A12. ~~Two older modules import `random` directly~~ Fixed 2026-10-05:** both now go
+  through `dice.new_rng`, with `dice.Rng` for annotations (the same `random.Random`, so
+  no stream changes). `tests/test_dice.py` fails if any module but `dice.py` imports
+  `random`. Original note:, against CLAUDE.md §7 ("`dice.py` is
+  the only module that touches `random`"): `src/arena/agent.py` (RandomAgent's own stream)
+  and `src/arena/heuristic/ga.py` (the GA). Both are seeded, so determinism holds, but the
+  stated invariant does not. → final cleanup: route both through `dice.new_rng`, or amend the
+  rule to say what it actually protects (game RNG versus agent or analysis streams).
+- **A13. ~~`openrouter_agent.DEFAULT_MODEL` is the known-dead free model~~ Fixed 2026-10-05:**
+  it now points at the study's live small model, `nvidia/nemotron-3.5-lightning` (cheap,
+  not free), and so do the example and setup guide. Original note:
+  (`nvidia/nemotron-nano-9b-v2:free` 404s). The study never uses it, because grids name their
+  models, but the example scripts default to it. → final cleanup: drop the default, or point it
+  at a live model and say so.
+- **A14. ~~Real-world malformed output crashed the harness.~~ Fixed 2026-09-24** (Phase 1
+  review). Unparseable or non-object tool arguments (`json.loads` unguarded in the
+  OpenRouter adapter), `null`/wrongly-typed argument values (`TypeError` uncaught in
+  `ToolExecutor.apply`), and a move by `option_id` in C2/C2+M (a dual path the schema had
+  closed but the executor still honoured). The first two stopped the grid as "harness
+  bugs"; the third was a between-condition confound. Coded as `malformed_output`
+  (prereg §6); `mock_model`'s `hostile` stumble style and a hostile offline smoke keep
+  them covered. The review's other findings (per-request provider retry, fresh-decision
+  H1, paired decision rules, out-of-range area aim, pilot readiness) are the next slices.
+- **A15. ~~Match-level exclusion biased the kept sample.~~ Fixed 2026-09-24** (Phase 1
+  review, H-2). One flaky request excluded a whole match, so matches with more requests
+  (more failures) were excluded more often. Infrastructure failures are now retried per
+  request in `llm_common._record_request` (3 attempts, recorded in
+  `DecisionTelemetry.provider_failures`, outside `request_count`), and the report breaks
+  exclusions and retries down per model x condition. `is_infrastructure_error` moved to
+  `agent.py` so the retry and the exclusion rule share one definition. Prereg §8.
+- **A16. ~~H1 counted retries as first attempts; H1–H3 had no decision rule; an
+  over-range area aim was silently repaired.~~ Fixed 2026-09-24** (Phase 1 review, H-1,
+  H-3, H-4).
+  - `Decision.fresh`: H1, H2 and the C1 bounds are measured over fresh decisions only;
+    per-call acceptance is reported as a secondary figure.
+  - `registered_verdicts`: a paired cluster bootstrap per model gives a directional
+    verdict for every registered contrast.
+  - `ToolExecutor` refuses an area aim beyond range as `out_of_range` instead of letting
+    the engine clamp it.
+  - A C3 `choose` naming no id is now excluded from the H2 split.
+  - All recorded in prereg §6–§7 before any data.
+- **A17. ~~Pilot readiness gaps.~~ Fixed 2026-09-24** (Phase 1 review, M-1 to M-6).
+  - `study verify <bundle>` replays a bundle.
+  - A response-integrity report flags responses cut at the token limit, truncated menus
+    and served-model substitution.
+  - `max_tokens` and `reasoning` are grid fields, sent with every request and recorded.
+    The manifest also records hosts and package versions.
+  - `menu_truncated` is recorded per decision, and the cap test runs on sampled match
+    states.
+  - `turn_end` records `end_cause`, and metrics import the driver's constants.
+  - `pilot_opponent.toml` covers the opponent choice.
+  - **Still open, low:** pin `lark` exactly at `study-freeze` (a range today; the version
+    is recorded per match). The menu lists attacks first, a primacy effect to declare in
+    prereg §9. A7, A12 and A13 are unchanged.
+- **A18. ~~Tool conditions ran the first of several different calls.~~ Fixed 2026-09-24**
+  (`fe46006`). C1 refused two different ACTION lines, while C2, C2+M and C3 silently ran
+  the first of several tool calls and counted the decision valid. That biased H1's
+  C2 − C1 contrast toward its prediction. More than one *distinct* call is now
+  `malformed_output` everywhere, and identical repeats are one action.
+  `parallel_tool_calls: false` is sent, and multi-call responses are counted per cell.
+  Prereg §6.
+- **A19. ~~The C1 decision rule and audit counted retries.~~ Fixed 2026-09-24**
+  (`e6357ff`). `audit.decision_rule` pooled every decision while the lenient bound was
+  fresh-only, and the audit population included retries. Both now read freshness from
+  `study_report.decisions_of`. Prereg §7.
+- **A20. ~~H2 put an area spell aimed at a creature in the non-spatial bucket.~~ Fixed
+  2026-09-24** (`1808d9d`). `classify` now knows the scenario's area spells. Prereg §6.
+- **A21. ~~Creatures could move off the ground.~~ Fixed 2026-09-24** (`45799d8`).
+  `move_entity` accepted any `y`. A willing move now keeps its altitude, refused as
+  `destination_blocked`. Prereg §6.
+  - Open, low: `_clear_option_along` still follows the full 3D direction to a target. If
+    a creature is ever elevated, "close to melee" would propose a move the engine now
+    refuses, and the enumeration property test would fail loudly. The fix is to
+    flatten the unit vector onto the ground plane when elevation enters the study.
+- **A22. ~~A resume overwrote excluded attempts.~~ Fixed 2026-09-24** (`607a2f4`). The
+  attempt number restarted at 1 on each run, which undercounted the §8 exclusions and
+  the spend cap.
+- **A23. ~~Offered coordinates carried float noise C1 could not say.~~ Fixed 2026-09-24**
+  (`81f064f`).
+  - Found by the new casting mock: a move to `x = 4.44e-16` rendered in exponent
+    notation, which C1's grammar does not read.
+  - Candidates are now held to three decimal places. A property test covers every state
+    a random-policy match reaches.
+  - Also landed in `d88c125`: the casting mock (`policy = "random"` for the mock), the
+    `H1 | full ordering` row, and a multiplicity statement in prereg §7 and §9.
+  - Still open, low: C1's grammar reads no exponent notation, while C2 accepts it as a
+    JSON number. Models rarely write it. If the pilot shows any, decide it at the
+    freeze.
+- **A24. ~~Combat does not end when one *team* is left.~~ Fixed 2026-09-24**, in the
+  engine, as decided by the user: a fight ends the moment one side is left.
+  - `turn_manager.sides_standing` counts sides. A creature with no team fights for
+    itself, so a free-for-all is unchanged.
+  - `CombatSystem` checks right after every attack, spell and legendary action
+    (`_decides_fight`), and `end_turn` checks before advancing, which catches deaths
+    from effects. `end_turn` is a no-op once combat is over.
+  - The arena's turn driver stops at the killing blow (`end_cause: over`, not forced).
+    The web UI sends `combat_ended` straight after the deciding action.
+  - Re-measured: zero decisions after a win, and `rounds` is the round of the kill.
+    Winners are unchanged. Prereg §4 "Match end". Original report kept below.
+  - `TurnManager.end_turn` ends combat only when at most one *creature* is alive. In a
+    2v2 whose winner keeps two survivors, the winners take turns against nobody until
+    round 20.
+  - Measured on 2026-09-24: in one random-baseline `aoe_placement` match, 34 of 48
+    model decisions came after the enemy team was wiped in round 3. `match_end` then
+    reports `rounds: 21`.
+  - Effect on the study, in the matches the model *wins*:
+    - paid LLM calls are wasted;
+    - H1's denominators are padded with trivially valid decisions, a padding that tracks
+      tactical success and so can track condition;
+    - the "rounds" measure is distorted.
+  - Kiting (1v1) and losses are unaffected.
+  - Fix options: end combat when at most one team has living members, in the engine
+    (`TurnManager`) or in the arena loop (`run_match`). Also decide whether a turn stops
+    mid-turn at the killing blow.
+- **A25. ~~Four quiet validity threats.~~ Fixed 2026-09-25** (the second validity pass).
+  - **C2+M was shown ids it may not use.** Its menu displayed an `option_id` on every
+    move and aim point, while acting by one was refused. That biased C2+M down, both
+    against C3 and against C2. The ids are now removed from C2+M's view.
+  - **Pilot and final data were not separated.** Prereg §4.4 now separates them: the
+    final run uses seeds 101–110, pilot matches enter no confirmatory analysis, and the
+    opponent is chosen by a rule on outcomes pooled over conditions.
+  - **H3 could pass on saturated outcomes.** A scenario at a floor or ceiling in both
+    conditions is now left out of that measure. If every scenario is, the verdict is
+    "uninformative (outcomes saturated)".
+  - **The action mix could move H1.** The report now shows validity by intended action
+    kind, H1 without end-turns, and H1 at a common mix. These are descriptive
+    sensitivity figures, prereg §7.
+- **A26. ~~An unbilled provider read as a free call, so the spend cap went inert.~~
+  Fixed 2026-09-25** (the third pre-pilot review).
+  - `transcript_tokens` (the spend cap's input) and `Decision.input_tokens` both
+    coerced an unreported `usage` count to `0`, discarding a distinction
+    `telemetry._sum_or_none` was written to preserve. A host that omits `usage` made
+    every cell cost `$0.0000`, so `spend_cap_usd` could never bind and a live grid
+    would run to completion against a ceiling believed to be guarding it. The report
+    could not tell "free" from "unknown" either, leaving the exploratory cost outcome
+    unfalsifiable.
+  - Recorded once on `DecisionTelemetry.usage_reported`; preflight refuses an
+    unbillable model, `run_grid` stops after a kept cell whose cost is unknowable,
+    and the report's integrity section counts unbilled decisions per cell.
+  - Same shape as the 2026-09-21 lesson: a fact declared in one layer and dropped at
+    the consumer. Prereg §5.
+- **A27. ~~Two response envelopes crashed the harness and stopped the grid.~~ Fixed
+  2026-09-25.** The A14 slice closed this class for tool *arguments*; these were the
+  two remaining shapes in the envelope. Both raised `AttributeError`, which is not an
+  infrastructure error, so `play_cell` re-raised and the run died with a traceback —
+  losing that cell's transcript, which is not even written to `_excluded/`.
+  - **Content parts.** `message.content` reached the caller as a list on a host that
+    answers with `{"type": "text", "text": …}` parts, and `read_response` ran
+    `text.strip()` on it. This is C1's entire channel. `llm_common.message_text` now
+    reads the text out of a string, a list of parts or a single part, rather than
+    refusing it — the envelope is a transport convention, not a model choice, and
+    charging C1's `malformed_output` rate for its host's serialisation would make H1
+    partly a function of routing.
+  - **A tool-call entry with no `function`.** Dropped; a readable call beside a broken
+    one still runs; a response whose every entry was unreadable is `malformed_output`,
+    not `no_tool_call` (which grants a free correction the other refusal paths do not).
+  - Prereg §6. The engine side needed nothing: `ToolExecutor.apply` already answers a
+    `None` tool name, an empty one and `arguments=None` with typed refusals.
+- **A28. ~~C1's parse layer conflated the command with the prose around it.~~ Fixed
+  2026-09-25.** `_layer` returned 3 whenever a response had more than one content
+  line, before comparing the command with its canonical rendering — so a byte-perfect
+  `ACTION:` line with a preamble scored the same as an action dug out of untagged
+  prose, and the registered `strict` bound (layer 0) was unreachable for real output.
+  Measured on the demo bundle: every C1 decision at layer 3, strict `0.000`, and a
+  layer histogram carrying no information. Layer 3 now means an *untagged* line, a
+  tagged line keeps its command's layer, and prose is its own recorded field and
+  report column. No hypothesis verdict moves — the C1 decision rule does not read the
+  layer. Prereg §7 and §10.
+  - Also closed: **A17's open `lark` pin** (exactly 1.3.1; the parser is the measuring
+    instrument), and `--dry-run` now reports the spend cap plus a per-model estimate
+    measured from what is on disk rather than printing no cost at all.
+- **A29. ~~Adjacent creatures were refused as overlapping.~~ Fixed 2026-09-30** (found
+  by the Phase 2 pilot).
+  - `BoundingBox.overlaps` compared closed intervals (`<=`/`>=`), so two boxes sharing
+    only a face, edge or corner counted as overlapping. Its docstring said so, and
+    contradicted itself: "share any volume (touching counts)". A shared face has no
+    volume.
+  - It is the engine's only occupancy test (`is_destination_clear` and
+    `_check_movement_overlap`; area targeting has its own tests in `aoe.py`). So a
+    Medium creature could not stand 5 ft centre-to-centre from another, the ordinary
+    adjacent position. SRD 5.1 forbids only ending a move *in* another creature's
+    space (5 by 5 ft for Medium).
+  - A unit test pinned the wrong rule (`test_overlaps_touching_edge`), so nothing
+    failed.
+  - In the pilot, 141 of 492 raw-coordinate `destination_blocked` refusals were
+    touching only (C1 49/237, C2 91/254, C2+M 1/1). The menus are built from the
+    same test and never offered a touching spot, so the defect loaded error onto
+    exactly the conditions H1 and H2 predict are worse.
+  - Now strict, with `OVERLAP_EPSILON_FT = 1e-6` for float noise only. The pilot's
+    smallest real overlap was 0.06 ft. Registered menu-coverage figures are unchanged
+    (re-measured). Prereg §10.
+- **A30. Moving *through* a hostile creature is not checked. Open.**
+  - SRD 5.1 allows moving through a hostile creature's space only if it is at least
+    two sizes larger or smaller. The engine checks a move's *destination* only, never
+    its path, so a creature can pass straight through an enemy line.
+  - It applies alike to every condition and to both sides, so it is not a between-
+    condition confound. It does make the positioning scenarios (`kiting`,
+    `protect_squishy`) easier to escape than the rules intend.
+  - **Accepted as a known limitation (user decision, 2026-09-30).** It is unlikely to
+    affect a between-condition measure measurably. Worth fixing after the study.
+    Recorded in prereg §9; the prompt is unchanged.
+- **A36. Re-casting Vampiric Touch while concentrating applies its healing twice. Open.**
+  - Found 2026-10-05 while cleaning the test lint (A7): an unused variable turned out to
+    be a missing assertion.
+  - The first cast heals correctly: 6 damage, 3 healing. A re-cast reports 4 healing
+    for 8 damage, but the caster gains 8.
+  - Likely cause: the first cast's healing rider survives the re-cast, so two riders
+    fire. SRD 5.1 ends the old concentration when a new concentration spell is cast.
+  - Pinned by `test_vampiric_touch_recast_heals_once`, a strict xfail that will report
+    an unexpected pass when this is fixed.
+  - It cannot have touched the study: no scenario includes Vampiric Touch, and it
+    appears nowhere in `results/final`.
+- **A35. ~~The audit's decision table listed the baselines as "not computable".~~ Fixed
+  2026-10-05.** They play their own condition, never C1 or C2, so they have no C1
+  comparison to report. `decision_rule` now leaves out a model with neither, and keeps
+  "not computable" for a model genuinely missing one side. Display only.
+- **A34. ~~The run header miscounted its cells.~~ Fixed 2026-10-05.** It printed
+  "6 models x 4 conditions x 4 scenarios x 10 seeds" for the final grid's 600 cells. That
+  counted the baselines as models crossed with every condition, which implies 960. It
+  also priced baseline cells as model calls (~21,000; ~16,800 was right). The header now
+  reads "480 model cells … ; 120 baseline cells …". Display only: the cell count was
+  always right, and no data or cost figure was affected.
+- **A33. ~~Show the model's reasoning in the web replay viewer.~~ Done 2026-10-06**
+  (user request, 2026-10-01). The `/playback` decision panel shows each request's
+  thought, said, called and read, beside the referee's verdict and code.
+  - Transcripts now record each request's `reasoning` text and `reasoning_tokens`,
+    scrubbed, and `study show` prints it as `thought`.
+  - The `/playback` page should show it beside each decision, so a viewer can see what
+    the model considered before it acted. Absent means the model returned none
+    (Nemotron runs with reasoning off).
+  - Frontend only: the data is already in every new transcript.
+- **A32. ~~C1's strict bound measured number formatting.~~ Fixed 2026-10-01** (Gemini
+  pilot; user decision).
+  - The canonical rendering drops a whole number's `.0`, so `move to x=-80.0 z=0.0`
+    read as layer 2. Gemini wrote every move that way. Its strict bound was 0.769
+    against a primary of 0.986, and all 48 of the layer-2 lines were trailing zeros.
+  - Trailing fractional zeros now count as the same number when the layer is judged
+    (`free_text._same_numbers`). Other number formats (`15ft`, `x: 15`) are still
+    layer 2.
+  - Re-derived offline on copies of both pilots: Gemini's strict bound is now 0.986
+    and Nemotron's 0.325, both equal to primary. 69 requests changed layer, all of
+    them trailing zeros. The recorded bundles are untouched.
+- **A31. ~~A zero-distance move is a free, valid action.~~ Fixed 2026-09-30** (user
+  decision: its own rejection code, `no_effect`, like "you are already holding that";
+  prereg §6, §10).
+  - `move` to the creature's own position costs nothing and is accepted. The failure
+    budget never fires on it, so a model can repeat it until the per-turn action cap
+    ends the turn (`end_cause: cap`).
+  - Pilot 1 (accepted model moves that went nowhere): C2 351/439, C2+M 115/177,
+    C1 35/94, C3 0/59. The menus never offer one.
+  - Adjacency check cell (C2 protect_squishy seed 2, after A29): 376/383, at 4x a
+    typical cell's cost. The model reached its spot, then idled in place until the
+    cap.
+  - These no-op moves count as valid first attempts in H1, so they inflate the
+    raw-coordinate conditions' validity. That runs against H1's prediction, but it
+    distorts the measure and the cost either way.
+- *(Known and declared in code, not duplicated here: multi-target spells are enumerated
+  nowhere — `enumeration.multi_target_spells_not_enumerated`.)*
+

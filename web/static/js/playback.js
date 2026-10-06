@@ -28,6 +28,8 @@ const el = {
     speed:    document.getElementById('pb-speed'),
     timeline: document.getElementById('pb-timeline'),
     srcName:  document.getElementById('pb-source-name'),
+    meta:     document.getElementById('pb-meta'),
+    decision: document.getElementById('pb-decision'),
     file:     document.getElementById('pb-file'),
 };
 
@@ -166,6 +168,47 @@ function updateTimeline(index) {
     tlRefs[index]?.scrollIntoView({ block: 'nearest' });
 }
 
+// ── Decision panel ──────────────────────────────────────────────────────────
+// What the model thought, wrote and called, how its text was read, and the
+// referee's verdict. Every string is model or referee text: escape all of it.
+function readingText(read) {
+    if (!read) return null;
+    if ('layer' in read) return `layer ${read.layer}${read.prose ? ' (with prose)' : ''}`;
+    return `refused — ${read.reason ?? read.code ?? '?'}`;
+}
+
+function field(label, text, cls = '') {
+    if (text == null || text === '') return '';
+    return `<div class="pb-dec-field ${cls}"><span class="k">${label}</span>`
+         + `<pre>${escapeHtml(text)}</pre></div>`;
+}
+
+function renderDecision(step) {
+    const d = step.decision;
+    if (!d) {
+        el.decision.innerHTML = '<div class="pb-dec-empty">No model decision at this step.</div>';
+        return;
+    }
+    const verdict = d.ok
+        ? '<span class="pb-dec-verdict ok">ACCEPTED</span>'
+        : `<span class="pb-dec-verdict bad">REFUSED</span>`
+          + (d.code ? ` <code>${escapeHtml(d.code)}</code>` : '');
+    const n = d.requests.length;
+    const requests = d.requests.map((r, i) => {
+        const head = n > 1 ? `<div class="pb-dec-req">request ${i + 1} of ${n}</div>` : '';
+        return head
+             + field('thought', r.thought)
+             + field('said', r.said)
+             + field('called', r.called ? JSON.stringify(r.called) : null)
+             + field('read', readingText(r.read))
+             + field('provider error', r.providerError, 'bad');
+    }).join('');
+    el.decision.innerHTML = `<div class="pb-dec-head">${verdict}</div>`
+        + (d.ok ? '' : field('reason', d.error, 'bad'))
+        + (requests || '<div class="pb-dec-empty">No request recorded.</div>');
+    el.decision.scrollTop = 0;
+}
+
 // ── Token sync ──────────────────────────────────────────────────────────────
 function syncTokens(step) {
     const seen = new Set();
@@ -201,6 +244,7 @@ function renderStep(index, { direction } = { direction: 0 }) {
     syncTokens(step);
     updateCards(step);
     updateTimeline(index);
+    if (!el.decision.hidden) renderDecision(step);
 
     el.round.textContent = step.round > 0 ? `Round ${step.round} · Turn ${step.turn}` : 'Setup';
     el.desc.textContent = step.caption;
@@ -256,6 +300,19 @@ function loadMatch(text, sourceName) {
     }
 
     el.srcName.textContent = sourceName;
+    const m = built.meta;
+    const metaParts = [
+        m.model, m.condition, m.scenario,
+        m.condition && m.seed != null ? `seed ${m.seed}` : null,
+        m.opponent ? `vs ${m.opponent}` : null,
+    ].filter(Boolean);
+    el.meta.textContent = metaParts.join(' · ');
+    el.meta.hidden = metaParts.length === 0;
+    // A layout switch for the whole match, not per step, so the timeline does not
+    // jump in height as playback crosses steps with and without a decision.
+    const hasModel = steps.some((s) => s.decision);
+    el.decision.hidden = !hasModel;
+    document.body.classList.toggle('pb-has-decisions', hasModel);
     el.slider.max = String(Math.max(0, steps.length - 1));
 
     buildCards(steps[0]);
@@ -271,13 +328,25 @@ function loadMatch(text, sourceName) {
     player.emitState();
 }
 
+// `?match=<file>` opens web/static/matches/<file>, and `&step=<n>` (1-based, as
+// the counter shows) starts there, so a replay moment can be linked to. A bare file
+// name only: the page never fetches outside that folder.
+function initialMatchUrl() {
+    const name = new URLSearchParams(window.location.search).get('match');
+    if (name && /^[\w.+-]+\.jsonl$/.test(name)) return `/static/matches/${name}`;
+    return DEFAULT_MATCH;
+}
+
 async function loadDefault() {
+    const url = initialMatchUrl();
     try {
-        const r = await fetch(DEFAULT_MATCH);
+        const r = await fetch(url);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        loadMatch(await r.text(), DEFAULT_MATCH.split('/').pop());
+        loadMatch(await r.text(), url.split('/').pop());
+        const step = Number(new URLSearchParams(window.location.search).get('step'));
+        if (Number.isInteger(step) && step > 1) player.seek(Math.min(step, steps.length) - 1);
     } catch (err) {
-        el.desc.textContent = `Could not load ${DEFAULT_MATCH} — use “Open…” to pick a file. (${err.message})`;
+        el.desc.textContent = `Could not load ${url} — use “Open…” to pick a file. (${err.message})`;
     }
 }
 

@@ -59,18 +59,18 @@ def create_app() -> FastAPI:
 
     @application.get("/", response_class=HTMLResponse)
     async def root(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse("index.html", {"request": request})
+        return templates.TemplateResponse(request, "index.html")
 
     @application.get("/battle", response_class=HTMLResponse)
     async def battle(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse("battle.html", {"request": request})
+        return templates.TemplateResponse(request, "battle.html")
 
     @application.get("/playback", response_class=HTMLResponse)
     async def playback(request: Request) -> HTMLResponse:
         # Static page: it plays back a recorded match entirely client-side (no
         # engine, no WebSocket). The server only serves this template, the JS/CSS,
         # and the match .jsonl under /static.
-        return templates.TemplateResponse("playback.html", {"request": request})
+        return templates.TemplateResponse(request, "playback.html")
 
     return application
 

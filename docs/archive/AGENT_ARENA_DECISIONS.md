@@ -1,5 +1,9 @@
 # Agent Arena — Open Decisions & Questions
 
+> **Historical.** This document is archived: it records a plan or decision as it
+> stood at the time, and may not match the code. For the current design, see
+> [ARCHITECTURE.md](../ARCHITECTURE.md) and `docs/current/`.
+
 > **Purpose.** The decisions about the agent framework where I most want *your* input before
 > building further, collated so you can answer in one pass. Companion to
 > [AGENT_ARENA_PLAN.md](../current/AGENT_ARENA_PLAN.md) (the architecture) — this is the "vision &

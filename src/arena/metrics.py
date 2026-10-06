@@ -24,6 +24,12 @@ import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+from src.arena.turn_driver import (
+    MAX_ACTIONS_PER_TURN,
+    MAX_CONSECUTIVE_FAILURES,
+    MAX_TOTAL_FAILURES,
+)
+
 # ---------------------------------------------------------------------------
 # Loading & indexing
 # ---------------------------------------------------------------------------
@@ -91,23 +97,20 @@ class Turn:
 
     entity_id: str
     actions: List[dict]
-    end_cause: str  # "agent" | "budget" | "cap" | "skip"
+    end_cause: str  # "agent" | "budget" | "cap" | "skip" | "over"
 
     @property
     def forced(self) -> bool:
-        return self.end_cause != "agent"
-
-
-# Mirror of the turn driver's guards (src/arena/turn_driver.py) so we can reconstruct
-# *why* a turn ended from the logged action stream — the transcript does not record it
-# directly.
-_MAX_CONSECUTIVE_FAILURES = 3
-_MAX_TOTAL_FAILURES = 5
-_MAX_ACTIONS_PER_TURN = 20
+        """The driver ended it — not the agent, and not the fight ending."""
+        return self.end_cause not in ("agent", "over")
 
 
 def _end_cause(actions: List[dict]) -> str:
-    """Replay the failure-budget logic over a turn's actions to classify how it ended.
+    """Reconstruct how a turn ended, for transcripts that predate ``end_cause``.
+
+    Current transcripts record the cause on each ``turn_end`` and it is read from
+    there (:func:`group_turns`). This replays the turn driver's own guards — imported,
+    not copied, so the two cannot drift — over a turn's actions.
 
     ``agent`` — the agent ended its own turn (a successful ``end_turn``). ``budget`` —
     the driver force-ended after 3 consecutive or 5 total failed calls. ``cap`` — the
@@ -126,14 +129,14 @@ def _end_cause(actions: List[dict]) -> str:
             consecutive += 1
             failures += 1
             if (
-                consecutive >= _MAX_CONSECUTIVE_FAILURES
-                or failures >= _MAX_TOTAL_FAILURES
+                consecutive >= MAX_CONSECUTIVE_FAILURES
+                or failures >= MAX_TOTAL_FAILURES
             ):
                 return "budget"
         else:
             consecutive = 0
             acted += 1
-            if acted >= _MAX_ACTIONS_PER_TURN:
+            if acted >= MAX_ACTIONS_PER_TURN:
                 return "cap"
     return "agent"  # completed without tripping a guard (e.g. a truncated tail)
 
@@ -157,7 +160,8 @@ def group_turns(records: List[dict]) -> List[Turn]:
             cur_actions.append(r)
         elif kind == "turn_end":
             entity_id = cur_id if cur_id is not None else r["entity_id"]
-            turns.append(Turn(entity_id, cur_actions, _end_cause(cur_actions)))
+            cause = r.get("end_cause") or _end_cause(cur_actions)
+            turns.append(Turn(entity_id, cur_actions, cause))
             cur_id = None
             cur_actions = []
     return turns
@@ -282,6 +286,8 @@ _SCENARIO_SCOPES: Dict[str, List[Tuple[str, str]]] = {
     "protect_squishy": [("protected_survival", "unique_fragile")],
     # coordination is a global (focus-fire) metric, added in a later slice
     "alpha_strike": [],
+    # Area placement is measured per cast by area_hits (H4b), not by a scoped subject.
+    "aoe_placement": [],
 }
 
 
@@ -411,6 +417,51 @@ _SCOPED_COMPUTERS = {
     "kiting_adherence": _kiting_adherence,
     "protected_survival": _protected_survival,
 }
+
+
+# ---------------------------------------------------------------------------
+# Area spells — who each cast caught (H4b)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class AreaHit:
+    """One successful area-spell cast, and whom it caught."""
+
+    actor_id: str
+    enemies: int
+    allies: int  # including the caster itself
+
+
+def area_hits(records: List[dict]) -> List[AreaHit]:
+    """Every successful cast aimed at a *point*, with the enemies and allies it caught.
+
+    5e area damage has no falloff, so the set caught is the whole outcome of a
+    placement — which is why realised expressivity (prereg H4b) is measured as targets
+    hit per cast. Read from the transcript alone: the call's ``target_point`` marks an
+    area cast, and the result lists every creature it resolved against.
+    """
+    roster = build_roster(records)
+    hits: List[AreaHit] = []
+    for record in _of_kind(records, "action"):
+        call, result = record["call"], record["result"]
+        if call["name"] != "cast_spell" or not result.get("ok"):
+            continue
+        if "target_point" not in call.get("arguments", {}):
+            continue
+        actor = roster.get(record["actor_id"])
+        if actor is None:
+            continue
+        caught = [roster.get(r["target_id"]) for r in result.get("results", [])]
+        teams = [c.team for c in caught if c is not None]
+        hits.append(
+            AreaHit(
+                actor_id=actor.entity_id,
+                enemies=sum(1 for t in teams if t != actor.team),
+                allies=sum(1 for t in teams if t == actor.team),
+            )
+        )
+    return hits
 
 
 # ---------------------------------------------------------------------------

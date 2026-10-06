@@ -16,6 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.arena.manifest import state_hash
+from src.arena.telemetry import DecisionTelemetry, scrub_value
 from src.arena.tools import ToolCall
 
 DEFAULT_MATCH_DIR = "matches"
@@ -70,16 +72,59 @@ class Transcript:
     def turn_start(self, entity_id: str, round_num: int, turn_num: int) -> None:
         self.log("turn_start", entity_id=entity_id, round=round_num, turn=turn_num)
 
-    def action(self, actor_id: str, call: ToolCall, result: Dict[str, Any]) -> None:
+    def action(
+        self,
+        actor_id: str,
+        call: ToolCall,
+        result: Dict[str, Any],
+        *,
+        telemetry: Optional["DecisionTelemetry"] = None,
+    ) -> None:
+        """Log one proposed action, its refereed result, and what deciding it cost.
+
+        ``telemetry`` is omitted entirely for a deterministic agent, which calls no
+        provider — an absent key rather than a null, as ``match_start`` does.
+        """
+        extra: Dict[str, Any] = {}
+        if telemetry is not None:
+            extra["telemetry"] = telemetry.to_dict()
         self.log(
             "action",
             actor_id=actor_id,
-            call={"name": call.name, "arguments": call.arguments},
-            result=result,
+            # The call's arguments and the referee's reply are model text too: a
+            # key-shaped target id reappears in "Unknown entity_id: '...'". Scrubbed
+            # here, at the one boundary every action passes through (ledger A9).
+            call={"name": call.name, "arguments": scrub_value(call.arguments)},
+            result=scrub_value(result),
+            **extra,
         )
 
-    def turn_end(self, entity_id: str, state: Dict[str, Any]) -> None:
-        self.log("turn_end", entity_id=entity_id, state=state)
+    def turn_end(
+        self,
+        entity_id: str,
+        state: Dict[str, Any],
+        *,
+        end_cause: Optional[str] = None,
+    ) -> None:
+        """Log the end of a turn with its ground-truth state and a canonical hash.
+
+        The hash is what ``ReplayVerifier`` compares: re-running the recorded actions
+        under the same seed must reproduce this exact sequence. Recording it *here*,
+        as the state is captured, means a replay is checked against what the engine
+        actually did rather than against a later re-serialisation of it.
+
+        ``end_cause`` says why the turn ended (``agent``, ``budget``, ``cap``,
+        ``skip``), so metrics read it rather than reconstruct it. It is not part of
+        the state, so it never changes the hash.
+        """
+        extra = {"end_cause": end_cause} if end_cause is not None else {}
+        self.log(
+            "turn_end",
+            entity_id=entity_id,
+            state=state,
+            state_hash=state_hash(state),
+            **extra,
+        )
 
     def match_end(self, winner: Optional[str], reason: str, rounds: int) -> None:
         self.log("match_end", winner=winner, reason=reason, rounds=rounds)

@@ -119,7 +119,8 @@ study **ablates** that choice. Related work to read and cite before freezing the
 - **Primary:** first-attempt valid-action rate per decision.
 - **Invalid-action taxonomy** (needs typed codes from the executor): `malformed_output`,
   `unknown_action`, `unknown_target`, `invalid_target_relation`, `out_of_range`,
-  `destination_blocked`, `insufficient_resource`, `action_economy_spent`, `no_tool_call`.
+  `destination_blocked`, `no_effect` (added 2026-09-30), `insufficient_resource`,
+  `action_economy_spent`, `no_tool_call`.
 - **Recovery rate:** P(valid on the next attempt | rejected).
 - **Forfeit turns** (failure budget exhausted).
 - **Cost:** input and output tokens per decision and per accepted action, latency, $ estimate.
@@ -172,16 +173,18 @@ focused Claude Code work block. Phase 3 overlaps Phase 2's background runs on pu
 ### Phase 0 — Decide & consolidate (≈1–2 sessions)
 - [x] Decide on the condition definitions (§3.1), including whether C2+M is in the final run.
       _(C2+M is **in** — 4 conditions. See the decisions log below.)_
-- [~] Choose two models, check tool support, top up OpenRouter if using free models.
-      _(Top-up done; throughput unconstrained. Slate tentative; tool support still to preflight.)_
+- [x] Choose two models, check tool support, top up OpenRouter if using free models.
+      _(Nemotron 3.5 + Gemini 3.8 confirmed, Claude Sonnet conditional on budget; **all via
+      OpenRouter**. Tool-support preflight remains a Phase 1 build item.)_
 - [x] Check whether any scenario exercises AoE, and decide whether to keep the expressivity question.
 - [x] Decide the licence (keep PolyForm NC and call it "source-available", or move to MIT/Apache-2.0).
-- [~] Decide the name (keep, or neutral name plus "SRD 5.1-compatible" and a non-affiliation note).
-- [ ] Review, then merge `feat/agent-arena` and `feat/deterministic-rng` to `main`.
+- [x] Decide the name (keep, or neutral name plus "SRD 5.1-compatible" and a non-affiliation note).
+      _(Renamed to **Arbiter Arena**, PR #6. The non-affiliation note lands in Phase 3.)_
+- [x] Review, then merge `feat/agent-arena` and `feat/deterministic-rng` to `main`.
       Bump to `0.2.0` per the branch workflow.
-- [ ] Add GitHub Actions: `pytest`, `black --check` (pinned 23.12.1), `flake8`, on 3.11/3.13.
-- [ ] Create branch `feat/interface-study`.
-- [ ] Fill in `docs/PREREGISTRATION.md` from §3 as a draft. Freeze it in Phase 2.
+- [x] Add GitHub Actions: `pytest`, `black --check` (pinned **26.5.1**), `flake8`, **mypy**, on 3.11/3.13.
+- [x] Create branch `feat/interface-study`.
+- [x] Fill in `docs/current/PREREGISTRATION.md` from §3 as a draft. Freeze it in Phase 2.
 
 #### Phase 0 decisions log (2026-09-19)
 
@@ -207,6 +210,43 @@ and is assessed as **tractable**: the spell engine already resolves AoE thorough
 work is gathering and formatting information that exists and surfacing it to the agent, rather than
 new mechanics.
 
+> **Delivered 2026-09-21** (`9822c3b`, `09cefee`, `f83a41b`). `action_space.aim_candidates`
+> implements the rule; `aoe_placement` is the scenario. The tractability assessment held — the
+> work was surfacing information the engine already had. Two things the build changed:
+> - **A live interface bug was found on the way.** `cast_spell`'s `target_point` schema required
+>   `["x", "y"]` while the executor read `x`/`z`, so a model naming a ground point as x/y got a
+>   `KeyError` → `malformed_output`. It fires in C1/C2/C2+M but never in C3, a between-condition
+>   confound of the same class as the entity ids. Fixed in `6ad7dca`, along with stating the axis
+>   convention in `SYSTEM_PROMPT` (a pre-freeze prompt change, since §3.1 hashes prompts).
+> - **The rule turns out to be outcome-complete**, which changes what H4 can claim — see the
+>   prereg §4.1.1 and the note below.
+
+#### H4 measured, then corrected (2026-09-21)
+
+Since 5e area damage has no falloff, the *set of creatures caught fully determines the outcome*,
+so a menu offering every achievable target set would cost no expressivity at all. Whether it does
+is a property of the grid resolution, so it was measured rather than argued.
+
+**First answer, from the opening position: 9/9 = 100%.** That was registered, and it was wrong —
+not arithmetically, but as a claim. A scenario's opening is the configuration its designer
+arranged and therefore the least representative board in the match. Sampled across the formations
+a match actually produces:
+
+| Axis | Minimum | Median |
+|---|---|---|
+| Area aim points | **75%** | 92% |
+| Move destinations | **33%** | 67–100% |
+
+So enumeration costs a little on the area axis and a great deal on the movement axis. H4 is split
+into **H4a** (the option-set ceiling, measured offline before any inference) and **H4b** (what
+agents realise), with H4b's area direction *reversed* — free aiming can miscompute a coordinate
+while a menu cannot, so C3 may beat C2 there. Both are registered in PREREGISTRATION §3, and the
+superseded wording plus the corrected figure are logged in its §10.
+
+The general lesson, which is also the contribution: **an action interface can be audited for
+expressivity loss before a dollar of inference is spent — but the audit has to sample the states
+the system will really be in, not the one you set up.**
+
 **C2+M → in the study as a full condition (not pilot-only).** Definition: tool calls with raw params (C2's format)
 *plus* the legal menu in the observation (C3's affordance), pinning one dial at a time so C3's
 result can be attributed to format or to affordance rather than to both. It is **today's production
@@ -229,70 +269,212 @@ running" does not apply; size the grid on cost and calls, not on the 1,000/day c
 
 ### Phase 1 — Build the study harness (≈5–7 sessions, TDD throughout)
 Recording and instrumentation, first:
-- [ ] Typed error codes on `ToolExecutor` results (the §3.4 taxonomy), with a test per code.
-- [ ] Capture token usage and latency in both adapters. Log per decision in the transcript.
-- [ ] Log the **raw model output** per decision (text or tool call) and the parsed action.
-      Scrub secrets; never log keys.
-- [ ] Fix the OpenRouter empty-`choices` crash (CODEBASE_REVIEW A1) as a provider error, not a
-      model failure.
-- [ ] Manifest record in `match_start`: commit, scenario, seed, condition, model string, temperature,
+- [x] Typed error codes on `ToolExecutor` results (the §3.4 taxonomy), with a test per code.
+      _(`src/errors.py`: `RuleViolation(ValueError)` carrying a code, raised at ~12 engine sites;
+      `src/arena/error_codes.py` adds the agent-side codes. See the taxonomy note below.)_
+- [x] Capture token usage and latency in both adapters. Log per decision in the transcript.
+      _(`src/arena/telemetry.py`; `Agent.last_telemetry()`. Recorded **per request** and summed,
+      since a decision takes two requests when the model is re-prompted — per-decision
+      accounting would under-report exactly the decisions being compared. Also captures the
+      provider-returned `served_model` (§3.1) and `finish_reason`. `Manifest.temperature` now
+      has a source: `OpenRouterAgent(temperature=0.0)` per §3.2; the Claude adapter records
+      `effort`, its actual sampling knob.)_
+- [x] Log the **raw model output** per decision (text or tool call) and the parsed action.
+      Scrub secrets; never log keys. _(Response content only — a request is never logged, so no
+      key can reach a transcript by construction; `telemetry.scrub()` is defence in depth at the
+      serialisation boundary.)_
+- [x] Fix the OpenRouter empty-`choices` crash (CODEBASE_REVIEW A1) as a provider error, not a
+      model failure. _(`ProviderError`, a `NoToolCallError` subclass → the `provider_error` code.)_
+- [x] Manifest record in `match_start`: commit, scenario, seed, condition, model string, temperature,
       prompt hash, schema versions (`observation.v1`, `legal_action.v1`, `match_record.v1`).
-- [ ] **Canonical state hash** per `turn_end` (sorted keys, normalised numbers).
-- [ ] **`ReplayVerifier`**: re-execute recorded accepted actions with the same seed, no model, and
-      compare hashes. Tests cover a scripted match and a match with rejected actions (does a
-      rejection consume RNG?).
+      _(`src/arena/manifest.py`; `run_match(manifest=…)`. The seed stays the transcript's own
+      field — one authority, not two copies that can disagree.)_
+- [x] **Canonical state hash** per `turn_end` (sorted keys, normalised numbers).
+- [x] **`ReplayVerifier`**: re-execute the recorded decisions with the same seed, no model, and
+      compare hashes. _(`src/arena/replay.py`; `verify()` per match, `verify_bundle()` for §5.)_
+      - **Built differently from this line's original wording, deliberately.** Re-executing only
+        the *accepted* actions desyncs: a turn ended by the failure budget is ended by the driver
+        calling `end_turn` directly, so it never appears as an action. A `ReplayAgent` instead
+        feeds every recorded call — rejections included — back through the ordinary `run_match`,
+        so the driver reproduces forced ends itself and there is still one execution path.
+      - **Answered:** a rejection consumes **no** RNG — every engine validation precedes the
+        first roll. Asserted by a test that replays a match full of rejections, not assumed.
+      - The earlier note about rebuilding entities under the recorded seed is **obsolete**:
+        entity ids are now derived from the roster, so a replay needs only the scenario.
+
+#### Entity ids are a fairness control (2026-09-21) — belongs in the frozen method
+
+Combatant ids are readable and roster-derived (`archer`, `fighter-a1`, `raider-2`) rather than
+random hex. This is **not** cosmetic and not for replay's benefit. Under C1 and C2 the model must
+*type* an entity id to name a target; under C3 it picks an `action_id` and never does. A
+16-hex-character id therefore taxes some conditions and not others, and the resulting failures
+land in `unknown_target` — one of the very §3.4 categories H2 is stated in terms of. Left alone,
+part of C3's measured advantage would have been "it didn't have to copy a hex string" rather than
+the affordance the study isolates. Same class as the 2026-09-15 raw-coordinate confound.
+Record it in `PREREGISTRATION.md` as a control, not a note.
+
+#### Taxonomy deviations from §3.4 (2026-09-21) — settle before the prereg freezes
+
+The §3.4 draft list was written before the codes met the engine's real refusal sites. Three
+changes, all made to keep the categories from blurring:
+
+- **`not_your_turn` added.** `_assert_active` is "it is not your turn", which is not
+  `action_economy_spent` ("you already acted"). Different mistakes.
+- **"Cannot afford" splits by the actual shortfall**, not by the cost's shape: a spent action
+  is `action_economy_spent`, spent movement or an exhausted slot is `insufficient_resource`.
+  Lumping them would blur the two most common refusals.
+- **`invalid_target_relation` widened** to cover an illegal *parameter combination* — today
+  only "cast at a slot below the spell's base level", which fits no other category. If the
+  pilot shows this firing often, split it out before the freeze.
+- **`provider_error` and `engine_error` added** as non-model buckets: the first is the §3.5
+  infra exclusion, the second should stay at zero and exists so an untyped refusal path is
+  visible rather than silently joining a real category.
 
 The three conditions:
-- [ ] Refactor the action section of the prompt into a per-condition **`ActionInterface`** strategy
+- [x] Refactor the action section of the prompt into a per-condition **`ActionInterface`** strategy
       (prompt text, tools, response decoder). Keep one `decide_one_action` skeleton, so there is no
-      second agent loop (CLAUDE.md §2.7).
-- [ ] **C1:** grammar, deterministic parser, prompt examples. Tests include adversarial and
-      near-miss text.
-- [ ] **C2:** the current tools with the menu stripped from the observation.
-- [ ] **C3:** `enumerate_legal_actions` with stable deterministic IDs and a neutral candidate rule,
+      second agent loop (CLAUDE.md §2.7). _(`src/arena/interfaces.py`; a test asserts the assembled
+      prompts differ **only** in the action section.)_
+- [x] **C1:** grammar, deterministic parser, prompt examples. Tests include adversarial and
+      near-miss text. _(`src/arena/free_text.py`; the corpus is `tests/arena/test_free_text.py`.
+      Built in two slices, 2026-09-24. See the §10 closing notes.)_
+- [x] **C2:** the current tools with the menu stripped from the observation.
+- [x] **C3:** `enumerate_legal_actions` with stable deterministic IDs and a neutral candidate rule,
       plus a `choose(action_id)` tool. Every listed ID must execute successfully (a property test).
-- [ ] **C2+M:** the current path, labelled as a condition.
+      _(`src/arena/enumeration.py`; the property test runs every id through the real executor.)_
+- [x] **C2+M:** the current path, labelled as a condition.
+- [x] Measure what each menu's discretisation costs (`aim_coverage`, `move_coverage`,
+      `sample_coverage`) — not on the original checklist; added because H4 is untestable without
+      it. See §9.
 
 Runner and analysis:
-- [ ] Batch runner CLI (`python -m src.arena.study run --grid grid.yaml`): resumable, preflight,
-      rate-limit backoff, spend cap, per-cell transcripts.
-- [ ] Analysis script (`… study report`): transcripts to one CSV per decision and per match, plus a
-      Markdown table and 2–3 plots. **Claude reads only this summary, never raw JSONL.**
-- [ ] Offline smoke: all conditions × all scenarios with a **mocked** model, green in CI.
+- [x] Batch runner CLI (`python -m src.arena.study run grid.toml --out …`): resumable, preflight,
+      rate-limit backoff, spend cap, per-cell transcripts. _(The grid is **TOML**, read by the
+      stdlib `tomllib`, not YAML, which would have added a dependency.)_
+- [x] Analysis script (`python -m src.arena.study report …`): transcripts to one CSV per decision
+      and per match, plus a Markdown summary. **Claude reads only this summary, never raw JSONL.**
+      _(Plots deferred to Phase 4: ledger A11.)_
+- [x] Offline smoke: all conditions × all scenarios with a **mocked** model, green in CI.
 
 ### Phase 2 — Pilot → freeze → final runs (≈2 sessions, then waiting)
-- [ ] Pilot: 1 model × 4 conditions × 3 scenarios × 2 seeds (~24 matches).
-- [ ] Fix **only** correctness and method issues (parser bugs, menu bugs, crashes), not results
+- [x] Pilot: 1 model × 4 conditions × **4** scenarios × 2 seeds (32 matches, plus the free
+      baselines). The grid is `examples/study/pilot.toml`: fill in its TODOs, and it refuses to
+      run until you do.
+- [x] Fix **only** correctness and method issues (parser bugs, menu bugs, crashes), not results
       you dislike.
-- [ ] Pick the opponent (Scripted vs Heuristic), decide on C2+M, confirm call counts and cost per match.
-- [ ] **Freeze:** tag the commit (`study-freeze`), finalise `PREREGISTRATION.md` (hypotheses,
+- [x] Pick the opponent (Scripted vs Heuristic), decide on C2+M, confirm call counts and cost per match.
+- [x] **Freeze:** tag the commit (`study-freeze`), finalise `PREREGISTRATION.md` (hypotheses,
       metrics, exclusions, seeds, prompts plus hashes, models, settings).
-- [ ] Launch the final grid in the background, outside Claude Code. Check once a day.
-- [ ] Baselines through the C3 path (free, fast).
-- [ ] 100% replay verification over the result bundle.
+- [x] Launch the final grid in the background, outside Claude Code. Check once a day.
+      _(2026-10-04: `examples/study/final.toml` into `results/final`, 600 cells, no
+      exclusions. $29.90 at list, $24.30 billed.)_
+- [x] Baselines through the C3 path (free, fast). _(120 cells, in the same run.)_
+- [x] 100% replay verification over the result bundle
+      (`python -m src.arena.study verify results/<name>`). _(600/600.)_
+- [x] The registered C1 parser audit (prereg §7): 200 blind labels, 2 false accepts
+      (0.010 [0.003, 0.036]), and every verdict stands. _(2026-10-05; drawn as 200
+      accepted items because the parser refused none, prereg §10.)_
+
+**Phase 2 is complete.** The working record of the results is
+`docs/current/FINAL_RUN_FINDINGS.md`; the authoritative numbers are in
+`results/final/report/summary.md` and `audit/audit_report.md`.
+
+**Recommended order from here (2026-10-05).** Phases 3 and 4 interleave; the article is the
+main deliverable.
+1. ~~**Results skeleton and failure story**~~ **Drafted 2026-10-05:**
+   `docs/current/ARTICLE_DRAFT.md`, about 2,900 words. The method and results are drafted;
+   the [YOUR VOICE] sections are left with notes. The failure story is Sonnet, kiting,
+   seed 108, C2 against C2+M.
+2. **Charts** (A11). Small and separate, and the article needs them.
+3. **Replay viewer** (Phase 3 playback item plus A33). This makes the failure story and the
+   demo GIF showable.
+4. **The user-voice sections** of the article: motivation, surprises, and "what I decided".
+5. **README, ARCHITECTURE, licence/NOTICE, CITATION and CHANGELOG**, then the fresh-clone
+   test.
+6. **Merge to `main`**, then the release bundle and `v1.0.0`.
+
+The ledger session (A30, A36) can come any time after step 1. Run `verify` at the
+`study-freeze` tag after any engine change.
 
 ### Phase 3 — V1 hygiene (parallel with Phase 2 runs; ≈3 sessions, use a cheaper model)
-- [ ] README rewrite: subtitle "a deterministic evaluation harness for tool-using LLM agents",
+
+_Status, 2026-10-05: not started as a phase. Some groundwork is done; each item notes what
+remains._
+- [x] README rewrite: subtitle "a deterministic evaluation harness for tool-using LLM agents",
       60-second quick start, **no-API-key demo command**, result chart (placeholder), limitations.
       Remove stale `RuleEngine`/"future goals" text.
-- [ ] `docs/ARCHITECTURE.md` (one page plus one diagram). Move superseded plans to `docs/archive/`
-      with a "historical" banner.
-- [ ] Licence change or wording; `NOTICE`/SRD attribution (CC BY 4.0 text); content provenance
-      list; trademark non-affiliation statement.
-- [ ] `CITATION.cff`, `CHANGELOG.md`.
-- [ ] Playback page shows condition, raw model output and error code per action.
-- [ ] Fresh-clone test on a clean venv: install, tests, demo command.
+      _(The subtitle and opening paragraph are done. Still to do: the `RuleEngine` paragraph
+      and "Future Goals" section, which are stale; a quick start; the no-key demo, which
+      exists as `examples/study/demo.toml`; a results chart; limitations.)_
+      _(2026-10-06: rewritten harness-first: quick start with the no-key demo, the study
+      with the validity table, limitations, an engine section without the deleted
+      `RuleEngine`, and no "Future Goals". The chart is still to add once A11 exists.
+      Follow-up: `examples/spells/SPELL_DEFINITION_GUIDE.md` still documents the deleted
+      `effects` pipeline; the README now points to `BLOCK_REFERENCE.md` instead.)_
+- [x] `docs/ARCHITECTURE.md` (one page plus one diagram). Move superseded plans to `docs/archive/`
+      with a "historical" banner. _(2026-10-06: written, with a Mermaid diagram; every
+      archived doc now carries the banner.)_
+- [x] Licence change or wording; `NOTICE`/SRD attribution (CC BY 4.0 text); content provenance
+      list; trademark non-affiliation statement. _(2026-10-06: Apache-2.0; `NOTICE` names the
+      SRD-derived content directories. Every spell was checked against SRD 5.1: Armor
+      of Agathys was not, and is now the original "Rime Ward", same mechanics.)_
+- [x] `CITATION.cff`, `CHANGELOG.md`. _(2026-10-06, both at 1.0.0. `pyproject.toml` stays
+      at 0.2.0 until the release bump.)_
+- [x] Playback page shows condition, raw model output and error code per action.
+      **Do this together with ledger A33**, showing the model's reasoning ("thought") and visible
+      prose ("said"). The data is already in every transcript, so it is frontend only. It is
+      also what makes the Phase 4 failure story and demo GIF showable.
+      _(2026-10-06: done with A33. A decision panel shows the verdict, its code and
+      reason, and each request's thought, said, called and read; the caption shows
+      model, condition, scenario and seed. `/playback?match=<file>&step=<n>` opens a
+      transcript in `web/static/matches/` at a step, so the failure story can be
+      linked to. Checked headlessly on demo transcripts; not yet on a real model's
+      reasoning.)_
+- [x] Fresh-clone test on a clean venv: install, tests, demo command. _(Note the venv
+      lesson from the final run: a plain `python` outside VS Code lacked the dependencies.
+      The quick start should say to use the venv's Python.)_
+      _(2026-10-07: run from a GitHub clone of `90d4141` into `E:\arena-clone`, on a new
+      python.org 3.13 venv. Install, 1712 tests, and the four demo commands all passed:
+      60/60 matches in 11 s, verify 100%. It found one blocker. A fresh install
+      resolves Starlette 1.x, which removed the old `TemplateResponse` form, so `/`,
+      `/battle` and `/playback` all returned 500. No test requested a page, so CI was
+      green. Fixed test-first (`TestPages`). Also: a free-threaded `python3.13t` cannot
+      build `watchfiles`, so `py -3` can pick an interpreter that fails to install.
+      Playback checked by eye on both a loaded file and the deep link.)_
+- [ ] Merge `feat/interface-study` into `main` by PR. `main` is 102 commits behind, and the
+      V1 definition of done (§5) needs the study on `main` with CI green.
+      _(2026-10-07: PR #7 is open, 109 commits, with no conflicts. CI is green on
+      `90d4141`: tests on py3.11 and py3.13, plus format, lint and types. Use a merge
+      commit, not squash, so the pre-registration freeze and `study-freeze` stay in
+      `main`'s history. Tick this box once it is merged.)_
 
 ### Phase 4 — Analyse, write, release (≈3–4 sessions)
 - [ ] Run the report on the frozen bundle, write up H1–H3 as confirmed or not, then exploratory
-      findings.
+      findings. _(The report is run and the verdicts are final, both in
+      `FINAL_RUN_FINDINGS.md`. The write-up itself is still to do.)_
 - [ ] Pick **one failure story**, a replay that illustrates the headline (e.g. fluent reasoning
       leading to an impossible spatial action in C1, vs a legal but weaker choice in C3).
+      _Candidates from the data:_
+      - Sonnet in bare C2 attacking after its action is spent, set against the same seed in
+        C2+M, where the menu rescues it.
+      - The audited Sonnet C1 response whose prose reasons towards one position and whose
+        `ACTION:` commits to a third.
+      - Nemotron in C2 "moving" in place until the failure budget ends its turn.
+      - A free-aim Fireball that catches allies, set against the menu's tagged placement.
+- [ ] Charts (ledger A11): validity by condition per model, friendly fire, and Sonnet's
+      tactics by condition. Draw them from `results/final/report/*.csv` in a separate script,
+      so the harness does not depend on a plotting library.
 - [ ] Article (~2,500–3,500 words), structure below. **Write the motivation, the surprises and the
       "what I decided" sections in your own voice.** That is the ownership evidence the review
       stresses.
-- [ ] Threats to validity: one environment; 2 models; format and affordance confound; menu
-      discretisation; LLM nondeterminism; tactics underpowered; neutral-prompt choice.
+- [ ] Threats to validity: one environment; 3 models; format and affordance confound; menu
+      discretisation; LLM nondeterminism; tactics underpowered (and saturated for Gemini);
+      neutral-prompt choice.
+      Added by the run (prereg §9):
+      - "low" reasoning means different things per vendor
+      - sampling differs between models (only Nemotron runs at temperature 0 with a seed)
+      - no multiplicity correction
+      - A30, moves through hostile creatures not checked
 - [ ] Release bundle: transcripts (non-sensitive), CSVs, prereg, prompts, report. Zenodo DOI optional.
 - [ ] Bump to `1.0.0`, tag `v1.0.0`, GitHub release notes.
 - [ ] Short demo GIF or video; update CV/LinkedIn with the **measured** numbers.
@@ -337,3 +519,614 @@ studies, new spells/creatures/rules, hosting, more providers, GA tuning, the reg
 - **Mocked model for all build work.** Real API calls only in the Phase 2 pilot and final run, per
   the standing cost rule.
 - **Heaviest token week is Phase 1.** Start it at the beginning of a weekly-limit window if you can.
+
+---
+
+## 7. Phase 0 closing note (2026-09-19)
+
+Phase 0 is **complete** apart from two items deliberately carried into Phase 3 (the
+final repository name, and implementing the Apache-2.0 relicence — both decided, not
+yet executed).
+
+Landed on `main`: the arena + deterministic-RNG merge (#4), `0.2.0`, and the toolchain
+branch (#5) — whole-tree Black 26.5.1 reformat, **mypy 43 errors → 0**, **flake8 → 0
+with E501 enforced at 88**, and GitHub Actions running tests on 3.11/3.13 plus
+format/lint/types. First CI run was green on all three jobs.
+
+One real bug was found on the way, by mypy, behind what looked like a typing nit:
+`move_entity` spent fractional Euclidean movement costs against an `int` budget, so any
+diagonal move drifted (`30 → 22.9 → 15.799999999999999`). The residue reached
+`can_afford`, the web UI, and the movement budget shown to LLM agents. Fixed in
+`2280157`; the SRD reasoning for continuous measurement is recorded in the code.
+
+**Sizing changed.** Adding the AoE scenario makes the grid 4 conditions × **4**
+scenarios × 10 seeds = **160 matches per model** (~5,600 calls), up a third from the
+original 3-scenario figure in §3.5. Accepted deliberately: H4 (expressivity cost) is
+untestable without a spell in play, since no existing scenario casts one.
+
+Next: Phase 1, beginning with recording and instrumentation (typed error codes, token
+and latency capture, raw model output, manifest, state hashes, `ReplayVerifier`) before
+the three interfaces are built.
+
+---
+
+## 8. Phase 1 recording-cluster closing note (2026-09-21)
+
+**The recording and instrumentation block is complete.** Everything a match does is now
+recorded in a form the study can measure, and a recorded match can be proved to
+reproduce. 1,050 tests green; flake8, mypy and Black clean throughout.
+
+What landed, in order: typed error codes (`src/errors.py`, `src/arena/error_codes.py`);
+the A1 provider-error fix; the `match_start` manifest and per-`turn_end` state hash
+(`src/arena/manifest.py`); readable roster-derived entity ids (`src/arena/setup.py`);
+per-decision telemetry (`src/arena/telemetry.py`); and `ReplayVerifier`
+(`src/arena/replay.py`).
+
+**Three decisions worth carrying forward.**
+
+1. **Entity ids became a study control**, for the reason recorded in §4 above. This was
+   not on the checklist — it surfaced from the replay work and turned out to matter more
+   for validity than for replay. It must be in the pre-registration.
+2. **The §3.4 taxonomy grew** (see the deviations note in §4). It freezes in Phase 2, so
+   the one open question — whether `invalid_target_relation` should split — should be
+   settled from pilot data.
+3. **`ReplayVerifier` drives the real turn driver** rather than re-executing accepted
+   actions, because forced turn ends are not recorded as actions. Anything later that
+   re-runs a match should reuse `replay.ReplayAgent` rather than invent a second path.
+
+**Two bugs the tests caught, both of the "looks done, does nothing" kind** that §9 of
+CLAUDE.md keeps collecting:
+- the secret scrub sat in `__post_init__` while adapters filled the guarded field in
+  afterwards, so it protected nothing and a key reached the saved JSONL;
+- the drift guard for error codes could not read a code chosen inside a helper, which
+  would have silently stopped covering the two most common refusals.
+
+---
+
+## 9. AoE cluster closing note (2026-09-21)
+
+**The AoE support and its scenario are done** — the last outstanding Phase 0 commitment.
+1,089 tests green; flake8, mypy and Black clean. Landed in five commits: the
+`target_point` contract fix (`6ad7dca`), `aim_candidates` (`9822c3b`), `aim_coverage`
+(`09cefee`), the `aoe_placement` scenario (`f83a41b`) and a spell-slot key-type fix
+(`2711f36`).
+
+**Chosen ahead of the `ActionInterface` deliberately.** The dependency runs one way —
+C3's enumerator must list aim points, while AoE needs nothing from the interface layer —
+so building AoE second would have forced C3's candidate schema, ordering and cap policy
+to be reopened, the cap especially, since it can only be calibrated against a real
+candidate distribution. That judgement was vindicated twice over: the `target_point` bug
+was found only because this work exercised a path no scenario had ever touched, and the
+menu-length figure (9 aim points versus ~4 attack entries) is exactly the number a cap
+has to be set against.
+
+**What must not be lost before the freeze:**
+
+1. **H4's area arm is null by design** (§ Phase 0 note above, prereg §4.1.1). Registered
+   in advance with the measured coverage, so the null is a prediction rather than a
+   post-hoc excuse. The live H4 test is the movement axis.
+2. **The menu is neutral by construction and by test** — lexicographic ordering, no
+   import of `heuristic/`, ally- and self-catching options offered and tagged rather
+   than hidden. A future change that sorts by "most enemies hit" would silently make C3
+   look smarter than it is.
+3. **The `SYSTEM_PROMPT` axis sentence is part of the measured interface.** It was added
+   pre-freeze on purpose; §3.1 hashes prompts, so editing it later is a deviation.
+
+**Sizing is now as §7 anticipated:** 4 conditions × 4 scenarios × 10 seeds = 160 matches
+per model.
+
+---
+
+## 10. ActionInterface cluster closing note (2026-09-21)
+
+**Three of the four conditions are built.** 1,158 tests green; flake8, mypy and Black
+clean. Six commits: the `ActionInterface` seam (`99557a5`), the move dual-path fix
+(`17766eb`), C3 (`1dc8c0a`), coverage (`f77e3a6`) and docs.
+
+`src/arena/interfaces.py` holds one strategy per condition — prompt section, observation
+shaping, tool set, response decoding — behind a registry. `SYSTEM_PROMPT` split into a
+shared world model plus a per-condition action section, and a test asserts the assembled
+prompts differ **only** in that section: the §3.1 guarantee, machine-checked.
+
+- **C2** — raw params, no menu. **C2+M** — raw params, menu shown. **C3** —
+  `choose(action_id)` over `enumerate_legal_actions`, with every listed id proven to
+  execute through the real `ToolExecutor`.
+- **C1 is not built** and declines loudly rather than degrading. Its grammar and parser
+  are the longest, least bounded item left and must be frozen and adversarially tested
+  before the pilot. The seam is ready for it: `interpret` already receives
+  `record.raw_output`, so C1 needs a parser, not a second agent loop.
+
+**Two defects closed on the way.** The `move` tool accepted either a menu `option_id` or
+raw coordinates, letting a model pick its own condition per decision — Phase 0 flagged
+it and nothing had fixed it. And `render_observation`'s instruction line said "study the
+battlefield and your legal options", condition-specific text sitting in the *shared*
+body, false under C2.
+
+**One gap declared rather than hidden:** multi-target spells (Magic Missile, Scorching
+Ray) are enumerated nowhere, so a C3 agent cannot cast one. No study scenario casts one,
+but `multi_target_spells_not_enumerated` makes it visible and a test keeps the scenarios
+clear of it.
+
+**What must survive to the freeze:** the prompt split changes every prompt hash (§3.1
+records them); the menus' neutrality is enforced by tests, and a future sort by "most
+enemies hit" would silently make C3 look smarter; and the corrected H4 figures in §9.
+
+#### The C1 question to settle *before* building it (2026-09-21)
+
+C1 is not just "the remaining condition" — it carries a tension the other three do not,
+and it should be discussed before a line of parser is written.
+
+**The constraint:** §3.1 forbids an LLM parser, because a second model inside the
+measurement means a C1 failure could be the parser's rather than the agent's, and the
+study could no longer attribute anything.
+
+**The risk:** a fully deterministic grammar parser may not reach acceptable *fairness*.
+If it rejects phrasings a reasonable reader would accept, C1's `malformed_output` rate
+measures parser brittleness rather than the free-text interface — and H1 predicts C1 is
+worst, so a brittle parser would *confirm the hypothesis for the wrong reason*. That is
+the most dangerous shape of error available to this study.
+
+**Options, none yet chosen:**
+1. A permissive deterministic parser (synonyms, loose ordering, fuzzy entity matching),
+   with an adversarial corpus written *before* the pilot and a documented accept/reject
+   boundary.
+2. A strict grammar with worked examples in the prompt, accepting that C1 partly
+   measures instruction-following — and saying so as a limitation rather than a finding.
+3. Drop C1, run three conditions, and report the free-text arm as out of scope.
+
+**Whichever is chosen, the parser must be frozen before the pilot and its accept/reject
+boundary published**, or C1's numbers are not interpretable. A useful pre-commitment:
+hand-label a sample of real model outputs and report parser agreement with the labels,
+so parser error and agent error are separable after the fact.
+
+Next: settle the above, then **C1**, then the batch runner and the analysis script.
+
+> **2026-09-24:** the options, a recommendation and four prerequisite wiring fixes are
+> written up in [`C1_PARSER_OPTIONS.md`](C1_PARSER_OPTIONS.md). **Decided 2026-09-24:** every
+> recommendation in its §9 accepted. Build order: slice 1 (parity prerequisites), then the parser.
+
+#### C1 slice 1 closing note (2026-09-24) — parity prerequisites done
+
+Three fixes to the **already-built** conditions, each one needed before a C1 parser could be fair.
+1,198 tests green; flake8, mypy and Black clean.
+
+- **Own capabilities in the shared body** (`b7e0fb4`). Under C1/C2 a creature's own attack and
+  spell names lived only in the stripped menu. The Mage could see the raiders' Greatsword but not
+  its own Dagger. That was a **live C2 confound**, and C2 → C2+M was measuring "being told what you
+  are" as well as affordance. Kept out of the state snapshot so recorded hashes are unaffected.
+- **Coded interface refusals** (`4b1198b`). A C3 invented `action_id` used to get an uncounted
+  free retry and was then logged as `no_tool_call`. It is now `unknown_target`, counted and fed
+  back exactly like a C2 executor refusal. Replay re-raises it by the same route. C1's
+  unparseable lines will use this path as `malformed_output`.
+- **Shared identifier resolver** (`d3f4151`). Tolerant of spelling (`Raider 1` = `raider-1`),
+  strict about identity (no edit distance), with ambiguity refused. One resolver serves every
+  raw-parameter condition, so C1 gets nothing C2 lacks. A scenario test keeps the study
+  rosters free of key collisions.
+
+All three change measured behaviour before the freeze, and all three are recorded in
+PREREGISTRATION §4.2 and §6. Prompt hashes change, which is expected.
+
+Next, slice 2: the adapters must handle an empty tool list, rejection feedback must be formatted
+per interface, then the Lark grammar, the layered parser, the §8 corpus and the round-trip property
+test.
+
+#### C1 slice 2 closing note (2026-09-24) — all four conditions are built
+
+C1 runs end to end offline. 1,287 tests green; flake8, mypy and Black clean. Six commits: the
+issues ledger (`36194e4`), adapters with an empty tool list (`7936b66`), per-condition rejection
+feedback (`2ae97b2`), the parser (`992e364`), the interface (`68c5e14`) and a whole offline C1
+match (`1a7af3d`).
+
+- **The parser** (`src/arena/free_text.py`) is a pure function of the text. Its Lark grammar is a
+  module constant, so the published grammar and the executed one are the same string. The
+  accept/reject boundary is a test table. Every accepted action records its parse layer, derived
+  by comparing the text with the canonical rendering of what was read.
+- **C1 can say everything C3 can list.** This is proved by a round-trip test over every
+  enumerated action in every scenario, at the opening and through a scripted match.
+- **A whole C1 match plays, records and replays at 100%.** A mocked model writes the scripted
+  policy's decisions as text, and everything after that is the real path.
+- **`lark` is a core dependency**, amended from the options doc's `[agents]` extra, because the
+  parser is harness code.
+
+Found on the way and logged in the CODEBASE_REVIEW §8 ledger, not fixed inline:
+
+- **A3 checked.** An area spell aimed at a creature is a typed `unknown_target`, identical in C1
+  and C2. That leaves only a taxonomy question.
+- **A8.** A trailing justification ("…with Dagger since it's adjacent") is read into the name. It
+  is pinned as a known boundary for the pilot to decide.
+- **A9.** Call arguments reach the transcript unscrubbed, in every condition.
+
+Also fixed: the prompt-identity tests had covered only C2 and C2+M, never C3. They now cover all
+four conditions.
+
+PREREGISTRATION now records the as-built C1 (§2), its refusal coding (§6), and the three-parser
+reporting and the audit decision rule (§7).
+
+Next, slice 3: the batch runner and the analysis script, with the offline strict/lenient
+re-scorer, the first-attempt metric (ledger A2) and the audit labelling tool.
+
+#### Slice 3 closing note (2026-09-24) — the pilot can run
+
+The runner, a mock model and the report are built. 1,355 tests pass; flake8, mypy and Black
+are clean. Split from the re-scorer and audit tool at the user's choice: those need real C1
+output, and this slice is everything the Phase 2 pilot needs.
+
+- **`src/arena/study.py`** runs every cell through the ordinary `run_match`:
+  - Each transcript is written atomically to a fixed path, so a resume skips finished cells.
+  - Cells run seed by seed, so an interrupted run leaves paired sets.
+  - Infrastructure failures are set aside and retried with backoff. Any other exception is a
+    bug and stops the run. A retry loop must never hide a defect.
+  - Spend is recomputed from disk at start, so the cap survives a resume.
+  - A preflight check fails a dead or tool-less model before the first cell.
+  - Only `openrouter` and `mock` providers exist, per prereg §5.
+- **`src/arena/mock_model.py`** lets the scripted policy decide, then writes each decision in
+  the condition's own format, including deliberate stumbles, through the real decision path.
+- **`src/arena/study_report.py`** produces the registered measurements with the standard
+  library only, deterministically. Its definitions are now in PREREGISTRATION §6–§8.
+- **A null control for the whole study.** The mock makes identical decisions in every
+  condition, and a test requires identical outcomes on every paired scenario and seed. The
+  harness can change what a decision costs, never what it does.
+
+Found and fixed on the way: menu length was never recorded (ledger A10); `aoe_placement` was
+missing from the metrics scope table; the report briefly imported `random` directly, against
+CLAUDE.md §7. Logged: A11 (plots) and A12 (two older modules import `random`). A mypy error
+reached one commit because a check was piped through `tail`, which hid its exit status. It
+was fixed in the next commit, and CLAUDE.md §9 records the lesson.
+
+Next, slice 4: the offline strict/lenient re-scorer and the terminal audit-labelling tool.
+Then the Phase 2 pilot, with your go-ahead.
+
+#### Slice 4 closing note (2026-09-24) — C1's bounds and audit are built
+
+1,415 tests pass; flake8, mypy and Black are clean. Three feature commits: the lenient bound
+(`0933b47`), the re-scorer (`d2cf78f`) and the audit tool (`aaafa60`).
+
+- **`free_text.read_lenient`** is C1's registered upper bound. It is used only offline.
+  - It adds the repairs a careful reader would accept: an implied sole weapon, a bare
+    `(x, z)` pair, the first clause of a two-action line, and the last of several actions.
+  - It also drops a trailing justification (ledger A8). This is the one addition to the
+    registered list, recorded in prereg §7.
+  - One design point came up while building it. An A8 line is *accepted* by the primary
+    parser, with a weapon the executor refuses, so the bound has to offer a repaired
+    alternative for an accepted line too. A decision counts as valid if either reading
+    executes, so the bounds stay ordered strict ≤ primary ≤ lenient, and a test enforces it.
+- **`src/arena/rescore.py`** judges the lenient reading with the real executor.
+  - It replays each C1 match through `run_match`, and at every model decision it probes a
+    deep copy of the live combat.
+  - The replay must reproduce the transcript's state hashes, or that match is reported as
+    not re-scored rather than bounded on the wrong state.
+  - The report now writes `c1_bounds.csv` and a "C1 under three parsers" section.
+- **`src/arena/audit.py`**: `sample` / `label` / `score`.
+  - Sampling is blind and stratified. The label file holds only the text; the verdicts are
+    sealed in a separate key.
+  - Labelling is a resumable terminal loop, with each label validated as a C1 command.
+  - Scoring weights the false-reject and false-accept rates to the population and evaluates
+    the registered decision rule. That rule is now pinned to pooled point estimates, which
+    the original wording left unstated; registered before any data.
+- **Small refactors on the way:** `model_team` moved to `scenarios.py`, to avoid a report ↔
+  re-scorer import cycle, and replay's `actions_by_team` became public rather than being
+  imported across modules as a private name.
+
+**Phase 1 tooling is now complete.** Next: review what else Phase 1 needs rounded out before
+the Phase 2 pilot.
+
+#### Phase 1 review and round-out (2026-09-24)
+
+A review of the Phase 1 code, done with fresh eyes by checking specific suspicions against the
+source and running the untested paths, found five problems that would have confounded or
+corrupted pilot data, and five gaps in pilot readiness. All ten are fixed, in seven commits.
+1,446 tests pass; flake8, mypy and Black are clean.
+
+**Would have affected the data:**
+- **C3 had no scratchpad** while the other conditions did, because the note field was only
+  ever added to a tool named `end_turn` (`98af20a`). It is now a registered control
+  (prereg §4.3).
+- **The prompt hash ignored the tool schemas**, so a tool-description edit could never have
+  shown (`460c78b`).
+- **OpenRouter's upstream host was neither pinned nor recorded**, so one model id could be
+  served by different quantisations from cell to cell (`be21606`). Hosts are now pinnable
+  with fallbacks off, recorded per request, and mixed hosts are flagged; the match seed is
+  sent.
+- **Model text reached transcripts unscrubbed** by three routes: the call arguments, the raw
+  tool call, and the referee echoing a bad id back (`4fd3358`). Extra tool calls are now
+  counted (A5), and empty capability descriptions are gone (A6).
+
+**Pilot readiness:**
+- The manifest records the opponent and `git_dirty`. A live run refuses a dirty tree, the run
+  stops at a cell that exhausts its retries, and the heuristic opponent is tested
+  (`7d3330b`).
+- The registered baselines run through the runner, with the Heuristic native by decision
+  (`1614ae1`).
+- There's a no-key demo grid, a pilot grid that can't run while any TODO remains, and
+  `study show` for reading a match decision by decision (`5958c3b`).
+
+**Deferred hygiene** (ledger A7, A12, A13): the test-suite lint (109 findings), line
+endings, `random` imports, and the dead default model.
+
+Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml`, dry-run it, and run it
+live only with the go-ahead.
+
+#### Phase 1 correctness review and fixes (2026-09-24)
+
+A second review, made before the pilot, fed the harness the output that real models and hosts
+actually send, and checked the study's definitions against its hypotheses. The build was
+complete. It found three defects that the well-formed mock could never reach, and four
+problems in the definitions. All are fixed, in four commits. 1,546 tests pass; flake8, mypy
+and Black are clean.
+
+**Would have stopped or confounded the pilot** (commit `86cd125`):
+- Tool arguments that are not a JSON object, and argument values of the wrong type, both
+  crashed the harness. The runner treats a crash as a harness bug and stops the grid, so the
+  first such output from a model would have ended the run. Both are now `malformed_output`.
+- C2+M could still move by a menu `option_id`. The schema had dropped it, but the executor
+  still accepted it. The C2 and C2+M interfaces now refuse it.
+- A `hostile` mock and a hostile offline smoke test keep all of this covered.
+
+**Validity, fixed before the freeze:**
+- Provider failures are retried per request, not handled by excluding the whole match.
+  Match-level exclusion biased the kept sample toward matches with fewer failures
+  (`3cfe26d`).
+- H1 is measured over fresh decisions. A retry after a rejection used to count as a second
+  first attempt.
+- Every hypothesis now has a registered decision rule: a paired cluster bootstrap over the
+  (scenario, seed) pairs, per model.
+- An area aim beyond range is refused as `out_of_range`. The engine used to clamp it
+  silently, which repaired the spatial errors H2 counts (`dfc8d5b`).
+
+**Pilot readiness** (Slice D):
+- A new command, `study verify`, replays a whole bundle.
+- The report gains a "Response integrity" section. It flags responses cut off at the token
+  limit, menus cut by a length cap, and a served model that differs from the one requested.
+- `max_tokens` and a thinking model's `reasoning` setting are now grid fields. They are
+  sent with every request and recorded in the manifest, along with the pinned hosts and the
+  Python, `lark` and `openai` versions.
+- Menu truncation is flagged per decision. It is also checked on every state a scripted
+  match passes through, not only at the opening, and no cap bites anywhere.
+- Each turn now records why it ended, so the metrics no longer copy the turn driver's
+  constants to reconstruct it.
+- A new grid, `pilot_opponent.toml`, runs the baselines against the heuristic opponent for
+  free. The Scripted-vs-Heuristic choice then has data behind it.
+
+All the changes to measured behaviour are registered in PREREGISTRATION §6–§8 before any
+data exists. Ledger entries A14–A17 record them.
+
+Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml` (model id, host, prices,
+reasoning), dry-run it, and run it live only with the go-ahead.
+
+#### Phase 1 validity fixes (2026-09-24)
+
+A third review, made before the pilot, checked the finished harness for anything that would
+bias a registered contrast rather than crash. It found five defects, and the fixes found a
+sixth. All six are fixed in seven commits, `fe46006` to `d88c125`. 1,601 tests pass;
+flake8, mypy and Black are clean. Every rule they change is registered in PREREGISTRATION
+§2, §6, §7 and §9 before any data. Ledger A18 to A23.
+
+**Would have biased a hypothesis:**
+- **Double actions (H1, C2 − C1).** C1 refused two different ACTION lines, while the tool
+  conditions ran the first of several calls and counted the decision valid. Two
+  different calls are now refused in every condition, and `parallel_tool_calls: false` is
+  sent.
+- **The C1 gate (H1, C2 − C1).** The audit's decision rule and its sample counted retries,
+  while H1 and the lenient bound did not. All are now fresh-only.
+- **Area spells at a creature (H2).** They were classed as non-spatial. An area spell is
+  now spatial however it was aimed.
+- **Flight.** A willing move could leave the ground. An axis slip was an accepted move in
+  the raw-coordinate conditions, and the menu could never make one. The engine now refuses
+  it as `destination_blocked`.
+- **Float noise in the menu.** A move to `x = 4.4e-16` was valid in C3 and unsayable in
+  C1. Coordinates are now held to three decimal places, and the C1 round trip is tested on
+  every state a match reaches.
+
+**Reporting:**
+- A resume no longer overwrites excluded attempts, which undercounted §8 exclusions and
+  the spend cap.
+- A mock that casts now runs area aiming end to end in every condition, and the null
+  control holds with it.
+- The report prints the full H1 ordering as its own verdict.
+- The prereg states that the seven contrasts carry no multiplicity correction.
+
+**Open, and blocking the pilot: ledger A24.** Combat ends only when at most one
+*creature* is alive, not one *team*. A 2v2 won with two survivors plays on to round 20,
+with the winners acting against nobody. That wastes paid calls and pads H1 with trivial
+decisions, in exactly the matches a model wins. The fix needs a decision: where the end
+rule lives, and whether a turn stops at the killing blow.
+
+> **A24 fixed, 2026-09-24.** A fight now ends the moment one team is left, at the
+> killing blow, in the engine. The arena turn driver stops there too (`end_cause: over`),
+> and the web UI announces the end with the deciding action. Registered in prereg §4
+> ("Match end"); ledger A24.
+
+Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml` (model id, host, prices,
+reasoning), dry-run it, and run it live only with the go-ahead.
+
+#### Phase 1 third-review fixes (2026-09-25)
+
+A fourth pre-pilot review, asked to look only for things that would genuinely harm the
+study on the way out of Phase 1. The harness was complete and green (1,632 tests); the
+whole demo grid ran, verified at 100% and reported. It found three problems and two
+loose ends, all fixed. 1,668 tests pass; flake8, mypy and Black are clean. Ledger
+A26–A28, registered in PREREGISTRATION §5, §6, §7 and §10 before any data.
+
+**Would have cost money without saying so.** The spend cap is computed from each
+transcript's token sums, and an unreported `usage` count was coerced to zero. A host that
+omits `usage` therefore made every cell cost `$0.0000`: the `$2.00` pilot cap could never
+bind, and a live grid would have run to completion against a ceiling believed to be
+guarding it. `telemetry._sum_or_none` was written precisely to keep "not reported" apart
+from "free" — both consumers then threw the distinction away, the same shape as the
+2026-09-21 lesson. Now recorded on `DecisionTelemetry.usage_reported`, refused in
+preflight (two requests, before any cell), stopped mid-run if a route stops billing, and
+counted in the report.
+
+**Would have stopped the grid on the first real response of its kind.** Two envelope
+shapes still crashed the harness — the A14 slice had closed this class for tool
+*arguments* only. `message.content` arriving as content parts made C1 call `.strip()` on
+a list; a tool-call entry with no `function` crashed the distinct-call count. Neither is
+an infrastructure error, so `play_cell` re-raised, the run died with a traceback, and
+that cell's transcript was lost entirely. Content parts are now **read** rather than
+refused: the envelope is a host's convention, and charging C1's `malformed_output` rate
+for it would make H1 partly a function of routing — with H1 predicting C1 is worst, that
+is confirmation for the wrong reason.
+
+**Would have published an uninformative registered measure.** C1's parse layer
+short-circuited to 3 whenever a response had a second content line, before it ever
+compared the command with its canonical form. Since a real model almost always writes a
+preamble, layer 0 was unreachable and the registered `strict` bound read ~0 by
+construction — on the demo bundle, every C1 decision at layer 3 and strict `0.000`, so
+the published band would have been `0.000 ≤ primary ≤ lenient`. The layer now describes
+the **command**; prose is its own field and report column; layer 3 goes back to meaning
+an untagged line. Strict now reads 0.901 / 1.000 / 0.654 on the same bundle. No
+hypothesis verdict moves: the C1 decision rule reads the primary parser, the lenient
+bound and the audit, never the layer.
+
+**Two loose ends closed.** `lark` is pinned exactly (1.3.1) — it is the measuring
+instrument, and A17 had left this open. `--dry-run` now prints the spend cap and, per
+live model, an estimate from $/cell **measured** per condition over what is already on
+disk; a condition with nothing on disk is reported as "not yet measured" rather than
+priced from an invented figure, and a bundle with unbilled decisions reports its cost as
+unknown.
+
+**Three decisions the user made**, each recorded where it is measured: read content parts
+rather than refuse them; refuse an unbillable model in preflight *and* stop a run that
+becomes unbillable; and split the parse layer from the prose fact rather than redefining
+strict or publishing the limitation.
+
+Next: **the Phase 2 pilot**. Fill in `examples/study/pilot.toml` (model id, host, prices,
+reasoning), dry-run it, and run it live only with the go-ahead.
+
+#### Phase 2, first pilot (2026-09-30) — one engine defect, then a re-run
+
+The grid ran Nemotron 3.5 Lightning, paid, pinned to `coreweave/bf16`, with reasoning
+off. The harness held:
+
+- **56/56** matches replay, with no exclusions and no provider retries.
+- Every request was served by one host, and every response reported its usage.
+- **$0.25** in all, about $0.0077 per cell. That puts the final run at about $1.24
+  per model at this token rate.
+- C1's parser read every response: strict, primary and lenient all agree.
+
+It found one correctness defect. The engine refused **adjacent** creatures as
+overlapping (ledger A29, prereg §10), and that charged 29% of raw-coordinate
+`destination_blocked` refusals to the conditions H1 predicts are worse. It is fixed
+test-first, and the registered coverage figures are re-measured and unchanged.
+
+The review also surfaced ledger A30, which is open: a move's path through a hostile
+creature is never checked.
+
+Read from pilot 1, and to be confirmed on the re-run:
+- **Opponent:** stays Scripted. The best pooled win rate in any scenario was 0.38.
+- **`invalid_target_relation`:** no split. It never occurred.
+- **End turn:** Nemotron never called `end_turn` in C1 or C2, so the failure budget
+  ended those turns. The prompt text is the same in every condition; the menus list
+  "end turn". This is a real interface effect, and it will be prominent in the
+  write-up.
+
+Next: re-run the pilot on the fixed engine (with the user's go-ahead), then the
+freeze.
+
+**Second pilot defect (2026-09-30): a move that goes nowhere was a free, valid
+action.** The live check of the A29 fix found a model "moving" to its own position 324
+times in one match. Each counted as a valid action, and only the per-turn cap ended the
+turn. Pilot 1 had the same pattern, most heavily in C2.
+
+It is now refused with a new code, `no_effect` (ledger A31, prereg §6 and §10). That
+counts against the failure budget. The web client no longer sends a move when a token
+is clicked without being dragged.
+
+**Second pilot (2026-09-30), on the fixed engine: clean.** `results/pilot-2`, commit
+`2d397af`.
+- 56/56 matches replay, with no exclusions and no provider retries. One host served
+  every request, and every response reported its usage.
+- A scan of every model cell found no action-cap endings, no accepted no-op moves, no
+  adjacency refusals and no untyped engine errors.
+- **$0.19** in all, about $0.0058 per cell. That puts the final run at about $0.93 per
+  model at this rate, at list price; the cache discount makes the real bill about 20%
+  lower.
+- C1's parser read every response. The strict bound is 0.304 and the primary and
+  lenient bounds are both 0.325.
+- The §4.4 choices are settled from it: the opponent stays **Scripted** (best pooled
+  win rate 3/8), and **`invalid_target_relation` does not split** (0 occurrences).
+
+Next: the freeze.
+
+**Gemini 3.8 Flash pilot (2026-10-01): clean, and at the ceiling.** `results/pilot-gemini`.
+- 32/32 matches replay, with no exclusions and no retries. Every request was served by
+  Google AI Studio.
+- **$1.86**, about $0.058 per cell. That puts Gemini's final run at about $9.30.
+  Reasoning (`low`) is about 180–320 output tokens per decision, roughly half of each
+  cell's cost.
+- First-attempt validity is 0.98–1.00 in every condition, the win rate is 0.875 in
+  every condition, and kiting and protect_squishy are solved in every condition. The
+  only refusals were 10 `destination_blocked`.
+- **Decision (user): the scenarios stay as they are.** A strong model solving them is a
+  result, not a defect: it shows that capable models do not need the options spelled
+  out, while Nemotron does. Changing scenarios because the results were uninformative
+  is what the pilot rules exclude.
+- Found one instrument issue: trailing zeros cost C1 commands their layer (A32, fixed
+  test-first).
+- Observed: prompt caching was **0%** on Gemini (Nemotron on CoreWeave was about 40%).
+  To be looked at before the final run.
+
+**Prompt caching (2026-10-01).** Gemini caches nothing because its minimum cacheable
+prefix is about 4,096 tokens and our whole request is 1–2k. Nemotron's host caches
+automatically (~40%). Sonnet caches only what a request marks, from 512 tokens.
+- A per-model grid option, `cache_prompt`, marks the system prompt. That caches the
+  tools and the system prompt, about half of each request, and it is on for Sonnet only.
+- Cache reads and writes are recorded per request.
+- Below the minimum, Anthropic writes nothing and bills nothing extra. The request
+  simply runs uncached.
+
+**Reasoning is recorded (2026-10-01).**
+- Each request keeps the model's reasoning text, as its provider returns it beside the
+  action (Sonnet: a summary), and its reasoning-token count.
+- It is scrubbed like other model text, and `study show` prints it as `thought`.
+- Nothing is sent back to the model, which never sees its earlier turns, so behaviour
+  is unchanged.
+- Showing it in the web replay viewer is ledger A33 (later).
+
+**Claude Sonnet 5.5 pilot (2026-10-01): clean.** `results/pilot-sonnet`, on
+`google-vertex/global`.
+- 32/32 matches replay, with no exclusions, no retries and no flags.
+- **$3.63 at list, about $2.29 billed.** Cache reads were 48% of input. The Vertex
+  endpoint load-balances, so a cell's first few requests sometimes re-write the cache
+  before it warms; each write costs far less than a hit saves.
+- At `low` effort Sonnet barely reasons: 19 of 663 requests returned reasoning, 2,773
+  tokens in all.
+- Validity: C1 0.99, C2 0.90, C2+M 1.00, C3 1.00. C2's misses are mostly attacks after
+  the action was spent (10), so C2 sits *below* C1 for this model.
+- Tactics are *not* saturated for Sonnet, unlike Gemini: win rates run 0.50–0.75, and
+  it kited perfectly only in C3.
+- Final-run cost at this rate: about $18 at list, or about $11.50 billed with caching.
+
+All three models are piloted. Estimated final-run cost at list (what the spend cap
+counts): Nemotron ~$0.93, Gemini ~$9.32, Sonnet ~$18.17, **~$28.40 in total**
+(billed: roughly $22). Next: set the final cap and key limit, then the freeze.
+
+**Freeze (2026-10-01).** All three models are piloted, and every freeze item is settled
+(prereg §11): the Scripted opponent, no taxonomy split, registered model versions,
+prompt hashes, measured cost per match, and verified citations. The final grid is
+`examples/study/final.toml`: 3 models × 4 conditions × 4 scenarios × seeds 101–110,
+plus baselines, with a $35 cap. Next: re-check the model versions, then launch it in
+the background, outside Claude Code (~10–12 hours), and verify 100% replay.
+
+**Pilot observations** are written up in `docs/current/PILOT_OBSERVATIONS.md`. They are
+exploratory, not data. At `low` effort, Gemini deliberates every turn and Sonnet almost
+never. C3's menu appears to stand in for the deliberation Sonnet skips, and C2's
+tool-call format removes the reasoning Sonnet writes out loud in C1 (cf. Tam et al.,
+2024). There is a list of what to check in the final run.
+
+**Final run (2026-10-04): complete.** `results/final`: 600/600 matches, 100% replay, no
+exclusions; $29.90 at list, $24.30 billed.
+- Nemotron supports H1 (the full ordering), H2 and H3.
+- Gemini is at the ceiling.
+- Sonnet reverses H1's C2 > C1 step: it fails only in bare C2, and is rescued either by
+  reasoning in prose (C1) or by seeing the menu (C2+M, C3).
+- The menu also prevents friendly fire.
+
+The working record is `docs/current/FINAL_RUN_FINDINGS.md`. Next: the registered C1
+parser audit, then the write-up.
+
+**C1 parser audit (2026-10-05): done.** 200 blind labels gave 2 false accepts, a rate of
+0.010 [0.003, 0.036], with false rejects zero by construction. Neither error shows a
+parser defect: one is a dropped minus sign in a label, the other a self-contradicting
+response. The C1 decision rule keeps every registered verdict. Details are in
+`FINAL_RUN_FINDINGS.md`. Next: the write-up.

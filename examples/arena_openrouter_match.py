@@ -1,7 +1,7 @@
 """Run a LIVE arena match with an OpenRouter model (team A) vs a chosen opponent.
 
     python -m examples.arena_openrouter_match                      # OpenRouter vs scripted
-    python -m examples.arena_openrouter_match --model nvidia/nemotron-nano-9b-v2:free
+    python -m examples.arena_openrouter_match --model nvidia/nemotron-3.5-lightning
     python -m examples.arena_openrouter_match --opponent claude    # cross-provider!
     python -m examples.arena_openrouter_match --opponent openrouter:openai/gpt-4o-mini
 
@@ -17,7 +17,14 @@ from src.arena.match import run_match
 from src.arena.openrouter_agent import DEFAULT_MODEL, OpenRouterAgent
 from src.arena.setup import build_combat
 from src.arena.transcript import Transcript
-from src.models import AbilityScores, AttackAction, Damage, DamageType, Entity, StatBlock
+from src.models import (
+    AbilityScores,
+    AttackAction,
+    Damage,
+    DamageType,
+    Entity,
+    StatBlock,
+)
 
 
 def _fighter(name: str, team: str, x: float) -> Entity:
@@ -52,17 +59,24 @@ def _make_agent(spec: str, name: str, team: str) -> Agent:
         model = spec.split(":", 1)[1] if ":" in spec else CLAUDE_DEFAULT
         return LLMAgent(name, team, model=model)
     model = spec.split(":", 1)[1] if ":" in spec else DEFAULT_MODEL
-    return OpenRouterAgent(name, team, model=model)  # 'openrouter[:model]' or a bare model id
+    return OpenRouterAgent(
+        name, team, model=model
+    )  # 'openrouter[:model]' or a bare model id
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a live OpenRouter arena match.")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="OpenRouter model for team A.")
     parser.add_argument(
-        "--opponent", default="scripted",
+        "--model", default=DEFAULT_MODEL, help="OpenRouter model for team A."
+    )
+    parser.add_argument(
+        "--opponent",
+        default="scripted",
         help="Team B: 'scripted' | 'claude[:model]' | 'openrouter[:model]'.",
     )
-    parser.add_argument("--seed", type=int, default=1, help="RNG seed for a reproducible battle.")
+    parser.add_argument(
+        "--seed", type=int, default=1, help="RNG seed for a reproducible battle."
+    )
     args = parser.parse_args()
 
     combat = build_combat([_fighter("Knight", "a", 0.0), _fighter("Bandit", "b", 10.0)])
@@ -71,11 +85,15 @@ def main() -> None:
         "b": _make_agent(args.opponent, f"B:{args.opponent}", "b"),
     }
 
-    print(f"Running OpenRouter {args.model} (team A) vs {args.opponent} (team B), seed {args.seed}...\n")
+    print(
+        f"Running OpenRouter {args.model} (team A) vs {args.opponent} (team B), seed {args.seed}...\n"
+    )
     transcript = Transcript()
     result = run_match(combat, agents, seed=args.seed, transcript=transcript)
 
-    print(f"=== winner={result.winner!r} ({result.reason}) in {result.rounds} rounds ===")
+    print(
+        f"=== winner={result.winner!r} ({result.reason}) in {result.rounds} rounds ==="
+    )
     for team, frac in result.hp_fraction.items():
         print(f"  team {team}: {frac:.0%} HP remaining")
 

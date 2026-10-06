@@ -1,6 +1,6 @@
 """Turn and round lifecycle management."""
 
-from typing import List, Optional
+from typing import Hashable, Iterable, List, Optional, Set
 
 from src.models.condition import ConditionType
 from src.models.entity import Entity
@@ -25,6 +25,22 @@ _SKIP_CONDITIONS: frozenset[ConditionType] = frozenset(
 def _should_skip(entity: Entity) -> bool:
     """Return True if the entity's conditions prevent them from acting."""
     return any(c.condition_type in _SKIP_CONDITIONS for c in entity.conditions)
+
+
+def sides_standing(combatants: Iterable[Entity]) -> int:
+    """How many sides still have a living creature.
+
+    A fight is over when one side is left, however many of it survive: a real combat
+    ends the moment the last enemy falls. A creature with no team fights for itself,
+    so a free-for-all goes on while two creatures stand.
+    """
+    sides: Set[Hashable] = set()
+    for entity in combatants:
+        if entity.is_alive():
+            sides.add(
+                entity.team if entity.team is not None else ("", entity.entity_id)
+            )
+    return len(sides)
 
 
 class TurnManager:
@@ -65,7 +81,8 @@ class TurnManager:
         """End the current turn and advance.
 
         Returns:
-            True if combat should continue, False if <=1 combatant alive.
+            True if combat should continue, False once at most one side is left
+            (:func:`sides_standing`).
         """
         current = self._initiative_tracker.get_current_entity()
         # Combat cannot start without combatants, so initiative is never empty.
@@ -74,6 +91,10 @@ class TurnManager:
             EventType.TURN_END,
             TurnEventData(entity=current, round_num=self.round, turn_num=self.turn),
         )
+        # Checked before advancing: a fight decided this turn (an end-of-turn effect
+        # included) must not start another turn or round.
+        if sides_standing(self._combatants) <= 1:
+            return False
 
         next_entity = self._initiative_tracker.next_turn()
         self.turn += 1
@@ -88,8 +109,7 @@ class TurnManager:
                 EventType.ROUND_START, RoundEventData(round_num=self.round)
             )
 
-        alive = [c for c in self._combatants if c.is_alive()]
-        if len(alive) <= 1:
+        if sides_standing(self._combatants) <= 1:
             return False
 
         # Skip entities whose conditions prevent acting (unconscious, stunned, etc.).
@@ -120,7 +140,8 @@ class TurnManager:
             EventType.TURN_START,
             TurnEventData(entity=next_entity, round_num=self.round, turn_num=self.turn),
         )
-        return True
+        # A start-of-turn effect can decide the fight too.
+        return sides_standing(self._combatants) > 1
 
     def get_current_entity(self) -> Optional[Entity]:
         """Get the entity whose turn it is."""

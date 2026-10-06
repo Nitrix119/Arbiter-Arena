@@ -1,0 +1,1110 @@
+"""The study grid runner: every cell, once, resumably, within a spend cap.
+
+    python -m src.arena.study run GRID.toml --out results/<name> [--dry-run]
+    python -m src.arena.study report results/<name>
+    python -m src.arena.study verify results/<name>
+    python -m src.arena.study show results/<name>/<model>/<cond>/<scenario>/seedN.jsonl
+
+A **cell** is one match: model × condition × scenario × seed. The runner plays each
+through the ordinary :func:`~src.arena.match.run_match` — there is no second match path
+— and writes its transcript to a fixed place, so a run is **resumable** (a cell whose
+transcript exists is done) and the result bundle is self-describing (the grid is copied
+beside it).
+
+What it guards, in the order the pre-registration cares about:
+
+* **Exclusion is for infrastructure only** (prereg §8). A cell is excluded — kept under
+  ``_excluded/`` and re-run with backoff — when a provider or network error escapes the
+  match, or its transcript records any ``provider_error``. Bad model behaviour is data,
+  never a reason to exclude. Anything else that escapes is a bug and is raised, not
+  retried: a retry loop must not hide a defect.
+* **Spend** is recomputed from every transcript on disk at start, so a cap survives a
+  resume, and the runner stops before a cell once the cap is reached.
+* **Preflight** makes one tool-call and one text-only request per live model before any
+  cell, so a dead model id or a model without tool calling fails the run in seconds
+  rather than hours in (CODEBASE_REVIEW A1's note).
+* **Cells run seed-major**, so an interrupted run leaves a balanced set of paired cells.
+
+Every live model is routed through OpenRouter (prereg §5: mixed routing would be a
+provider-path confound), so the providers are ``openrouter`` and ``mock`` — the latter a
+:class:`~src.arena.mock_model.MockModelAgent`, which lets the whole grid run offline.
+"""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import sys
+import time
+import tomllib
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple
+
+from src.arena.agent import Agent, ScriptedAgent, is_infrastructure_error
+from src.arena.error_codes import PROVIDER_ERROR
+from src.arena.interfaces import C1, C2, REGISTRY, ActionInterface, get_interface
+from src.arena.manifest import Manifest, git_dirty, interface_fingerprint
+from src.arena.match import DEFAULT_ROUND_CAP, run_match
+from src.arena.mock_model import STUMBLE_STYLES
+from src.arena.openrouter_agent import (
+    DEFAULT_MAX_TOKENS,
+    PROVIDER_DEFAULT_TEMPERATURE,
+    Temperature,
+)
+from src.arena.scenarios import SCENARIOS
+from src.arena.transcript import Transcript
+from src.combat.combat_system import CombatSystem
+
+PROVIDER_OPENROUTER = "openrouter"
+PROVIDER_MOCK = "mock"
+PROVIDER_BASELINE = "baseline"
+PROVIDERS = (PROVIDER_OPENROUTER, PROVIDER_MOCK, PROVIDER_BASELINE)
+
+#: The baselines prereg §7 registers, and the condition each is played in. Random and
+#: Scripted choose from C3's menu through the real ``choose`` path; the Heuristic plays
+#: **natively** with its own action space — forcing its free movement onto the menu
+#: would make it a different, weaker agent than the one tuned and validated
+#: (amendment 2026-09-24, before any data).
+NATIVE = "native"
+BASELINE_CONDITIONS = {"scripted": "C3", "random": "C3", "heuristic": NATIVE}
+#: Policies the mock can write in a condition's format. Not the heuristic: it plays
+#: natively, with moves no menu lists, so it cannot be written as a condition's answer.
+MOCK_POLICIES = ("scripted", "random")
+
+OPPONENT_SCRIPTED = "scripted"
+OPPONENT_HEURISTIC = "heuristic"
+OPPONENTS = (OPPONENT_SCRIPTED, OPPONENT_HEURISTIC)
+
+#: Where excluded attempts are kept, beside the completed cells.
+EXCLUDED_DIR = "_excluded"
+RUN_LOG = "run_log.jsonl"
+GRID_COPY = "grid.toml"
+
+#: Rough calls per match, for ``--dry-run`` estimates only (2026-09-15 diagnostic).
+CALLS_PER_MATCH_ESTIMATE = 35
+
+
+class GridError(ValueError):
+    """A grid file that cannot be run, naming the bad value and the valid options."""
+
+
+# -- the grid ----------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    """One model in the grid, and what its tokens cost."""
+
+    id: str
+    provider: str
+    #: A number, or ``"default"`` to leave it to the provider (not sent, recorded).
+    temperature: Temperature = 0.0
+    usd_per_m_input: float = 0.0
+    usd_per_m_output: float = 0.0
+    #: Mock only: decision indices at which the mock answers malformed, so an offline
+    #: grid exercises the refusal paths and the report's taxonomy.
+    stumble_on: Tuple[int, ...] = ()
+    #: Mock only: ``malformed`` (each condition's typical slip) or ``hostile`` (the
+    #: shapes real models and hosts send), for the decisions in ``stumble_on``.
+    stumble_style: str = "malformed"
+    #: OpenRouter only: the upstream hosts allowed to serve this model, in order, with
+    #: fallbacks off. One model id can otherwise be served by different hosts (and
+    #: quantisations) from cell to cell — an uncontrolled variable.
+    hosts: Tuple[str, ...] = ()
+    #: Which policy decides: required for a baseline (``BASELINE_CONDITIONS``);
+    #: optional for the mock (``MOCK_POLICIES``, scripted by default), whose answers
+    #: are that policy's decisions written in each condition's format.
+    policy: Optional[str] = None
+    #: The output-token limit sent with every request, and recorded.
+    max_tokens: int = DEFAULT_MAX_TOKENS
+    #: OpenRouter only: the ``reasoning`` setting for a thinking model, as sorted
+    #: items so the spec stays hashable; see :meth:`reasoning_config`.
+    reasoning: Tuple[Tuple[str, Any], ...] = ()
+    #: OpenRouter only: mark the system prompt for prompt caching (Anthropic caches
+    #: only what a request marks). Changes the bill, never the prompt.
+    cache_prompt: bool = False
+
+    def reasoning_config(self) -> Optional[Dict[str, Any]]:
+        return dict(self.reasoning) if self.reasoning else None
+
+    def cost_usd(self, input_tokens: int, output_tokens: int) -> float:
+        return (
+            input_tokens * self.usd_per_m_input + output_tokens * self.usd_per_m_output
+        ) / 1_000_000
+
+
+@dataclass(frozen=True)
+class Grid:
+    """A parsed, validated study grid."""
+
+    name: str
+    seeds: Tuple[int, ...]
+    scenarios: Tuple[str, ...]
+    conditions: Tuple[str, ...]
+    models: Tuple[ModelSpec, ...]
+    opponent: str = OPPONENT_SCRIPTED
+    round_cap: int = DEFAULT_ROUND_CAP
+    spend_cap_usd: float = 0.0
+    max_attempts: int = 3
+    backoff_seconds: float = 30.0
+
+    def model(self, model_id: str) -> Optional[ModelSpec]:
+        return next((m for m in self.models if m.id == model_id), None)
+
+
+def _choices(value: Any, valid: Sequence[str], what: str) -> Tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise GridError(f"{what} must be a non-empty list; got {value!r}")
+    for item in value:
+        if item not in valid:
+            raise GridError(
+                f"Unknown {what[:-1]} {item!r}; expected one of {sorted(valid)}"
+            )
+    return tuple(value)
+
+
+def _number(table: Dict[str, Any], key: str, default: float, what: str) -> float:
+    value = table.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        raise GridError(f"{what}.{key} must be a non-negative number; got {value!r}")
+    return float(value)
+
+
+def _temperature(table: Dict[str, Any], what: str) -> Temperature:
+    """A model's temperature: a non-negative number, or the provider's default."""
+    if table.get("temperature") == PROVIDER_DEFAULT_TEMPERATURE:
+        return PROVIDER_DEFAULT_TEMPERATURE
+    try:
+        return _number(table, "temperature", 0.0, what)
+    except GridError:
+        raise GridError(
+            f"{what}.temperature must be a non-negative number or "
+            f"{PROVIDER_DEFAULT_TEMPERATURE!r}; got {table.get('temperature')!r}"
+        ) from None
+
+
+#: A value still containing this is an unfilled template, never a runnable grid.
+PLACEHOLDER = "TODO"
+
+
+def _placeholders(value: Any, where: str = "") -> List[str]:
+    """Every location in the grid whose value is still a template placeholder."""
+    if isinstance(value, str):
+        return [where] if PLACEHOLDER in value else []
+    if isinstance(value, dict):
+        return [p for k, v in value.items() for p in _placeholders(v, f"{where}.{k}")]
+    if isinstance(value, list):
+        return [
+            p for i, v in enumerate(value) for p in _placeholders(v, f"{where}[{i}]")
+        ]
+    return []
+
+
+def parse_grid(data: Dict[str, Any]) -> Grid:
+    """Validate a grid's TOML tables into a :class:`Grid`, refusing anything unclear."""
+    unfilled = _placeholders(data)
+    if unfilled:
+        raise GridError(
+            f"The grid is an unfilled template: replace the {PLACEHOLDER} at "
+            + ", ".join(where.lstrip(".") for where in unfilled)
+        )
+    study = data.get("study")
+    if not isinstance(study, dict):
+        raise GridError("The grid needs a [study] table")
+    unknown = set(study) - {
+        "name",
+        "seeds",
+        "scenarios",
+        "conditions",
+        "opponent",
+        "round_cap",
+        "spend_cap_usd",
+        "max_attempts",
+        "backoff_seconds",
+    }
+    if unknown:
+        raise GridError(f"Unknown [study] key(s) {sorted(unknown)}")
+
+    seeds = study.get("seeds")
+    if (
+        not isinstance(seeds, list)
+        or not seeds
+        or not all(isinstance(s, int) and not isinstance(s, bool) for s in seeds)
+    ):
+        raise GridError(
+            f"study.seeds must be a non-empty list of integers; got {seeds!r}"
+        )
+    if len(set(seeds)) != len(seeds):
+        raise GridError(f"study.seeds repeats a seed: {seeds}")
+
+    opponent = study.get("opponent", OPPONENT_SCRIPTED)
+    if opponent not in OPPONENTS:
+        raise GridError(f"Unknown opponent {opponent!r}; expected one of {OPPONENTS}")
+
+    models_data = data.get("models")
+    if not isinstance(models_data, list) or not models_data:
+        raise GridError("The grid needs at least one [[models]] entry")
+    models: List[ModelSpec] = []
+    for index, entry in enumerate(models_data):
+        what = f"models[{index}]"
+        provider = entry.get("provider")
+        if provider not in PROVIDERS:
+            raise GridError(
+                f"{what}: unknown provider {provider!r}; expected one of {PROVIDERS} "
+                "(every live model is routed through OpenRouter — prereg §5)"
+            )
+        model_id = entry.get("id")
+        if not isinstance(model_id, str) or not model_id:
+            raise GridError(f"{what}: id must be a non-empty string")
+        policy = entry.get("policy")
+        if provider == PROVIDER_BASELINE and policy is None:
+            raise GridError(f"{what} ({model_id}): policy is required for a baseline")
+        if policy is not None and provider not in (PROVIDER_BASELINE, PROVIDER_MOCK):
+            raise GridError(
+                f"{what} ({model_id}): policy is only for a baseline or the mock"
+            )
+        if provider == PROVIDER_BASELINE and policy not in BASELINE_CONDITIONS:
+            raise GridError(
+                f"{what}: unknown baseline policy {policy!r}; expected one of "
+                f"{sorted(BASELINE_CONDITIONS)}"
+            )
+        if provider == PROVIDER_MOCK and policy not in (None, *MOCK_POLICIES):
+            raise GridError(
+                f"{what}: a mock's policy must be one of {list(MOCK_POLICIES)}, not "
+                f"{policy!r} (the heuristic plays natively, so no condition can "
+                "write its answers)"
+            )
+        if provider == PROVIDER_OPENROUTER and not (
+            "usd_per_m_input" in entry and "usd_per_m_output" in entry
+        ):
+            raise GridError(
+                f"{what} ({model_id}): usd_per_m_input and usd_per_m_output are "
+                "required for a live model — the spend cap is computed from them"
+            )
+        if provider == PROVIDER_OPENROUTER and not (
+            _number(entry, "usd_per_m_input", 0.0, what) > 0
+            and _number(entry, "usd_per_m_output", 0.0, what) > 0
+        ):
+            raise GridError(
+                f"{what} ({model_id}): a live model's prices must be above zero, or "
+                "the spend cap can never bind"
+            )
+        stumble_on = entry.get("stumble_on", [])
+        if stumble_on and provider != PROVIDER_MOCK:
+            raise GridError(f"{what} ({model_id}): stumble_on is for the mock only")
+        if not isinstance(stumble_on, list) or not all(
+            isinstance(i, int) and not isinstance(i, bool) and i >= 0
+            for i in stumble_on
+        ):
+            raise GridError(f"{what}: stumble_on must be a list of decision indices")
+        max_tokens = entry.get("max_tokens", DEFAULT_MAX_TOKENS)
+        if (
+            isinstance(max_tokens, bool)
+            or not isinstance(max_tokens, int)
+            or max_tokens < 1
+        ):
+            raise GridError(
+                f"{what}: max_tokens must be a positive integer; got {max_tokens!r}"
+            )
+        reasoning = entry.get("reasoning")
+        if reasoning is not None and provider != PROVIDER_OPENROUTER:
+            raise GridError(
+                f"{what} ({model_id}): reasoning is for OpenRouter models only"
+            )
+        if reasoning is not None and not isinstance(reasoning, dict):
+            raise GridError(
+                f'{what}: reasoning must be a table (e.g. {{ effort = "low" }}); '
+                f"got {reasoning!r}"
+            )
+        stumble_style = entry.get("stumble_style", "malformed")
+        if "stumble_style" in entry and provider != PROVIDER_MOCK:
+            raise GridError(f"{what} ({model_id}): stumble_style is for the mock only")
+        if stumble_style not in STUMBLE_STYLES:
+            raise GridError(
+                f"{what}: unknown stumble_style {stumble_style!r}; expected one of "
+                f"{list(STUMBLE_STYLES)}"
+            )
+        cache_prompt = entry.get("cache_prompt", False)
+        if not isinstance(cache_prompt, bool):
+            raise GridError(
+                f"{what}.cache_prompt must be true or false; got {cache_prompt!r}"
+            )
+        if cache_prompt and provider != PROVIDER_OPENROUTER:
+            raise GridError(
+                f"{what} ({model_id}): cache_prompt is for OpenRouter models only"
+            )
+        hosts = entry.get("hosts", [])
+        if hosts and provider != PROVIDER_OPENROUTER:
+            raise GridError(f"{what} ({model_id}): hosts is for OpenRouter models only")
+        if not isinstance(hosts, list) or not all(
+            isinstance(h, str) and h for h in hosts
+        ):
+            raise GridError(f"{what}: hosts must be a list of provider names")
+        models.append(
+            ModelSpec(
+                id=model_id,
+                provider=provider,
+                temperature=_temperature(entry, what),
+                usd_per_m_input=_number(entry, "usd_per_m_input", 0.0, what),
+                usd_per_m_output=_number(entry, "usd_per_m_output", 0.0, what),
+                stumble_on=tuple(stumble_on),
+                stumble_style=stumble_style,
+                hosts=tuple(hosts),
+                policy=policy,
+                max_tokens=max_tokens,
+                reasoning=tuple(sorted((reasoning or {}).items())),
+                cache_prompt=cache_prompt,
+            )
+        )
+    if len({m.id for m in models}) != len(models):
+        raise GridError("Two [[models]] entries share an id")
+
+    round_cap = study.get("round_cap", DEFAULT_ROUND_CAP)
+    max_attempts = study.get("max_attempts", 3)
+    for key, value in (("round_cap", round_cap), ("max_attempts", max_attempts)):
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise GridError(f"study.{key} must be a positive integer; got {value!r}")
+
+    spend_cap = _number(study, "spend_cap_usd", 0.0, "study")
+    if spend_cap == 0.0 and any(m.provider == PROVIDER_OPENROUTER for m in models):
+        raise GridError("study.spend_cap_usd is required (> 0) when any model is live")
+
+    return Grid(
+        name=str(study.get("name", "study")),
+        seeds=tuple(seeds),
+        scenarios=_choices(study.get("scenarios"), list(SCENARIOS), "scenarios"),
+        conditions=_choices(study.get("conditions"), list(REGISTRY), "conditions"),
+        models=tuple(models),
+        opponent=opponent,
+        round_cap=round_cap,
+        spend_cap_usd=spend_cap,
+        max_attempts=max_attempts,
+        backoff_seconds=_number(study, "backoff_seconds", 30.0, "study"),
+    )
+
+
+def load_grid(path: Path) -> Grid:
+    with open(path, "rb") as handle:
+        try:
+            data = tomllib.load(handle)
+        except tomllib.TOMLDecodeError as exc:
+            raise GridError(f"{path}: not valid TOML ({exc})") from None
+    return parse_grid(data)
+
+
+# -- cells ------------------------------------------------------------------------
+
+
+def _slug(text: str) -> str:
+    """A filesystem-safe token: ``C2+M`` → ``C2M``, ``org/m:free`` → ``org-m-free``."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", text.replace("+", "")).strip("-")
+
+
+@dataclass(frozen=True)
+class Cell:
+    """One match in the grid."""
+
+    model: ModelSpec
+    condition: str
+    scenario: str
+    seed: int
+
+    def path(self, out: Path) -> Path:
+        return (
+            out
+            / _slug(self.model.id)
+            / _slug(self.condition)
+            / self.scenario
+            / f"seed{self.seed}.jsonl"
+        )
+
+    def label(self) -> str:
+        return (
+            f"{self.model.id} | {self.condition} | {self.scenario} | seed {self.seed}"
+        )
+
+
+def cells(grid: Grid) -> Iterator[Cell]:
+    """Every cell, **seed-major**: a run stopped part-way leaves whole paired seeds."""
+    models = [m for m in grid.models if m.provider != PROVIDER_BASELINE]
+    baselines = [m for m in grid.models if m.provider == PROVIDER_BASELINE]
+    for seed in grid.seeds:
+        for scenario in grid.scenarios:
+            for condition in grid.conditions:
+                for model in models:
+                    yield Cell(model, condition, scenario, seed)
+            # A baseline plays once per scenario and seed, in its own condition,
+            # whatever conditions the grid lists for the models.
+            for baseline in baselines:
+                yield Cell(
+                    baseline, BASELINE_CONDITIONS[baseline.policy or ""], scenario, seed
+                )
+
+
+# -- agents -----------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Seat:
+    """Everything a factory needs to seat a model at a match."""
+
+    spec: ModelSpec
+    name: str
+    team: Optional[str]
+    interface: Optional[ActionInterface]
+    combat: Optional[CombatSystem] = None
+    seed: Optional[int] = None
+
+
+#: provider → builds the model's agent. Registry, not a branch on the name.
+ModelFactory = Callable[[Seat], Agent]
+
+
+def _openrouter_agent(seat: Seat) -> Agent:
+    from src.arena.openrouter_agent import OpenRouterAgent
+
+    return OpenRouterAgent(
+        seat.name,
+        seat.team,
+        model=seat.spec.id,
+        temperature=seat.spec.temperature,
+        interface=seat.interface,
+        hosts=seat.spec.hosts,
+        seed=seat.seed,
+        max_tokens=seat.spec.max_tokens,
+        reasoning=seat.spec.reasoning_config(),
+        cache_prompt=seat.spec.cache_prompt,
+    )
+
+
+def _mock_agent(seat: Seat) -> Agent:
+    from src.arena.mock_model import MockModelAgent
+
+    assert seat.interface is not None
+    return MockModelAgent(
+        seat.name,
+        seat.team,
+        seat.interface,
+        stumble_on=seat.spec.stumble_on,
+        stumble_style=seat.spec.stumble_style,
+        policy=_written_policy(seat),
+    )
+
+
+def _written_policy(seat: Seat) -> Agent:
+    """The policy whose decisions a mock (or a menu baseline) writes as answers."""
+    from src.arena.mock_model import RandomMenuPolicy
+
+    policies: Dict[str, Callable[[], Agent]] = {
+        "scripted": lambda: ScriptedAgent(seat.name, seat.team),
+        "random": lambda: RandomMenuPolicy(seat.name, seat.team),
+    }
+    return policies[seat.spec.policy or "scripted"]()
+
+
+def _baseline_agent(seat: Seat) -> Agent:
+    """A registered baseline, seated in its own condition (``BASELINE_CONDITIONS``)."""
+    from src.arena.heuristic.agent import HeuristicAgent
+    from src.arena.mock_model import MockModelAgent
+
+    if seat.spec.policy == "heuristic":
+        if seat.combat is None:
+            raise ValueError("the heuristic baseline must be bound to its combat")
+        return HeuristicAgent(seat.name, seat.team, seat.combat)
+    assert seat.interface is not None
+    return MockModelAgent(
+        seat.name,
+        seat.team,
+        seat.interface,
+        policy=_written_policy(seat),
+        record_telemetry=False,
+    )
+
+
+MODEL_FACTORIES: Dict[str, ModelFactory] = {
+    PROVIDER_OPENROUTER: _openrouter_agent,
+    PROVIDER_MOCK: _mock_agent,
+    PROVIDER_BASELINE: _baseline_agent,
+}
+
+
+def _opponent(kind: str, combat: CombatSystem, team: Optional[str]) -> Agent:
+    if kind == OPPONENT_HEURISTIC:
+        from src.arena.heuristic.agent import HeuristicAgent
+
+        return HeuristicAgent("opponent", team, combat)
+    return ScriptedAgent("opponent", team)
+
+
+# -- running one cell -------------------------------------------------------------
+
+
+def provider_errors(records: Sequence[Dict[str, Any]]) -> int:
+    """How many actions in a transcript were infrastructure failures."""
+    return sum(
+        1
+        for r in records
+        if r.get("kind") == "action" and r["result"].get("code") == PROVIDER_ERROR
+    )
+
+
+def transcript_tokens(records: Sequence[Dict[str, Any]]) -> Tuple[int, int]:
+    """(input, output) tokens a transcript's decisions reported spending.
+
+    Coerces an unreported count to zero, which is only safe because
+    :func:`unreported_usage` is checked alongside it: on its own this would read a
+    provider that omits ``usage`` as a free call and let the spend cap never fire.
+    """
+    tokens_in = tokens_out = 0
+    for r in records:
+        telemetry = r.get("telemetry") if r.get("kind") == "action" else None
+        if telemetry:
+            tokens_in += telemetry.get("input_tokens") or 0
+            tokens_out += telemetry.get("output_tokens") or 0
+    return tokens_in, tokens_out
+
+
+def unreported_usage(records: Sequence[Dict[str, Any]]) -> int:
+    """Decisions whose provider billed no token usage, so their cost is unknown.
+
+    The companion to :func:`transcript_tokens`: a cell with any of these has a cost
+    the cap cannot see. Transcripts written before ``usage_reported`` existed carry no
+    such key, and are read as billed rather than retro-flagged.
+    """
+    return sum(
+        1
+        for r in records
+        if r.get("kind") == "action"
+        and (r.get("telemetry") or {}).get("usage_reported", True) is False
+    )
+
+
+@dataclass
+class CellResult:
+    """What became of one attempt at a cell."""
+
+    records: List[Dict[str, Any]]
+    excluded_reason: Optional[str] = None
+
+
+def play_cell(
+    cell: Cell,
+    grid: Grid,
+    *,
+    factories: Dict[str, ModelFactory] = MODEL_FACTORIES,
+) -> CellResult:
+    """Play one cell once. Infrastructure failure → excluded; anything else raises."""
+    scenario = SCENARIOS[cell.scenario]
+    native = cell.condition == NATIVE
+    interface = None if native else get_interface(cell.condition)
+    combat = scenario.build()
+    model_team = scenario.llm_team
+    agents: Dict[Optional[str], Agent] = {
+        model_team: factories[cell.model.provider](
+            Seat(
+                cell.model,
+                f"{cell.model.id} [{cell.condition}]",
+                model_team,
+                interface,
+                combat=combat,
+                seed=cell.seed,
+            )
+        ),
+        scenario.heuristic_team: _opponent(
+            grid.opponent, combat, scenario.heuristic_team
+        ),
+    }
+    manifest = Manifest.for_run(
+        scenario=cell.scenario,
+        seed=cell.seed,
+        condition=cell.condition,
+        model=cell.model.id,
+        temperature=cell.model.temperature,
+        prompt_hash=None if interface is None else interface_fingerprint(interface),
+        opponent=grid.opponent,
+        max_tokens=cell.model.max_tokens,
+        hosts=list(cell.model.hosts) or None,
+        reasoning=cell.model.reasoning_config(),
+        cache_prompt=cell.model.cache_prompt or None,
+    )
+    transcript = Transcript()
+    try:
+        run_match(
+            combat,
+            agents,
+            seed=cell.seed,
+            round_cap=grid.round_cap,
+            transcript=transcript,
+            manifest=manifest,
+        )
+    except Exception as exc:
+        if not is_infrastructure_error(exc):
+            raise  # a bug, not the weather: never retried, never hidden
+        return CellResult(transcript.records, f"{type(exc).__name__}: {exc}")
+
+    failures = provider_errors(transcript.records)
+    if failures:
+        return CellResult(transcript.records, f"{failures} provider_error action(s)")
+    return CellResult(transcript.records)
+
+
+def _write_atomically(path: Path, records: Sequence[Dict[str, Any]]) -> None:
+    """Write a transcript so a crash can never leave a half-file that looks complete."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".partial")
+    temporary.write_text(
+        "".join(json.dumps(r, default=str) + "\n" for r in records), encoding="utf-8"
+    )
+    os.replace(temporary, path)
+
+
+def _next_excluded_path(out: Path, cell_path: Path) -> Path:
+    """Where the next excluded attempt at a cell goes: the first unused number.
+
+    Numbered from what is on disk, not from the run's retry counter, which restarts
+    at 1 on a resume. Reusing a number would overwrite an earlier run's attempt,
+    dropping it from the exclusion count prereg §8 reports and its cost from the
+    spend cap.
+    """
+    relative = cell_path.relative_to(out)
+    n = 1
+    while True:
+        candidate = out / EXCLUDED_DIR / relative.with_suffix(f".attempt{n}.jsonl")
+        if not candidate.exists():
+            return candidate
+        n += 1
+
+
+def _read(path: Path) -> List[Dict[str, Any]]:
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+# -- spend ------------------------------------------------------------------------
+
+
+def spent_usd(out: Path, grid: Grid) -> float:
+    """Everything the bundle on disk has cost — completed and excluded alike.
+
+    Recomputed from the transcripts rather than kept in a counter, so a resumed run
+    starts from the true figure and a cap cannot be reset by restarting.
+    """
+    total = 0.0
+    for path in out.rglob("*.jsonl"):
+        if path.name == RUN_LOG:
+            continue
+        records = _read(path)
+        start = next((r for r in records if r.get("kind") == "match_start"), {})
+        spec = grid.model(start.get("model", ""))
+        if spec is not None:
+            total += spec.cost_usd(*transcript_tokens(records))
+    return total
+
+
+# -- preflight --------------------------------------------------------------------
+
+_PREFLIGHT_PROMPT = [{"role": "user", "content": "Preflight check. End your turn."}]
+
+
+def preflight(
+    grid: Grid,
+    factories: Dict[str, ModelFactory] = MODEL_FACTORIES,
+    echo: Callable[[str], None] = print,
+) -> List[str]:
+    """One tool-call and one text-only request per live model. Returns the problems.
+
+    The tool-call check uses C2's tools; the text check uses C1's (none). A model that
+    cannot answer either cannot fill its row of the grid, and finding that out before
+    the first cell costs a few hundred tokens instead of a day.
+    """
+    problems: List[str] = []
+    for spec in grid.models:
+        if spec.provider != PROVIDER_OPENROUTER:
+            continue  # the mock and the baselines call no provider
+        for condition, needs_call in ((C2, True), (C1, False)):
+            interface = get_interface(condition)
+            agent = factories[spec.provider](Seat(spec, "preflight", "a", interface))
+            tools = interface.api_tools({})
+            try:
+                call, record = agent._request_action(  # type: ignore[attr-defined]
+                    list(_PREFLIGHT_PROMPT), tools
+                )
+            except Exception as exc:
+                problems.append(f"{spec.id}: {condition} preflight failed: {exc}")
+                continue
+            if needs_call and call is None:
+                problems.append(
+                    f"{spec.id}: returned no tool call — C2, C2+M and C3 need tool "
+                    "calling"
+                )
+            if not needs_call and not (record.raw_output or "").strip():
+                problems.append(f"{spec.id}: returned no text for the C1 check")
+            if record.input_tokens is None or record.output_tokens is None:
+                # An unbillable model reads as $0.00 to the cost metric, so the spend
+                # cap would never fire and a grid could run to completion unmetered.
+                # Two requests to find that out beats a day of unmetered spend.
+                problems.append(
+                    f"{spec.id}: reported no token usage on the {condition} check — "
+                    "the spend cap cannot be enforced for it, and cost per accepted "
+                    "action would read as zero"
+                )
+            echo(
+                f"preflight {spec.id} [{condition}]: served by "
+                f"{record.served_provider or 'an unreported host'}"
+            )
+    return problems
+
+
+# -- the run ----------------------------------------------------------------------
+
+
+class _Log:
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    def __call__(self, event: str, **fields: Any) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self._path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"event": event, "time": time.time(), **fields}))
+            handle.write("\n")
+
+
+@dataclass
+class RunSummary:
+    """What a run did."""
+
+    done: int = 0
+    skipped: int = 0
+    excluded_attempts: int = 0
+    failed: List[str] = field(default_factory=list)
+    stopped: Optional[str] = None
+
+
+def run_grid(
+    grid: Grid,
+    out: Path,
+    *,
+    grid_path: Optional[Path] = None,
+    factories: Dict[str, ModelFactory] = MODEL_FACTORIES,
+    sleep: Callable[[float], None] = time.sleep,
+    echo: Callable[[str], None] = print,
+    allow_dirty: bool = False,
+) -> RunSummary:
+    """Run every cell not already on disk. Resumable; stops at the spend cap.
+
+    Refuses to start a **live** run from a tree with uncommitted changes (unless
+    *allow_dirty*): the manifest's commit would then name code that did not run.
+    Stops at the first cell that exhausts its retries — a quota or an outage would
+    otherwise fail, and bill, every remaining cell in turn.
+    """
+    live = any(m.provider == PROVIDER_OPENROUTER for m in grid.models)
+    if live and not allow_dirty and git_dirty():
+        reason = (
+            "the working tree has uncommitted changes, so the recorded commit would "
+            "not name the code that ran — commit first, or pass --allow-dirty"
+        )
+        echo(reason)
+        return RunSummary(stopped=reason)
+    out.mkdir(parents=True, exist_ok=True)
+    if grid_path is not None:
+        shutil.copyfile(grid_path, out / GRID_COPY)
+    log = _Log(out / RUN_LOG)
+    summary = RunSummary()
+    spend = spent_usd(out, grid)
+    log("run_start", grid=grid.name, spent_usd=spend)
+
+    for cell in cells(grid):
+        path = cell.path(out)
+        if path.exists():
+            summary.skipped += 1
+            log("cell_skip", cell=cell.label())
+            continue
+        if grid.spend_cap_usd and spend >= grid.spend_cap_usd:
+            summary.stopped = (
+                f"spend cap reached: ${spend:.4f} of ${grid.spend_cap_usd:.2f}"
+            )
+            log("stop", reason=summary.stopped)
+            echo(summary.stopped)
+            break
+
+        for attempt in range(1, grid.max_attempts + 1):
+            result = play_cell(cell, grid, factories=factories)
+            spend += cell.model.cost_usd(*transcript_tokens(result.records))
+            if result.excluded_reason is None:
+                _write_atomically(path, result.records)
+                summary.done += 1
+                log("cell_done", cell=cell.label(), spent_usd=spend)
+                echo(f"done      {cell.label()}")
+                unbilled = unreported_usage(result.records)
+                if unbilled and cell.model.provider == PROVIDER_OPENROUTER:
+                    # The match is sound and is kept; what is gone is the ability to
+                    # enforce the cap, so the run does not go on spending blind. The
+                    # preflight normally catches this; a route can stop billing later.
+                    summary.stopped = (
+                        f"{cell.label()}: {unbilled} decision(s) reported no token "
+                        "usage — the spend cap cannot be enforced; check the host, "
+                        "then resume"
+                    )
+                    log("stop", reason=summary.stopped)
+                    echo(summary.stopped)
+                break
+            summary.excluded_attempts += 1
+            excluded = _next_excluded_path(out, path)
+            _write_atomically(excluded, result.records)
+            log(
+                "cell_excluded",
+                cell=cell.label(),
+                attempt=attempt,
+                reason=result.excluded_reason,
+            )
+            echo(f"excluded  {cell.label()} ({result.excluded_reason})")
+            if attempt < grid.max_attempts:
+                sleep(grid.backoff_seconds * 2 ** (attempt - 1))
+        else:
+            summary.failed.append(cell.label())
+            log("cell_failed", cell=cell.label())
+            summary.stopped = (
+                f"{cell.label()} failed all {grid.max_attempts} attempts — stopping "
+                "(a quota or an outage?); resume to retry it first"
+            )
+            log("stop", reason=summary.stopped)
+            echo(summary.stopped)
+            break
+        if summary.stopped:  # a kept cell whose cost is unknowable; see above
+            break
+
+    log("run_end", done=summary.done, skipped=summary.skipped, spent_usd=spend)
+    return summary
+
+
+# -- verify -----------------------------------------------------------------------
+
+
+def verify_results(bundle: Path, echo: Callable[[str], None] = print) -> bool:
+    """Replay every completed cell in *bundle* and report the rate (V1_PLAN §5).
+
+    A harness check, not a result: it must be 100%. Excluded attempts are not
+    analysed, so they are not verified either. An empty bundle is a failure, since
+    nothing was checked.
+    """
+    from src.arena.replay import verify_bundle
+    from src.arena.study_report import completed_transcripts
+
+    transcripts: Dict[str, Sequence[Dict[str, Any]]] = {
+        path.relative_to(bundle).as_posix(): records
+        for path, records in completed_transcripts(bundle)
+    }
+
+    def builder(records: Sequence[Dict[str, Any]]) -> Callable[[], CombatSystem]:
+        start = next((r for r in records if r.get("kind") == "match_start"), {})
+        scenario = SCENARIOS.get(str(start.get("scenario")))
+        if scenario is None:
+            raise GridError(f"unknown scenario {start.get('scenario')!r}")
+        return scenario.build
+
+    report = verify_bundle(transcripts, builder)
+    rate = 100.0 * report.rate
+    echo(f"{report.verified}/{report.total} transcripts replay ({rate:.1f}%)")
+    for failure in report.failures:
+        echo(f"  FAILED {failure}")
+    return bool(report)
+
+
+# -- CLI --------------------------------------------------------------------------
+
+
+@dataclass
+class MeasuredCost:
+    """What the completed cells of one model x condition cost, read from disk."""
+
+    cells: int = 0
+    usd: float = 0.0
+    #: Decisions whose provider reported no usage — their cost, and so the rate, is
+    #: unknown rather than low.
+    unbilled: int = 0
+
+    @property
+    def per_cell(self) -> Optional[float]:
+        if not self.cells or self.unbilled:
+            return None
+        return self.usd / self.cells
+
+
+def measured_costs(out: Path, grid: Grid) -> Dict[Tuple[str, str], MeasuredCost]:
+    """$ per completed cell, **measured** from the bundle, per model x condition.
+
+    Per cell, not per request times a guessed calls-per-match: how many requests a
+    match takes is exactly what varies between conditions (C1's corrections, C2's
+    menus), so it is measured along with the price. And per condition, because a rate
+    measured on one condition says little about another. A pair with nothing on disk
+    is absent rather than guessed at: the dry run is the last checkpoint before real
+    money. Unbilled decisions are counted rather than read as free — the invariant
+    :func:`transcript_tokens` states.
+    """
+    measured: Dict[Tuple[str, str], MeasuredCost] = {}
+    for cell in cells(grid):
+        path = cell.path(out)
+        if not path.exists():
+            continue
+        records = _read(path)
+        entry = measured.setdefault((cell.model.id, cell.condition), MeasuredCost())
+        entry.cells += 1
+        entry.usd += cell.model.cost_usd(*transcript_tokens(records))
+        entry.unbilled += unreported_usage(records)
+    return measured
+
+
+def _estimate_line(
+    spec: ModelSpec,
+    todo: Dict[str, int],
+    measured: Dict[Tuple[str, str], MeasuredCost],
+) -> str:
+    """One model's remaining cost, from what its completed cells cost on disk."""
+    total = sum(todo.values())
+    head = f"  {spec.id}: {total} cells to run"
+    costs = {c: measured.get((spec.id, c), MeasuredCost()) for c in todo}
+    unbilled = sum(m.unbilled for m in costs.values())
+    if unbilled:
+        return (
+            f"{head}, cost unknown — {unbilled} decision(s) on disk reported no token "
+            "usage, so no rate can be measured; check the host."
+        )
+    rates = {c: m.per_cell for c, m in costs.items() if m.per_cell is not None}
+    if not rates:
+        return (
+            f"{head}, cost not yet measured — run a few cells, then dry-run again "
+            "for an estimate."
+        )
+    estimate = sum(rates[c] * n for c, n in todo.items() if c in rates)
+    measured_rates = ", ".join(f"{c} ${r:,.4f}" for c, r in sorted(rates.items()))
+    line = f"{head}, ~${estimate:,.2f} (per cell measured on disk: {measured_rates})"
+    unmeasured = {c: n for c, n in todo.items() if c not in rates and n}
+    if unmeasured:
+        line += "; not yet measured, so not included: " + ", ".join(
+            f"{n} {c}" for c, n in sorted(unmeasured.items())
+        )
+    return line + "."
+
+
+def _dry_run(grid: Grid, out: Path) -> str:
+    all_cells = list(cells(grid))
+    existing = sum(1 for c in all_cells if c.path(out).exists())
+    remaining = len(all_cells) - existing
+    # A baseline plays once per scenario and seed in its own condition, and makes no
+    # model calls, so it is counted apart (ledger A34).
+    n_models = sum(1 for m in grid.models if m.provider != PROVIDER_BASELINE)
+    n_baselines = len(grid.models) - n_models
+    model_cells = (
+        n_models * len(grid.conditions) * len(grid.scenarios) * len(grid.seeds)
+    )
+    parts = [
+        f"{model_cells} model cells: {n_models} models x {len(grid.conditions)} "
+        f"conditions x {len(grid.scenarios)} scenarios x {len(grid.seeds)} seeds"
+    ]
+    if n_baselines:
+        parts.append(
+            f"{len(all_cells) - model_cells} baseline cells: {n_baselines} baselines "
+            f"x {len(grid.scenarios)} scenarios x {len(grid.seeds)} seeds"
+        )
+    model_remaining = sum(
+        1
+        for c in all_cells
+        if c.model.provider != PROVIDER_BASELINE and not c.path(out).exists()
+    )
+    lines = [
+        f"{grid.name}: {len(all_cells)} cells ({'; '.join(parts)}); "
+        f"{existing} already done, {remaining} to run "
+        f"(~{model_remaining * CALLS_PER_MATCH_ESTIMATE} model calls)."
+    ]
+    live = [spec for spec in grid.models if spec.provider == PROVIDER_OPENROUTER]
+    if live:
+        measured = measured_costs(out, grid)
+        cap = (
+            f"spend cap ${grid.spend_cap_usd:,.2f}"
+            if grid.spend_cap_usd
+            else "NO spend cap set"
+        )
+        lines.append(f"Cost: {cap} (the hard ceiling; a run stops when it is reached).")
+        for spec in live:
+            todo: Dict[str, int] = {c: 0 for c in grid.conditions}
+            for c in all_cells:
+                if c.model.id == spec.id and not c.path(out).exists():
+                    todo[c.condition] += 1
+            lines.append(_estimate_line(spec, todo, measured))
+    return "\n".join(lines)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser(prog="python -m src.arena.study")
+    commands = parser.add_subparsers(dest="command", required=True)
+    run = commands.add_parser("run", help="run a study grid (resumable)")
+    run.add_argument("grid", type=Path)
+    run.add_argument("--out", type=Path, required=True)
+    run.add_argument("--dry-run", action="store_true")
+    run.add_argument("--skip-preflight", action="store_true")
+    run.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="run live models from a tree with uncommitted changes (recorded)",
+    )
+    report = commands.add_parser("report", help="summarise a result bundle")
+    report.add_argument("bundle", type=Path)
+    verify = commands.add_parser(
+        "verify", help="replay every completed cell; must be 100%"
+    )
+    verify.add_argument("bundle", type=Path)
+    show = commands.add_parser("show", help="read one match, decision by decision")
+    show.add_argument("transcript", type=Path)
+    show.add_argument(
+        "--refused", action="store_true", help="only decisions that were refused"
+    )
+    args = parser.parse_args(argv)
+
+    if args.command == "show":
+        from src.arena.study_report import describe
+
+        print(describe(_read(args.transcript), refused_only=args.refused), end="")
+        return 0
+
+    if args.command == "verify":
+        return 0 if verify_results(args.bundle) else 1
+
+    if args.command == "report":
+        from src.arena.study_report import write_report
+
+        for written in write_report(args.bundle):
+            print(f"wrote {written}")
+        return 0
+
+    try:
+        grid = load_grid(args.grid)
+    except GridError as exc:
+        print(f"grid error: {exc}", file=sys.stderr)
+        return 2
+    print(_dry_run(grid, args.out))
+    if args.dry_run:
+        return 0
+    if not args.skip_preflight:
+        problems = preflight(grid)
+        if problems:
+            for problem in problems:
+                print(f"preflight: {problem}", file=sys.stderr)
+            return 3
+    summary = run_grid(
+        grid, args.out, grid_path=args.grid, allow_dirty=args.allow_dirty
+    )
+    print(
+        f"done {summary.done}, skipped {summary.skipped}, excluded attempts "
+        f"{summary.excluded_attempts}, failed {len(summary.failed)}"
+        + (f"; stopped: {summary.stopped}" if summary.stopped else "")
+    )
+    return 1 if summary.failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

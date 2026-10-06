@@ -1,18 +1,16 @@
-"""Tests for the Armor of Agathys spell and entity effect.
+"""Tests for the Rime Ward spell and entity effect.
 
-Verifies that casting Armor of Agathys grants temporary HP, deals cold
+Verifies that casting Rime Ward grants temporary HP, deals cold
 retaliation damage when the warded entity is hit by an attack while temp
 HP remain, and that the effect self-terminates when temp HP are depleted.
 """
 
 from unittest.mock import patch
 
-import pytest
 
 from src.models import AbilityScores, StatBlock, Entity, DamageType
 from src.models.damage import Damage
 from src.combat.event_bus import EventBus
-from src.combat.events import EventType
 from src.combat.damage_processor import DamageProcessor
 from src.combat.attack_resolver import AttackResolver
 from src.combat.spell_resolver import SpellResolver
@@ -44,7 +42,7 @@ def _make_entity(name="Fighter", hp=30, ac=15, speed=30, actions=None):
 
 def _make_attacker(name="Goblin"):
     """Create an entity with a melee attack action."""
-    from src.models.action import AttackAction, ActionType
+    from src.models.action import AttackAction
 
     scimitar = AttackAction(
         name="Scimitar",
@@ -75,18 +73,16 @@ def _setup(*entities):
 
 
 def _load_spell():
-    return StatBlockLoader.load_spell_from_json(
-        str(SPELLS_DIR / "armor_of_agathys.json")
-    )
+    return StatBlockLoader.load_spell_from_json(str(SPELLS_DIR / "rime_ward.json"))
 
 
 # -- Loading tests ------------------------------------------------------------
 
 
-class TestArmorOfAgathysLoading:
+class TestRimeWardLoading:
 
     def test_loads_native_program(self):
-        """Armor of Agathys is a native program: a lifetime granting temp HP with a
+        """Rime Ward is a native program: a lifetime granting temp HP with a
         retaliation trigger (its effect is inline, not a separate entity-effect file).
         """
         spell = _load_spell()
@@ -118,10 +114,10 @@ class TestArmorOfAgathysLoading:
 # -- Temp HP grant tests ------------------------------------------------------
 
 
-class TestArmorOfAgathysTempHP:
+class TestRimeWardTempHP:
 
     def test_grants_temp_hp_on_cast(self):
-        """Casting Armor of Agathys should grant 5 temp HP to the caster."""
+        """Casting Rime Ward should grant 5 temp HP to the caster."""
         caster = _make_entity()
         bus, engine, dp, ar, spell_res = _setup(caster)
 
@@ -153,7 +149,7 @@ class TestArmorOfAgathysTempHP:
 # -- Retaliation tests --------------------------------------------------------
 
 
-class TestArmorOfAgathysRetaliation:
+class TestRimeWardRetaliation:
 
     def test_attacker_takes_cold_damage_on_hit(self):
         """A creature that hits the warded entity should take 5 cold damage."""
@@ -232,7 +228,7 @@ class TestArmorOfAgathysRetaliation:
 # -- Self-termination tests ---------------------------------------------------
 
 
-class TestArmorOfAgathysSelfTermination:
+class TestRimeWardSelfTermination:
 
     def test_effect_removed_when_temp_hp_depleted_by_attack(self):
         """The effect should auto-remove when temp HP reach 0 from attack damage."""
@@ -249,7 +245,10 @@ class TestArmorOfAgathysSelfTermination:
         # Patch roll_formula at both import sites: action.roll_damage() and
         # effects.deal_damage() use their own imported copies.
         action = attacker.stat_block.actions[0]
-        mock_roll = lambda f: 5 if f == "5" else 10
+
+        def mock_roll(f):
+            return 5 if f == "5" else 10
+
         with (
             patch("src.spells.blocks.rolls.roll_d20", return_value=20),
             patch("src.spells.blocks.damage.roll_formula", side_effect=mock_roll),
@@ -298,7 +297,9 @@ class TestArmorOfAgathysSelfTermination:
         action = attacker.stat_block.actions[0]
 
         # Force hit, scimitar deals 8 damage (> 5 temp HP)
-        mock_roll = lambda f: 5 if f == "5" else 8
+        def mock_roll(f):
+            return 5 if f == "5" else 8
+
         with (
             patch("src.spells.blocks.rolls.roll_d20", return_value=20),
             patch("src.spells.blocks.damage.roll_formula", side_effect=mock_roll),

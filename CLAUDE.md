@@ -34,9 +34,10 @@ the mistake is not repeated.
 
 ## 1. Project overview
 
-**D&D Auto-Battler** — a D&D 5e combat simulator. The engine is **Python** (`src/`),
-usable as a library or through a FastAPI web app (`web/`) with a browser JS client
-(`web/static/js/`). **Creatures, spells, and rules are JSON data** — most content is
+**Arbiter Arena** (formerly D&D Auto-Battler) — an SRD 5.1-compatible combat simulator
+and a deterministic evaluation harness for tool-using LLM agents. The engine is
+**Python** (`src/`), usable as a library or through a FastAPI web app (`web/`) with a
+browser JS client (`web/static/js/`). **Creatures, spells, and rules are JSON data** — most content is
 added without touching Python.
 
 The ambition (see [the vision doc](docs/current/SPELL_SYSTEM_VISION.md)): a **massively
@@ -227,8 +228,18 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
 | Run all tests | `pytest tests/ -q` |
 | Run one test | `pytest tests/test_spells.py::TestX::test_y -q` |
 | Format | `black src/ web/ tests/` |
-| Lint | `flake8 src/ web/` |
+| Lint | `flake8 src/ web/ tests/` |
 | Type-check | `mypy src/` |
+| Run a study grid (resumable) | `python -m src.arena.study run GRID.toml --out results/<name>` (`--dry-run` to preview) |
+| Report on a study bundle | `python -m src.arena.study report results/<name>` |
+| Verify a bundle replays (must be 100%) | `python -m src.arena.study verify results/<name>` |
+| Read one match, decision by decision | `python -m src.arena.study show <transcript.jsonl> [--refused]` |
+| No-key demo of the whole pipeline | `python -m src.arena.study run examples/study/demo.toml --out results/demo` |
+| C1 parser audit | `python -m src.arena.audit sample results/<name> --out audit/` → `… label audit/` → `… score audit/ --report results/<name>/report` |
+
+- **Check exit codes, not tails.** In a chained command, never pipe a check through `tail`/`head`
+  unless `set -o pipefail` is on: the pipe reports the *last* command's status, so a failing
+  `mypy` would read as success (§9 2026-09-24).
 
 - **RNG:** all randomness flows through a single **context-scoped** `random.Random` in
   `src/utils/dice.py` (a `contextvars.ContextVar`), so each battle can own its own seed
@@ -281,6 +292,126 @@ leave a brief note here.
 - **Rule going forward:** the concrete, testable rule.
 ```
 
+### 2026-10-07 — Green CI on fresh dependencies, while every page returned 500
+- **Context:** The V1 fresh-clone test, run just before merging the study to `main`.
+- **What went wrong:** the web extra floors `fastapi` but sets no ceiling. So a fresh
+  install resolved Starlette 1.x, which removed `TemplateResponse(name, {"request":
+  ...})`, and `/`, `/battle` and `/playback` all returned 500.
+  - CI installs fresh too, so it ran the broken version and stayed green, because no test
+    requested a page.
+  - The developer's older venv only raised a deprecation warning, so nobody saw it.
+- **Rule going forward:** every route a user opens needs at least one test that requests
+  it and checks the status. Those are the tests that notice when a dependency upgrade
+  breaks something. Treat a deprecation warning from a dependency as a failure that hasn't
+  happened yet, and fix it while it is still only a warning.
+
+### 2026-09-30 — A test pinned a boundary convention that broke the rules
+- **Context:** The Phase 2 pilot, the first live data. The engine refused 141 moves as
+  overlapping another creature when the two only touched: plain D&D adjacency.
+- **What went wrong:** `BoundingBox.overlaps` used closed intervals, so a shared face
+  counted as overlap. A unit test, `test_overlaps_touching_edge`, asserted exactly that,
+  so the suite defended the bug instead of catching it.
+  - Nobody checked the convention against SRD 5.1, which forbids only ending a move
+    *in* another creature's space.
+  - Every layer above inherited the rule. The menus never offered an adjacent spot, so
+    only the free-coordinate conditions were ever refused for one. That silently
+    biased the study toward its own hypotheses.
+- **Rule going forward:** a boundary convention (`<` vs `<=`, inclusive vs exclusive, a
+  tolerance) *is* a rules decision.
+  - A test that pins one must say which rule it encodes. Here: "SRD: adjacent is legal;
+    only ending in a space is not".
+  - When one primitive is used for two purposes (occupancy vs area hits), give each
+    purpose its own semantics rather than letting one inherit the other's.
+  - And a test that asserts a behaviour is not evidence the behaviour is right. Check
+    it against the source of truth.
+
+### 2026-09-24 — A mock that only speaks well-formed output proves nothing about real models
+- **Context:** The Phase 1 review, before the first live pilot. The offline smoke ran every
+  condition x scenario through the real runner with a mock model, and was green.
+- **What went wrong:** the mock only ever wrote well-formed calls (plus one tidy "stumble"
+  per condition). Fed the shapes real models and hosts actually send, the harness broke:
+  - `""` or `"{bad json"` as tool arguments raised `JSONDecodeError` in the adapter.
+  - `null` for an optional argument raised `TypeError` in the executor.
+  - Both escaped as "harness bugs", which the study runner, by design, stops the whole
+    grid on.
+  - A move by menu `option_id` was accepted in C2+M. The schema no longer offered it, but
+    the executor still honoured it, and hosts do not enforce schemas.
+
+  Every test passed, because no test spoke like a real model.
+- **Rule going forward:** a boundary that accepts model output must be tested with
+  **realistic malformed payloads**, not only with the happy path and one designed slip.
+  Test through the real path, and let a hostile mock run in the offline smoke. A guard
+  expressed only in a schema or a prompt is a request, not a guarantee: enforce it where
+  the value is consumed.
+
+### 2026-09-24 — A check piped through `tail` cannot fail
+- **Context:** Committing slice 3 of the interface study, chaining
+  `black --check && flake8 && mypy src/ | tail -1 && pytest | tail -1 && git commit`.
+- **What went wrong:** mypy found an error, but a pipeline's exit status is its *last*
+  command's, and `tail` succeeded. The chain carried on, and the commit went in with a type
+  error. The output did show "Found 1 error", but nothing acted on it.
+- **Rule going forward:** in any chain that gates a commit, either run the check unpiped or
+  `set -o pipefail` first. More generally, a gate is only as good as the exit status it reads;
+  a check whose failure cannot stop anything is a comment.
+
+### 2026-09-21 — Measuring at the configuration you designed measures your design, not the system
+- **Context:** Quantifying how much the enumerated action menu's discretisation costs, by comparing
+  the options it offers against the options a fine sweep proves reachable. Measured on the AoE
+  scenario and registered the result in the pre-registration: **coverage 9/9 = 100%**, i.e. the menu
+  is outcome-complete and costs nothing.
+- **What went wrong:** that number was taken at the scenario's **opening position** — which is the
+  formation its author deliberately arranged so the intended decision would be available. It is the
+  single least representative board in the match. Sampling across the formations a match actually
+  produces gave **75% minimum, 92% median**: the menu *does* lose options, just not in the tableau
+  it was tested on. The figure was already written into the pre-registration, and had data been
+  collected first, correcting it afterwards would have been indistinguishable from moving the
+  goalposts. Nothing failed; every test passed; the measurement was simply of the wrong population.
+- **Rule going forward:** a measurement over states must **sample the states the system will really
+  be in**, and report the distribution — minimum, median, n — not a single frame. Prefer the
+  *worst* case as the registered claim, because "this loses nothing" has to hold at the tightest
+  moment, not on average. Be most suspicious when the sampled state is one you constructed: a
+  fixture, a scenario opening, a hand-built example. Corollary, and the reason this is worth the
+  entry: the metric was honest and the code correct — the error was entirely in *which* board it
+  ran on, which no test can catch for you.
+
+### 2026-09-21 — An identifier the model must retype is part of the interface under test
+- **Context:** Building the recording layer for the action-interface study. Entity ids were 16
+  random hex characters (`c735df5ef7697fb9`), drawn from the seeded RNG. The problem surfaced as a
+  replay nuisance — two same-seed runs hashed differently because ids differed — and the first fix
+  was to rebuild entities under the recorded seed.
+- **What went wrong:** that fix was correct and beside the point. The study compares interface
+  conditions, and under two of them the model must **emit** an entity id to name a target, while
+  under the enumerated-menu condition it picks a short option id and never types one. An opaque hex
+  id is therefore a transcription tax charged to some conditions and not others, and the failures it
+  causes land in `unknown_target` — one of the very categories the headline hypothesis is stated in
+  terms of. Part of the menu's "advantage" would have been that it spared the model a copying
+  chore. Nothing in the tests could have caught this: every test passed, the ids were unique and
+  reproducible, and the confound lives entirely in what the data would later *mean*.
+- **Rule going forward:** when something is measured across conditions, audit every artefact the
+  conditions **do not share** — not just the one you deliberately varied. An identifier, a
+  formatting quirk, a field ordering: if one arm has to reproduce it and another does not, it is an
+  independent variable whether you intended it or not. Fix it before the data exists, because
+  afterwards it is a limitation rather than a control. (Second instance in this repo: the
+  2026-09-15 raw-coordinate confound, where agents guessing feet produced 12–37 illegal moves a
+  match until legal candidates were offered. Same shape, different surface.) Corollary: a
+  *reproducibility* problem and a *validity* problem can have the same symptom; solving the first
+  does not touch the second, so ask which one you actually have.
+
+### 2026-09-21 — A guard that runs before the field it guards is a comment
+- **Context:** Capturing per-decision telemetry. `RequestRecord.__post_init__` scrubbed API-key
+  shapes out of the model's raw output before it reached the transcript.
+- **What went wrong:** adapters construct the record with the timing and token counts they have,
+  then assign `raw_output` as they parse the rest of the response. So the scrub ran at construction,
+  against a field that was still `None`, and the real value — assigned a moment later — was never
+  touched. An echoed key reached the saved JSONL. The code read as obviously correct; only a test
+  that wrote a real transcript and grepped it for the secret exposed it.
+- **Rule going forward:** put a sanitiser at the **serialisation boundary**, not in the
+  constructor — the boundary is the one place every value must pass through and cannot be bypassed
+  by a later mutation. More generally, when a guard and the data it guards are separated in time,
+  test the guard *through the path that actually produces the data*, never by constructing the
+  object the way the guard expects. (Same family as 2026-08-08's "shipped feature unreachable at
+  the wiring seam" — the mechanism existed and looked complete, but nothing real ever reached it.)
+
 ### 2026-09-17 — A richer policy lost to a trivial one because a penalty had no counter-force
 - **Context:** Benchmarking the utility-scoring `HeuristicAgent` against the weak `ScriptedAgent`
   yardstick. On the symmetric 2v2 melee scenario (`alpha_strike`) the heuristic won only ~35%,
@@ -302,6 +433,25 @@ leave a brief note here.
   baseline on the scenario built to test it** — "beats Random" is not "beats a three-line if/elif."
   A policy that loses to the scripted agent on the scenario meant to showcase it is the loudest
   possible signal of a scoring bug.
+
+### 2026-09-25 — A metric that cannot fail is not a metric
+- **Context:** Pre-pilot review of the arena's measurement code. Two separate findings turned
+  out to be the same mistake.
+- **What went wrong:** `telemetry._sum_or_none` deliberately returns `None` — not `0` — when a
+  provider reports no token usage, with a docstring explaining that "free" and "not reported"
+  are different facts. Both consumers then wrote `telemetry.get("input_tokens") or 0`. So an
+  unbilled cell cost `$0.0000`, the study's hard spend cap could never bind, and the cost metric
+  would have published `0.000000` as a *result*. Separately, C1's parse layer folded "how much
+  tolerance did the command need" together with "did the model also write prose", which made the
+  best layer unreachable for any realistic response — so a registered bound read ~0 by
+  construction and could not have come out any other way.
+- **Rule going forward:** When you add a measurement, ask what value would falsify it and check
+  that value is reachable. A number that can only come out one way — a cost that is always zero, a
+  bound that is always nil, a guard that never trips — is telling you about the instrument, not the
+  subject. Two specific corollaries: (1) a layer that preserves a distinction is worthless if its
+  consumer coerces it away, so follow the value to every reader (same seam-auditing lesson as
+  2026-08-08 and 2026-08-31); (2) one function must answer one question — `_layer` answering two
+  made the cheaper answer silently win.
 
 ### 2026-09-03 — A hand-written schema needs a machine-checked link to the code it describes
 - **Context:** Building the per-field block schema (`BlockContract.fields`) that lets the loader

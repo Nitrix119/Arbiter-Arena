@@ -21,14 +21,21 @@ spell **save DC is the actor's own** stat and is always shown; the target's resu
 is never in the result (the next observation carries it, gated by ``reveal_enemy_hp``).
 """
 
+import math
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from src.arena.action_space import move_candidates
+from src.arena.error_codes import ENGINE_ERROR, MALFORMED_OUTPUT
+from src.arena.identifiers import resolve
 from src.arena.information_policy import FULL_INFORMATION, InformationPolicy
-from src.models.action import AttackAction
+from src.errors import OUT_OF_RANGE, UNKNOWN_ACTION, UNKNOWN_TARGET, RuleViolation
+from src.models.action import AttackAction, SpellAction
 from src.models.entity import Entity
+from src.models.spell_properties import AOEShape
 from src.spatial.geometry import Point3D
+from src.spatial.range_check import effective_range_ft
 
 if TYPE_CHECKING:
     from src.combat.combat_system import CombatSystem
@@ -47,7 +54,7 @@ TOOLS: List[Dict[str, Any]] = [
         "name": TOOL_ATTACK,
         "description": (
             "Make a weapon/attack action against one target. Use an attack `name` "
-            "and a target `entity_id` from your legal-action menu."
+            "and a target `entity_id` from the battlefield."
         ),
         "input_schema": {
             "type": "object",
@@ -55,7 +62,7 @@ TOOLS: List[Dict[str, Any]] = [
                 "action_name": {
                     "type": "string",
                     "description": (
-                        "The attack's name, exactly as listed in your options."
+                        "The attack's name, as listed under your capabilities."
                     ),
                 },
                 "defender_id": {
@@ -80,7 +87,7 @@ TOOLS: List[Dict[str, Any]] = [
                 "spell_name": {
                     "type": "string",
                     "description": (
-                        "The spell's name, exactly as listed in your options."
+                        "The spell's name, as listed under your capabilities."
                     ),
                 },
                 "target_ids": {
@@ -93,12 +100,28 @@ TOOLS: List[Dict[str, Any]] = [
                 "target_point": {
                     "type": "object",
                     "properties": {
-                        "x": {"type": "number"},
-                        "y": {"type": "number"},
-                        "z": {"type": "number"},
+                        "x": {
+                            "type": "number",
+                            "description": "Aim point x, in feet (east).",
+                        },
+                        "y": {
+                            "type": "number",
+                            "description": "Aim point y, in feet (up); usually 0.",
+                        },
+                        "z": {
+                            "type": "number",
+                            "description": "Aim point z, in feet (south).",
+                        },
                     },
-                    "required": ["x", "y"],
-                    "description": "Point in feet to aim an area spell at.",
+                    # x and z are the ground plane; y is the vertical axis and defaults
+                    # to 0. Requiring x/y here (as this did) asked for the one axis a
+                    # ground-level aim never needs and made the one it does need
+                    # optional.
+                    "required": ["x", "z"],
+                    "description": (
+                        "Ground point in feet to aim an area spell at: `x` east, "
+                        "`z` south, `y` up (omit unless aiming above ground)."
+                    ),
                 },
                 "slot_level": {
                     "type": "integer",
@@ -111,24 +134,18 @@ TOOLS: List[Dict[str, Any]] = [
     },
     {
         "name": TOOL_MOVE,
+        # Raw coordinates only. The schema used to accept *either* a menu `option_id`
+        # or raw x/z, which let the model pick its own experimental condition per
+        # decision — that one tool spanned C2's format and C3's affordance, the very
+        # distinction C2+M exists to isolate (V1_PLAN, Phase 0 decisions). The executor
+        # still honours `option_id` for the deterministic baselines; see `_move`.
         "description": (
-            "Move on the battlefield. Either pass an `option_id` from your legal move "
-            "options (a named, already-legal destination), OR give raw `x`/`z` in "
-            "feet for a "
-            "bespoke spot. Costs movement equal to the straight-line distance; "
-            "you cannot "
-            "move onto another creature."
+            "Move on the battlefield to a point given in feet. Costs movement equal "
+            "to the straight-line distance; you cannot move onto another creature."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "option_id": {
-                    "type": "string",
-                    "description": (
-                        "id of a move option from your legal options; resolves to "
-                        "its destination. Omit if giving raw x/z."
-                    ),
-                },
                 "x": {
                     "type": "number",
                     "description": "Destination x, in feet (east).",
@@ -142,6 +159,7 @@ TOOLS: List[Dict[str, Any]] = [
                     "description": "Destination z, in feet (south).",
                 },
             },
+            "required": ["x", "z"],
         },
     },
     {
@@ -172,8 +190,98 @@ def _ok(**fields: Any) -> Dict[str, Any]:
     return {"ok": True, **fields}
 
 
-def _error(message: str) -> Dict[str, Any]:
-    return {"ok": False, "error": message}
+def _error(code: str, message: str) -> Dict[str, Any]:
+    """A refused action: a stable *code* for metrics, prose for the model to read."""
+    return {"ok": False, "code": code, "error": message}
+
+
+def _require(args: Dict[str, Any], key: str, tool: str) -> Any:
+    """Return ``args[key]``, or refuse as malformed output.
+
+    A missing required argument is the *model's* formatting failure, not a rule the
+    engine declined — it belongs in a different taxonomy bucket, and it must not
+    surface as a bare ``KeyError``. ``null`` counts as missing: it is how an
+    OpenAI-style call says "not given".
+    """
+    if args.get(key) is None:
+        raise RuleViolation(
+            MALFORMED_OUTPUT, f"{tool} requires a {key!r} argument; none was given."
+        )
+    return args[key]
+
+
+# Model-written arguments arrive as whatever JSON the model produced. These readers
+# are the one place their *types* are checked, so a wrong type is a coded
+# malformed_output rather than a TypeError that would stop the study grid as a harness
+# bug (review 2026-09-24, C-2). A ``null`` optional argument is treated as absent — the
+# OpenAI-style convention — never as an error.
+
+#: A number as text, with an optional unit: the same forms C1's grammar reads
+#: (``NUMBER`` then an optional ``ft``/``feet``), so C2 is allowed exactly what C1 is.
+_NUMBER_TEXT = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*(?:ft|feet)?\s*$", re.IGNORECASE)
+
+
+def _malformed(message: str) -> RuleViolation:
+    return RuleViolation(MALFORMED_OUTPUT, message)
+
+
+def _text(args: Dict[str, Any], key: str, tool: str) -> str:
+    """A required name argument, which must be a string."""
+    value = _require(args, key, tool)
+    if not isinstance(value, str):
+        raise _malformed(f"{tool}'s {key!r} must be a name (a string); got {value!r}.")
+    return value
+
+
+def _coordinate(value: Any, what: str) -> float:
+    """A finite distance in feet, given as a number or as number text."""
+    number: Optional[float] = None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        number = float(value)
+    elif isinstance(value, str):
+        match = _NUMBER_TEXT.match(value)
+        number = float(match.group(1)) if match else None
+    if number is None or not math.isfinite(number):
+        raise _malformed(f"{what} must be a number of feet; got {value!r}.")
+    return number
+
+
+def _point(args: Dict[str, Any], what: str) -> Point3D:
+    """A point from ``x``/``z`` (required) and ``y`` (optional, default 0)."""
+    missing = [axis for axis in ("x", "z") if args.get(axis) is None]
+    if missing:
+        raise _malformed(
+            f"{what} requires both 'x' and 'z' (ground feet); missing "
+            + " and ".join(repr(axis) for axis in missing)
+            + "."
+        )
+    y = args.get("y")
+    return Point3D(
+        _coordinate(args["x"], f"{what} x"),
+        0.0 if y is None else _coordinate(y, f"{what} y"),
+        _coordinate(args["z"], f"{what} z"),
+    )
+
+
+def _target_ids(value: Any) -> List[str]:
+    """Entity ids to target: a list of names, or one bare name (as C1 may write)."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list) and all(isinstance(v, str) for v in value):
+        return list(value)
+    raise _malformed(f"cast_spell's 'target_ids' must be a list of ids; got {value!r}.")
+
+
+def _slot_level(value: Any) -> Optional[int]:
+    """A whole-number slot level, given as a number or as number text."""
+    if value is None:
+        return None
+    level = _coordinate(value, "cast_spell's 'slot_level'")
+    if not level.is_integer():
+        raise _malformed(f"cast_spell's 'slot_level' must be whole; got {value!r}.")
+    return int(level)
 
 
 def _gate_roll(
@@ -212,6 +320,32 @@ def _gate_roll(
     return dict(roll_detail)
 
 
+def _refuse_out_of_range_aim(actor: Entity, spell: SpellAction, point: Point3D) -> None:
+    """Refuse an area aim beyond the spell's range, rather than let it be moved.
+
+    SRD: an area is centred on "a point you choose within range". The engine clamps an
+    over-range aim onto the edge of range (``derive_aoe_origin``), which silently
+    repairs a spatial error in the raw-parameter conditions — the category H2 counts —
+    while the menu condition can never make one (review 2026-09-24, H-4). The test is
+    the engine's own: distance from the caster's centre against range plus half its
+    size. Cones and lines start at the caster and are only *pointed*, so any point is
+    in range for them.
+    """
+    if spell.aoe is None or spell.aoe.shape in (AOEShape.CONE, AOEShape.LINE):
+        return
+    range_ft = effective_range_ft(spell)
+    if range_ft is None:
+        return
+    reach = range_ft + actor.stat_block.size.size_ft / 2.0
+    distance = actor.bounding_box.center().distance_to(point)
+    if distance > reach:
+        raise RuleViolation(
+            OUT_OF_RANGE,
+            f"{spell.name} must be aimed within its {range_ft:g} ft range; that "
+            f"point is {distance:.1f} ft away.",
+        )
+
+
 class ToolExecutor:
     """Validates a :class:`ToolCall` and applies it via the ``CombatSystem`` referee.
 
@@ -243,35 +377,77 @@ class ToolExecutor:
         }
         handler = handlers.get(call.name)
         if handler is None:
-            return _error(f"Unknown tool: {call.name!r}")
+            return _error(UNKNOWN_ACTION, f"Unknown tool: {call.name!r}")
+        if not isinstance(call.arguments, dict):
+            return _error(
+                MALFORMED_OUTPUT,
+                f"{call.name}'s arguments must be an object of named fields.",
+            )
         try:
             return handler(actor, call.arguments, policy)
-        except (ValueError, RuntimeError, KeyError) as exc:
-            return _error(str(exc))
+        except RuleViolation as exc:
+            return _error(exc.code, str(exc))
+        except KeyError as exc:
+            return _error(MALFORMED_OUTPUT, f"Missing or unknown key: {exc}")
+        except (ValueError, RuntimeError, TypeError) as exc:
+            # TypeError is a backstop: the argument readers above should leave none,
+            # and one reaching here is counted where it can be seen rather than
+            # stopping the study grid.
+            # An untyped refusal — the engine declining something it cannot model
+            # (an unsupported AoE shape) or a path that still needs a code. Counted
+            # under its own bucket so a non-zero rate is visible, not silently
+            # merged into a real category.
+            return _error(ENGINE_ERROR, str(exc))
 
     # -- individual tools ------------------------------------------------------
 
     def _lookup(self, entity_id: str) -> Entity:
-        for e in self._combat.combatants:
-            if e.entity_id == entity_id:
-                return e
-        raise ValueError(f"Unknown entity_id: {entity_id!r}")
+        """The combatant *entity_id* names — by id first, then by display name.
+
+        Forgiving of spelling only (:mod:`src.arena.identifiers`): ``Raider 1`` finds
+        ``raider-1``, ``raider-3`` finds nothing, and a spelling two creatures share is
+        refused as ambiguous rather than guessed.
+        """
+        combatants = self._combat.combatants
+        matches = resolve(
+            entity_id,
+            [
+                [(e.entity_id, e) for e in combatants],
+                [(e.name, e) for e in combatants],
+            ],
+        )
+        if not matches:
+            raise RuleViolation(UNKNOWN_TARGET, f"Unknown entity_id: {entity_id!r}")
+        if len(matches) > 1:
+            raise RuleViolation(
+                UNKNOWN_TARGET,
+                f"Ambiguous target {entity_id!r}: it could name any of "
+                f"{sorted(e.entity_id for e in matches)}; use the entity_id.",
+            )
+        return matches[0]
 
     def _attack(
         self, actor: Entity, args: Dict[str, Any], policy: InformationPolicy
     ) -> Dict[str, Any]:
-        action_name = args["action_name"]
-        defender = self._lookup(args["defender_id"])
-        action = next(
-            (
-                a
-                for a in actor.stat_block.actions + actor.granted_actions
-                if isinstance(a, AttackAction) and a.name == action_name
-            ),
-            None,
-        )
-        if action is None:
-            raise ValueError(f"{actor.name} has no attack called {action_name!r}")
+        action_name = _text(args, "action_name", TOOL_ATTACK)
+        defender = self._lookup(_text(args, "defender_id", TOOL_ATTACK))
+        attacks = [
+            a
+            for a in actor.stat_block.actions + actor.granted_actions
+            if isinstance(a, AttackAction)
+        ]
+        matches = resolve(action_name, [[(a.name, a) for a in attacks]])
+        if not matches:
+            raise RuleViolation(
+                UNKNOWN_ACTION, f"{actor.name} has no attack called {action_name!r}"
+            )
+        if len(matches) > 1:
+            raise RuleViolation(
+                UNKNOWN_ACTION,
+                f"Ambiguous attack {action_name!r}: it could name any of "
+                f"{[a.name for a in matches]}.",
+            )
+        action = matches[0]
 
         hit, damage, roll_detail = self._combat.resolve_attack(actor, defender, action)
         return _ok(
@@ -285,24 +461,40 @@ class ToolExecutor:
     def _cast_spell(
         self, actor: Entity, args: Dict[str, Any], policy: InformationPolicy
     ) -> Dict[str, Any]:
-        spell_name = args["spell_name"]
+        # Resolved to the known spell's real name here, so the engine's own
+        # exact-match check stays strict and the arena alone owns the tolerance. A
+        # name that spells no known spell passes through unchanged, so the refusal is
+        # the engine's own (unknown_action, "does not know the spell").
+        written = _text(args, "spell_name", TOOL_CAST_SPELL)
+        known = resolve(written, [[(n, n) for n in actor.stat_block.known_spells]])
+        if len(known) > 1:
+            raise RuleViolation(
+                UNKNOWN_ACTION,
+                f"Ambiguous spell {written!r}: it could name any of {known}.",
+            )
+        spell_name = known[0] if known else written
         spell_action = self._combat.get_spell_for_entity(actor, spell_name)
 
-        defenders = [self._lookup(tid) for tid in args.get("target_ids", [])]
+        defenders = [self._lookup(tid) for tid in _target_ids(args.get("target_ids"))]
 
         target_point: Optional[Point3D] = None
         tp = args.get("target_point")
         if tp is not None:
-            target_point = Point3D(
-                float(tp["x"]), float(tp.get("y", 0.0)), float(tp["z"])
-            )
+            # x/z are the ground plane and are required; y (vertical) defaults to 0.
+            if not isinstance(tp, dict):
+                raise _malformed(
+                    "cast_spell's 'target_point' must be an object with x and z; "
+                    f"got {tp!r}."
+                )
+            target_point = _point(tp, "cast_spell target_point")
+            _refuse_out_of_range_aim(actor, spell_action, target_point)
 
         results = self._combat.resolve_spell(
             actor,
             defenders,
             spell_action,
             target=target_point,
-            slot_level=args.get("slot_level"),
+            slot_level=_slot_level(args.get("slot_level")),
         )
         per_target = []
         for entity, hit, damage, roll_detail, healing, healed in results:
@@ -322,6 +514,16 @@ class ToolExecutor:
     def _move(
         self, actor: Entity, args: Dict[str, Any], policy: InformationPolicy
     ) -> Dict[str, Any]:
+        """Move to a raw point, or — for the deterministic baselines only — an option.
+
+        ``option_id`` is deliberately **not** in the :data:`TOOLS` schema any more, so
+        no LLM condition can reach it: a tool accepting both a menu id and raw
+        coordinates would let the model choose its own condition per decision. The
+        executor still resolves one because ``ScriptedAgent``/``RandomAgent`` move by
+        option to stay overlap-clear without solving the geometry themselves
+        (:func:`~src.arena.agent._move_option_toward`), and a baseline inventing
+        illegal moves would corrupt the anchor the tactical metrics are read against.
+        """
         option_id = args.get("option_id")
         if option_id:
             option = next(
@@ -333,17 +535,17 @@ class ToolExecutor:
                 None,
             )
             if option is None:
-                raise ValueError(
+                raise RuleViolation(
+                    UNKNOWN_TARGET,
                     f"No move option {option_id!r} is available now; "
-                    "choose a listed option_id or give raw x/z."
+                    "choose a listed option_id or give raw x/z.",
                 )
             x, y, z = option.x, option.y, option.z
-        elif "x" in args and "z" in args:
-            x = float(args["x"])
-            z = float(args["z"])
-            y = float(args.get("y", 0.0))
         else:
-            raise ValueError("move requires either an option_id or both x and z.")
+            # The refusal names only x and z: option_id is the baselines' path, and
+            # advertising it to a model would reopen the one it must not have.
+            destination = _point(args, "move")
+            x, y, z = destination.x, destination.y, destination.z
         self._combat.move_entity(actor, x, y, z)
         return _ok(
             action=TOOL_MOVE,

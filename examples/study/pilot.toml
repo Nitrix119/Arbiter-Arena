@@ -1,0 +1,55 @@
+# The Phase 2 pilot (V1_PLAN §4): 1 model x 4 conditions x 4 scenarios x 2 seeds = 32
+# matches, plus the baselines (free). Refuses to run until every TODO is replaced.
+#
+#   python -m src.arena.study run examples/study/pilot.toml --out results/pilot --dry-run
+#   python -m src.arena.study run examples/study/pilot.toml --out results/pilot
+#
+# Live runs cost money: never start one without an explicit go-ahead.
+#
+# The pilot is not data (prereg §4.4): its matches never enter the confirmatory
+# analysis, and the final run uses seeds 101-110, disjoint from these.
+
+[study]
+name = "pilot"
+seeds = [1, 2]
+scenarios = ["kiting", "alpha_strike", "protect_squishy", "aoe_placement"]
+conditions = ["C1", "C2", "C2+M", "C3"]
+opponent = "scripted"          # the pilot decides Scripted vs Heuristic (prereg §4);
+                               # see pilot_opponent.toml for the free comparison
+spend_cap_usd = 2.0            # a hard stop, recomputed from disk on every resume
+max_attempts = 3
+backoff_seconds = 30
+
+[[models]]
+# The paid endpoint, not ":free": the harness refuses a $0 price (the cap could
+# never bind), the free tier's 1,000 requests/day is below the pilot's ~1,100
+# calls, and its only host is a 4-bit quant unlike the final run's (prereg §5).
+id = "nvidia/nemotron-3.5-lightning"
+provider = "openrouter"
+temperature = 0.0
+usd_per_m_input = 0.07         # CoreWeave's listed price, checked 2026-09-30
+usd_per_m_output = 0.20
+# CoreWeave at full precision (bf16): tools, tool choice and seed, and the best
+# uptime of the hosts (100% over a day; DeepInfra is cheaper but ~98.9%). It is
+# the only host allowed; fallbacks are off. It stays pinned for the final run.
+hosts = ["coreweave/bf16"]
+max_tokens = 4096              # recorded; a response cut at this limit is flagged
+# Nemotron is a thinking model, so pin reasoning rather than leave it to host
+# defaults (recorded in every manifest). Off: how this "Lightning" model is
+# mostly used, and reasoning tokens would count against max_tokens.
+reasoning = { enabled = false }
+
+[[models]]
+id = "baseline-scripted"
+provider = "baseline"
+policy = "scripted"
+
+[[models]]
+id = "baseline-random"
+provider = "baseline"
+policy = "random"
+
+[[models]]
+id = "baseline-heuristic"
+provider = "baseline"
+policy = "heuristic"

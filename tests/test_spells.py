@@ -15,7 +15,7 @@ from src.models import (
     DurationUnit,
 )
 from src.loaders.stat_block_loader import StatBlockLoader
-from src.combat import CombatSystem, CombatState, EventType
+from src.combat import CombatSystem, EventType
 from src.rules.effect_registry import EffectRegistry
 from src.spatial.geometry import Point3D
 from src.utils.dice import roll_d20, roll_formula
@@ -729,7 +729,8 @@ class TestNewSpellsCombat:
 
 
 class TestVampiricTouch:
-    """Vampiric Touch — concentration, melee spell attack, heals caster for half damage."""
+    """Vampiric Touch — concentration, melee spell attack, heals caster for half
+    damage."""
 
     @pytest.fixture
     def wizard(self) -> Entity:
@@ -772,7 +773,8 @@ class TestVampiricTouch:
         assert damage_steps[0]["formula"] == "3d6"
 
     def test_vampiric_touch_grants_action_on_hit(self, wizard, goblin, combat):
-        """After a successful cast, the wizard has a granted Vampiric Touch attack action."""
+        """After a successful cast, the wizard has a granted Vampiric Touch attack
+        action."""
         spell = StatBlockLoader.load_spell_from_json(
             str(SPELLS_DIR / "vampiric_touch.json")
         )
@@ -841,7 +843,8 @@ class TestVampiricTouch:
         assert not any(a.name == "Vampiric Touch" for a in wizard.granted_actions)
 
     def test_vampiric_touch_repeat_attack_heals(self, wizard, goblin, combat):
-        """Using the granted Vampiric Touch attack on a repeat turn also heals the caster."""
+        """Using the granted Vampiric Touch attack on a repeat turn also heals the
+        caster."""
         from unittest.mock import patch
         from src.models.action import AttackAction
 
@@ -882,7 +885,6 @@ class TestVampiricTouch:
     def test_vampiric_touch_healing_uses_floor_division(self, wizard, goblin, combat):
         """D&D rounding: 9 damage should heal for 4 (9 // 2 = 4), not 5."""
         from unittest.mock import patch
-        from src.models.action import AttackAction
 
         spell = StatBlockLoader.load_spell_from_json(
             str(SPELLS_DIR / "vampiric_touch.json")
@@ -924,12 +926,10 @@ class TestVampiricTouch:
             combat.resolve_spell(wizard, [goblin], spell)
 
         assert wizard.concentrating_on == "vampiric_touch"
-        hp_after_first = wizard.hp
 
         # Second cast (re-cast while concentration is active) — force hit
         wizard.resources.actions = 1
         wizard.take_damage(Damage(DamageType.BLUDGEONING, 10))
-        hp_before_second = wizard.hp
 
         with (
             patch("src.spells.blocks.rolls.roll_d20", return_value=20),
@@ -944,6 +944,41 @@ class TestVampiricTouch:
         assert healing == 4
         assert wizard.concentrating_on == "vampiric_touch"
         assert any(a.name == "Vampiric Touch" for a in wizard.granted_actions)
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="ledger A36: a re-cast while concentrating applies its healing twice",
+    )
+    def test_vampiric_touch_recast_heals_once(self, wizard, goblin, combat):
+        """The healing a re-cast reports is the healing the caster receives.
+
+        Found while cleaning the test lint (ledger A7): the recast below reports 4
+        healing but raises the wizard from 0 to 8 HP. Strict, so this fails loudly
+        (as an unexpected pass) the day the double application is fixed.
+        """
+        from unittest.mock import patch
+
+        spell = StatBlockLoader.load_spell_from_json(
+            str(SPELLS_DIR / "vampiric_touch.json")
+        )
+        goblin.current_hp = 200
+        with (
+            patch("src.spells.blocks.rolls.roll_d20", return_value=20),
+            patch("src.spells.blocks.damage.roll_formula", return_value=6),
+        ):
+            combat.resolve_spell(wizard, [goblin], spell)
+        wizard.resources.actions = 1
+        wizard.take_damage(Damage(DamageType.BLUDGEONING, 10))
+        hp_before = wizard.hp
+
+        with (
+            patch("src.spells.blocks.rolls.roll_d20", return_value=20),
+            patch("src.spells.blocks.damage.roll_formula", return_value=8),
+        ):
+            results = combat.resolve_spell(wizard, [goblin], spell)
+
+        assert results[0].healing == 4
+        assert wizard.hp == hp_before + 4
 
 
 if __name__ == "__main__":

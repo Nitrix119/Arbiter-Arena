@@ -7,7 +7,6 @@ from src.arena.heuristic.agent import HeuristicAgent
 from src.arena.heuristic.plan import PlannedAction
 from src.arena.information_policy import FULL_INFORMATION
 from src.arena.observation import build_observation
-from src.arena.tools import TOOLS
 from src.models import AttackAction, Damage, DamageType
 
 from .conftest import force_turn, load_spell
@@ -108,5 +107,5 @@ def test_caster_saves_the_slot_on_a_trivial_target(
     force_turn(combat, caster)
 
     agent = HeuristicAgent("Mage", "a", combat)
-    call = agent.decide(build_observation(combat, caster), TOOLS)
+    call = agent.decide(build_observation(combat, caster))
     assert call.name == "cast_spell" and call.arguments.get("spell_name") == "Fire Bolt"

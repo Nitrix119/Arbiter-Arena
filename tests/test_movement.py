@@ -1,9 +1,9 @@
 """Tests for entity movement (willing and forced) and AoE targeting."""
 
-import math
 import pytest
 
 from src.combat.combat_system import CombatSystem
+from src.errors import NO_EFFECT, RuleViolation
 from src.models.ability import AbilityScores
 from src.models.creature_size import CreatureSize
 from src.models.entity import Entity
@@ -78,11 +78,34 @@ class TestMoveEntity:
         mover = _make_entity(speed=30)
         combat = _make_combat(mover)
 
-        combat.move_entity(mover, 3.0, 4.0, 0.0)
+        combat.move_entity(mover, 3.0, 0.0, 4.0)  # on the ground plane (x, z)
 
         assert mover.x == 3.0
-        assert mover.y == 4.0
+        assert mover.z == 4.0
         assert mover.resources.movement == 25  # 30 - 5
+
+    def test_a_voluntary_move_cannot_change_altitude(self):
+        """Flight is not modelled and no creature has a fly speed (SRD: a creature
+        without one cannot move up through the air), so a move keeps its y."""
+        from src.errors import DESTINATION_BLOCKED, RuleViolation
+
+        mover = _make_entity(speed=30)
+        combat = _make_combat(mover)
+
+        with pytest.raises(RuleViolation) as refused:
+            combat.move_entity(mover, 0.0, 5.0, 0.0)
+
+        assert refused.value.code == DESTINATION_BLOCKED
+        assert mover.y == 0.0
+        assert mover.resources.movement == 30  # nothing spent
+
+    def test_a_creature_placed_off_the_ground_moves_at_its_own_height(self):
+        mover = _make_entity(speed=30, y=10.0)
+        combat = _make_combat(mover)
+
+        combat.move_entity(mover, 5.0, 10.0, 0.0)
+
+        assert (mover.x, mover.y) == (5.0, 10.0)
 
     def test_move_cost_is_continuous_not_rounded_to_a_grid(self):
         """Movement is measured in feet, continuously — not snapped to 5-ft squares.
@@ -137,13 +160,50 @@ class TestMoveEntity:
 
         assert mover.x == 0.0
 
-    def test_move_zero_distance_costs_nothing(self):
+    # A willing move that goes nowhere changes no state, so it is refused as
+    # `no_effect` rather than accepted as a free action (ledger A31). In the pilot, a
+    # model repeated one until the per-turn cap, each counted as a valid action.
+
+    def test_move_to_own_position_is_refused_as_no_effect(self):
+        mover = _make_entity(speed=30, x=10.0, z=5.0)
+        combat = _make_combat(mover)
+
+        with pytest.raises(RuleViolation, match="already at") as refused:
+            combat.move_entity(mover, 10.0, 0.0, 5.0)
+
+        assert refused.value.code == NO_EFFECT
+        assert (mover.x, mover.z) == (10.0, 5.0)
+        assert mover.resources.movement == 30
+
+    def test_a_move_too_short_to_cost_anything_is_refused(self):
+        # Movement is charged to FEET_DP (0.1 ft), so 0.04 ft would cost 0.0: a free
+        # nudge in place, which is the same no-op.
         mover = _make_entity(speed=30)
         combat = _make_combat(mover)
 
-        combat.move_entity(mover, 0.0, 0.0, 0.0)
+        with pytest.raises(RuleViolation) as refused:
+            combat.move_entity(mover, 0.04, 0.0, 0.0)
 
-        assert mover.resources.movement == 30
+        assert refused.value.code == NO_EFFECT
+        assert mover.x == 0.0
+
+    def test_the_shortest_chargeable_move_is_allowed(self):
+        mover = _make_entity(speed=30)
+        combat = _make_combat(mover)
+
+        combat.move_entity(mover, 0.1, 0.0, 0.0)
+
+        assert mover.x == 0.1
+        assert mover.resources.movement == 29.9
+
+    def test_a_push_that_goes_nowhere_is_still_fine(self):
+        # Forced movement is not a choice the creature made; a zero push is harmless.
+        mover = _make_entity()
+        combat = _make_combat(mover)
+
+        combat.push_entity(mover, 0.0, 0.0, 0.0)
+
+        assert mover.x == 0.0
 
     def test_dead_entity_does_not_block_movement(self):
         mover = _make_entity("Mover")
@@ -165,6 +225,54 @@ class TestMoveEntity:
         # large box [15,25]×[0,10]×[-5,5] — overlap at x=[15,17.5] → raises
         with pytest.raises(ValueError, match="overlaps"):
             combat.move_entity(mover, 15.0, 0.0, 0.0)
+
+    # SRD 5.1 forbids ending a move in another creature's *space*. A Medium space is
+    # 5 by 5 ft, so two Medium creatures 5 ft apart centre-to-centre are adjacent:
+    # their spaces share an edge, not an area. Found by the Phase 2 pilot, where
+    # 29% of raw-coordinate `destination_blocked` refusals were adjacency.
+
+    @pytest.mark.parametrize(
+        "dx, dz",
+        [(5.0, 0.0), (-5.0, 0.0), (0.0, 5.0), (5.0, 5.0), (5.0, -3.0)],
+        ids=["east", "west", "south", "diagonal", "edge-offset"],
+    )
+    def test_move_adjacent_to_a_creature_is_allowed(self, dx, dz):
+        mover = _make_entity("Mover", x=-20.0)
+        other = _make_entity("Other", x=0.0)
+        combat = _make_combat(mover, other)
+
+        combat.move_entity(mover, dx, 0.0, dz)
+
+        assert (mover.x, mover.z) == (dx, dz)
+
+    def test_adjacent_to_a_large_creature_is_allowed(self):
+        # Large box [15,25] on x; a Medium mover at x=12.5 spans [10,15]: touching.
+        mover = _make_entity("Mover", size=CreatureSize.MEDIUM)
+        large = _make_entity("Dragon", size=CreatureSize.LARGE, x=20.0)
+        combat = _make_combat(mover, large)
+
+        combat.move_entity(mover, 12.5, 0.0, 0.0)
+
+        assert mover.x == 12.5
+
+    def test_adjacency_survives_float_noise(self):
+        # 12.071 - 2.5 and 7.071 + 2.5 need not be the same float; a 3-dp position
+        # (the menu's precision) must not turn exact adjacency into an overlap.
+        mover = _make_entity("Mover", x=-20.0)
+        other = _make_entity("Other", x=7.071, z=3.333)
+        combat = _make_combat(mover, other)
+
+        assert combat.is_destination_clear(mover, 12.071, 0.0, 8.333)
+        assert combat.is_destination_clear(mover, 2.071, 0.0, -1.667)
+
+    def test_a_small_real_overlap_still_blocks(self):
+        # The pilot's smallest genuine overlaps were 0.06 ft: not adjacency.
+        mover = _make_entity("Mover", x=-20.0)
+        other = _make_entity("Other", x=0.0)
+        combat = _make_combat(mover, other)
+
+        with pytest.raises(ValueError, match="overlaps"):
+            combat.move_entity(mover, 4.94, 0.0, 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -220,9 +328,11 @@ class TestPushEntity:
 class TestGetTargetsInAoe:
     def test_fireball_hits_entities_in_radius(self):
         caster = _make_entity("Wizard", x=0.0, team="heroes")
-        # Goblin A centred at x=5: bbox [2.5,7.5], nearest pt to (10,0,0) is (7.5,0,0), dist=2.5 < 20 → hit
+        # Goblin A centred at x=5: bbox [2.5,7.5], nearest pt to (10,0,0) is (7.5,0,0),
+        # dist=2.5 < 20 → hit
         target_a = _make_entity("Goblin A", x=5.0, team="monsters")
-        # Goblin B centred at x=35: bbox [32.5,37.5], nearest pt to (10,0,0) is (32.5,0,0), dist=22.5 > 20 → miss
+        # Goblin B centred at x=35: bbox [32.5,37.5], nearest pt to (10,0,0) is
+        # (32.5,0,0), dist=22.5 > 20 → miss
         target_b = _make_entity("Goblin B", x=35.0, team="monsters")
         combat = _make_combat(caster, target_a, target_b)
 

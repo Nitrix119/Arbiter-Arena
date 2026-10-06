@@ -38,10 +38,12 @@ def test_rule_is_native_and_valid(path):
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     name = data.get("name", "")
-    # Native shape: a block ``program``, and none of the legacy ``triggers``/``effects``.
+    # Native shape: a block ``program``, and none of the legacy
+    # ``triggers``/``effects``.
     assert "program" in data, f"{path} is not native (no program)"
     assert "effects" not in data and "triggers" not in data, f"{path} has legacy keys"
-    # The program parses and passes the load-time validator (also exercised by the loader).
+    # The program parses and passes the load-time validator (also exercised by the
+    # loader).
     rule = RuleLoader.load(path)
     assert rule.program is not None
     validate_program(rule.program, spell_name=name)

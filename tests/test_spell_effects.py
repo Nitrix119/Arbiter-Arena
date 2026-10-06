@@ -193,7 +193,8 @@ class TestSpellEffectApplicationOnFailedSave:
         assert event.cancelled is True
 
     def test_charmed_not_applied_when_save_succeeds(self):
-        """Charm Person should NOT apply the charmed effect when the defender succeeds."""
+        """Charm Person should NOT apply the charmed effect when the defender
+        succeeds."""
         wizard = load_wizard()
         goblin = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(wizard, goblin)
@@ -206,7 +207,8 @@ class TestSpellEffectApplicationOnFailedSave:
         assert goblin.lifetimes == []  # no charmed rider installed
 
     def test_charmed_attack_is_blocked_after_spell(self):
-        """After a successful Charm Person cast, the charmed goblin cannot attack the wizard."""
+        """After a successful Charm Person cast, the charmed goblin cannot attack the
+        wizard."""
         wizard = load_wizard()
         goblin = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(wizard, goblin)
@@ -405,7 +407,8 @@ class TestShieldOfFaithEffect:
         assert mod.effect_name == "shield_of_faith"
 
     def test_stat_breakdown_contains_base_and_modifier(self):
-        """get_stat_breakdown returns the base AC line followed by the spell modifier."""
+        """get_stat_breakdown returns the base AC line followed by the spell
+        modifier."""
         cleric = load_cleric()
         goblin = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(cleric, goblin)
@@ -422,7 +425,8 @@ class TestShieldOfFaithEffect:
         assert breakdown[1] == {"source": "Shield of Faith", "value": 2}
 
     def test_concentration_tracked_on_caster(self):
-        """After casting, the caster's concentrating_on and concentration_target are set."""
+        """After casting, the caster's concentrating_on and concentration_target are
+        set."""
         cleric = load_cleric()
         goblin = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(cleric, goblin)
@@ -436,7 +440,8 @@ class TestShieldOfFaithEffect:
         assert cleric.concentration_target is cleric
 
     def test_ac_restored_when_effect_removed(self):
-        """Removing the shield_of_faith effect strips the modifier and restores base AC."""
+        """Removing the shield_of_faith effect strips the modifier and restores base
+        AC."""
         cleric = load_cleric()
         goblin = load_goblin()
         bus, reg, resolver = setup_engine_and_resolver(cleric, goblin)

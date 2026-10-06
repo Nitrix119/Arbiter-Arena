@@ -1,0 +1,8 @@
+# Line endings: LF everywhere, in the repository and the working copy, whatever a
+# machine's core.autocrlf says. The repository already stores LF; this stops a Windows
+# checkout from mixing CRLF files with the LF files tools write (ledger A7).
+* text=auto eol=lf
+
+# Windows batch scripts keep CRLF, which cmd.exe expects.
+*.bat text eol=crlf
+*.cmd text eol=crlf

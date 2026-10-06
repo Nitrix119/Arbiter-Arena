@@ -1,6 +1,6 @@
 {
-  "name": "Armor of Agathys",
-  "description": "A protective magical force surrounds you, manifesting as a spectral frost that covers you and your gear. You gain 5 temporary hit points for the duration. If a creature hits you with a melee attack while you have these hit points, the creature takes 5 cold damage.",
+  "name": "Rime Ward",
+  "description": "A shell of rime grants you 5 temporary hit points. While any of them remain, a creature that hits you with an attack takes 5 cold damage; the ward breaks when they are gone.",
   "type": "spell",
   "spell_level": 1,
   "spell_range": {
@@ -25,7 +25,7 @@
     {
       "block": "lifetime",
       "kind": "rounds",
-      "source": "armor_of_agathys",
+      "source": "rime_ward",
       "then": [
         {
           "block": "grant_temporary_hp",

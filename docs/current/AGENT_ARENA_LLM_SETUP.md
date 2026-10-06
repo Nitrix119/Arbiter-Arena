@@ -119,7 +119,7 @@ for cheap experimentation and for surfacing where weaker models fail.
    fails loudly (which is often the point). Pass it with `--model`.
 4. **Run:**
    ```bash
-   python -m examples.arena_openrouter_match --model nvidia/nemotron-nano-9b-v2:free
+   python -m examples.arena_openrouter_match --model nvidia/nemotron-3.5-lightning
    python -m examples.arena_openrouter_match --opponent claude          # cross-provider!
    python -m examples.arena_openrouter_match --opponent openrouter:openai/gpt-4o-mini
    ```
@@ -131,6 +131,71 @@ To add yet another provider, write a new `Agent` subclass whose `_request_action
 returns one `ToolCall`, delegating `decide` to `llm_common.decide_one_action` — everything else
 is reused. (This repo's tooling generates Claude code only, so non-Claude adapters like the
 OpenRouter one are deliberate additions built against the shared interface.)
+
+## 7a. Running the study grid
+
+The action-interface study runs as a **grid** of matches (model × condition × scenario × seed),
+described in a TOML file:
+
+```toml
+[study]
+name = "pilot"
+seeds = [1, 2]
+scenarios = ["kiting", "alpha_strike", "protect_squishy", "aoe_placement"]
+conditions = ["C1", "C2", "C2+M", "C3"]
+opponent = "scripted"      # or "heuristic"
+spend_cap_usd = 5.0        # required when any model is live
+max_attempts = 3           # retries for infrastructure failures only
+backoff_seconds = 30
+
+[[models]]
+id = "<openrouter model id>"
+provider = "openrouter"    # or "mock" (offline, free)
+temperature = 0.0
+usd_per_m_input = 0.10     # required for live models: the spend cap is computed from these
+usd_per_m_output = 0.40
+```
+
+```
+python -m src.arena.study run pilot.toml --out results/pilot --dry-run   # what would run
+python -m src.arena.study run pilot.toml --out results/pilot             # run (resumable)
+python -m src.arena.study report results/pilot                           # report/summary.md
+```
+
+- **Resumable:** a finished cell's transcript is never re-run, so you can stop and restart
+  freely. Spend is recomputed from disk each time, so the cap still holds.
+- **Preflight:** before the first cell, each live model gets one tool-call and one text-only
+  request, so a dead or tool-less model fails in seconds.
+- **Exclusions:** a provider or network failure parks the attempt under `_excluded/` and
+  retries it. Bad model behaviour is data and is never excluded.
+- **Live runs cost money.** Every non-mock run needs your explicit go-ahead. Use
+  `provider = "mock"` for any offline check.
+- **Pin the host.** Give each OpenRouter model `hosts = ["<provider>"]`. OpenRouter otherwise
+  routes one model id across upstream hosts that may differ in quantisation. The served host is
+  recorded either way, and the report flags any cell that mixed hosts.
+- **A clean tree.** A live run refuses to start with uncommitted changes (`--allow-dirty`
+  overrides this, and it is recorded), so the manifest's commit names the code that ran.
+- **Baselines** are grid entries with `provider = "baseline"` and `policy = "scripted"`,
+  `"random"` or `"heuristic"`. They are free and play once per scenario and seed.
+- **Templates:** `examples/study/demo.toml` (no key needed) and `examples/study/pilot.toml`
+  (fill in its TODOs; it refuses to run until you do).
+- **Reading a match:** `python -m src.arena.study show <transcript> --refused` prints what the
+  model wrote, how it was read, and why it was refused.
+- **C1's bounds** come with the report: `report/c1_bounds.csv` and the "C1 under three
+  parsers" section. Both are recomputed offline by replaying each C1 match.
+
+**The parser audit** (after the *final* run; PREREGISTRATION §7):
+
+```
+python -m src.arena.audit sample results/final --out audit/ --n 200   # blind, stratified
+python -m src.arena.audit label audit/                                # resumable; ? for help
+python -m src.arena.audit score audit/ --report results/final/report  # rates + decision rule
+```
+
+While labelling you see only the model's text. Type the one action a careful reader would
+take it to mean, as a C1 command, or `n` for no single action. `s` skips an item, and `q` (or
+Ctrl-D/Ctrl-Z) saves and quits. Every label is saved as you give it. Use a fresh sample on
+**final-run** output only: pilot output helped shape the parser, so it can't also judge it.
 
 ## 8. Troubleshooting
 

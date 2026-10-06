@@ -1,51 +1,50 @@
 """Provider-neutral pieces shared by every LLM adapter.
 
-The prompt, the notes scratchpad, the tool-note augmentation, and the
-one-action-per-call loop are the same whether the model is served by Anthropic,
-OpenRouter, or anything else — only the actual request differs. Keeping them here means
-one copy for all adapters (CLAUDE.md §2.7: no duplicated vocabulary); an adapter
-supplies just a ``request_fn`` that turns a list of messages + tools into one
-:class:`~src.arena.tools.ToolCall` (or ``None``).
+The notes scratchpad, the tool-note augmentation and the one-action-per-call loop are
+the same whether the model is served by Anthropic, OpenRouter or anything else — only
+the request differs. Keeping them here means one copy for all adapters (CLAUDE.md §2.7:
+no duplicated vocabulary); an adapter supplies just a ``request_fn`` that turns messages
+plus tools into one :class:`~src.arena.tools.ToolCall` (or ``None``) and a cost record.
+
+What the model is *shown, offered and read by* varies with the study condition. That is
+:mod:`src.arena.interfaces`' job — this module drives the loop and never learns which
+condition it is running, which is how four conditions share one agent path.
 """
 
 import json
-from typing import Any, Callable, Dict, List, Optional
+import time
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
-from src.arena.agent import NoToolCallError
+from src.arena.agent import NoToolCallError, RejectedResponse, is_infrastructure_error
+from src.arena.error_codes import MALFORMED_OUTPUT
+from src.arena.interfaces import SHARED_PROMPT, ActionInterface, describe_tool_call
+from src.arena.telemetry import DecisionTelemetry, RequestRecord
 from src.arena.tools import TOOL_END_TURN, ToolCall
 
-#: One request → one ToolCall, or None when the model made no tool call.
-RequestFn = Callable[[List[Dict[str, Any]], List[Dict[str, Any]]], Optional[ToolCall]]
+#: One request → the ToolCall it produced (or None when the model made none), paired
+#: with what that request cost. The record is returned *alongside* the call rather than
+#: stashed by the adapter, so a decision that takes two requests cannot lose the first
+#: one's cost — the retry lives here, so the accounting does too.
+RequestFn = Callable[
+    [List[Dict[str, Any]], List[Dict[str, Any]]],
+    Tuple[Optional[ToolCall], RequestRecord],
+]
 
-SYSTEM_PROMPT = """\
-You are commanding a team in a Dungeons & Dragons 5th Edition combat encounter. \
-Your goal is to defeat the enemy team.
+#: How many times one request is attempted when the *provider* fails it, and the
+#: pause before each retry. Registered in PREREGISTRATION §8: excluding a whole match
+#: for one flaky request would bias the kept sample toward matches with fewer requests
+#: — the ones with fewer failures — so a failed request is retried unchanged, and only
+#: one that fails every attempt escapes to exclude the match.
+PROVIDER_ATTEMPTS = 3
+PROVIDER_BACKOFF_SECONDS = (2.0, 8.0)
+#: The pause itself; a module hook so tests need not wait.
+retry_sleep: Callable[[float], None] = time.sleep
 
-How you play:
-- You act one creature at a time, one action at a time. Each message shows the current \
-battlefield and your legal options for the active creature.
-- Respond with EXACTLY ONE tool call (attack, cast_spell, move, or end_turn) and \
-nothing else. After it resolves you'll see the updated battlefield and act again, \
-until you end the turn.
-- A referee enforces the rules: an illegal action is rejected with an error you can \
-learn from and correct. Prefer choices from the listed legal options.
-- End your turn when you have nothing more worth doing.
-
-The world model:
-- Positions and distances are in FEET, on an open battlefield — there is no grid. You \
-may move to any point within your movement budget; melee reach is measured edge to \
-edge.
-- Your legal options list named move destinations (close to melee, retreat, kite to \
-range). Take one with move(option_id=…), or move anywhere with move(x, z) — you \
-cannot move onto another creature.
-- You only know what you can observe. An enemy's HP, AC, or capabilities may be \
-hidden; you learn about them by seeing what they do and the damage they take.
-
-Not modelled (do not plan around these): opportunity attacks and other reactions on \
-another creature's turn, and legendary actions.
-
-No tactics are scripted for you — use your own judgment and knowledge of 5e to play \
-well."""
+#: Back-compat alias. The prompt is now assembled per condition — the shared world
+#: model lives in :data:`~src.arena.interfaces.SHARED_PROMPT` and each condition adds
+#: its own action section. An adapter that still wants "the prompt" without a condition
+#: gets the shared half, which is the part that is genuinely provider-neutral.
+SYSTEM_PROMPT = SHARED_PROMPT
 
 
 def augment_tools_with_notes(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -70,7 +69,114 @@ def augment_tools_with_notes(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]
     return augmented
 
 
-def render_observation(notes: str, observation: Dict[str, Any]) -> str:
+def _call_key(name: Any, arguments: Any) -> Tuple[str, str]:
+    """A call as comparable text: decoded where possible, else its raw text."""
+    value = arguments
+    if isinstance(arguments, str):
+        if not arguments.strip():
+            value = {}
+        else:
+            try:
+                value = json.loads(arguments)
+            except ValueError:
+                return str(name), "raw:" + arguments
+    if value is None:
+        value = {}
+    return str(name), json.dumps(value, sort_keys=True, default=str)
+
+
+def distinct_call_count(calls: Iterable[Tuple[Any, Any]]) -> int:
+    """How many *different* ``(name, arguments)`` calls one response made.
+
+    Arguments are compared by meaning — a JSON string and the dict it encodes are
+    the same call, and ``""``/``null`` are the empty object, as
+    :func:`decode_arguments` reads them. Text that is not JSON compares as itself.
+    Provider-neutral, so every adapter and the mock count the same way.
+    """
+    return len({_call_key(name, arguments) for name, arguments in calls})
+
+
+def message_text(content: Any) -> Optional[str]:
+    """The prose a model wrote, whatever envelope its host wrapped it in.
+
+    An OpenAI-style ``message.content`` is documented as a string, but the SDK parses
+    responses leniently and some hosts answer with **content parts** — a list of
+    ``{"type": "text", "text": …}`` — which then reaches the caller as a list. That
+    matters far more than it looks: ``content`` is C1's *entire* channel, so a text
+    condition would raise ``AttributeError`` on ``text.strip()``, which is not an
+    infrastructure error and so stops the whole study grid.
+
+    Reading the text out is the right answer rather than refusing it, for the reason
+    :func:`decode_arguments` reads an empty-string argument as ``{}``: the envelope is
+    a transport convention, not a model choice, and charging C1's ``malformed_output``
+    rate for its host's serialisation would make H1 partly a function of which host
+    OpenRouter routed to — with H1 predicting C1 is worst, that would confirm the
+    hypothesis for the wrong reason.
+
+    Non-text parts (a reasoning trace, an image) are not the answer and are skipped,
+    as the Claude adapter already skips them. Anything with no readable text is
+    ``None``: no action, which is the loop's correction path.
+    """
+    if isinstance(content, str):
+        return content or None
+    if isinstance(content, dict):
+        content = [content]
+    if not isinstance(content, list):
+        return None  # a shape we cannot read is not text
+    texts: List[str] = []
+    for part in content:
+        if isinstance(part, str):
+            texts.append(part)
+            continue
+        kind = (
+            part.get("type") if isinstance(part, dict) else getattr(part, "type", None)
+        )
+        if kind not in (None, "text"):
+            continue
+        text = (
+            part.get("text") if isinstance(part, dict) else getattr(part, "text", None)
+        )
+        if isinstance(text, str) and text:
+            texts.append(text)
+    return "\n".join(texts) or None
+
+
+def decode_arguments(name: str, arguments: Any, record: RequestRecord) -> Dict:
+    """A tool call's arguments as a dict, or refuse them as ``malformed_output``.
+
+    An empty string is ``{}``: some hosts send it for a tool with no arguments, a
+    transport convention rather than a model choice. Anything that is not a JSON
+    object is the model's formatting failure — refused with a code and counted like
+    any other refusal, never an exception that stops the study grid as a bug.
+
+    Provider-neutral, so every adapter (and the mock model) decodes the same way.
+    """
+    if arguments is None or (isinstance(arguments, str) and not arguments.strip()):
+        return {}
+    if isinstance(arguments, dict):
+        return dict(arguments)
+    try:
+        decoded = json.loads(arguments) if isinstance(arguments, str) else arguments
+    except ValueError:
+        decoded = None
+        problem = "are not valid JSON"
+    else:
+        problem = "are not a JSON object"
+    if isinstance(decoded, dict):
+        return decoded
+    raise RejectedResponse(
+        MALFORMED_OUTPUT,
+        f"The {name} call's arguments {problem}; send an object of named fields.",
+        ToolCall(name, {"raw_arguments": arguments}),
+        record=record,
+    )
+
+
+def render_observation(
+    notes: str,
+    observation: Dict[str, Any],
+    format_rejected: Callable[[Dict[str, Any]], str] = describe_tool_call,
+) -> str:
     """Render an observation as the user message.
 
     Order: prior note → any rejected-action feedback (a compact header, so the model
@@ -91,14 +197,15 @@ def render_observation(notes: str, observation: Dict[str, Any]) -> str:
         ]
         for r in rejected:
             action = r.get("action", {})
-            lines.append(
-                f"- {action.get('name')} {json.dumps(action.get('arguments', {}))}"
-                f" -> {r.get('error')}"
-            )
+            lines.append(f"- {format_rejected(action)} -> {r.get('error')}")
         parts.append("\n".join(lines))
+    # Deliberately says nothing about *how* to act or what is listed: that is the
+    # action section's job, and it is the only text allowed to differ between
+    # conditions (§3.1). "your legal options" used to live here, which silently made
+    # the shared body condition-specific.
     parts.append(
-        "It is your turn. Study the battlefield and your legal options, then take "
-        "exactly one action.\n\n" + json.dumps(obs, indent=2, default=str)
+        "It is your turn. Study the battlefield, then take exactly one action.\n\n"
+        + json.dumps(obs, indent=2, default=str)
     )
     return "\n\n".join(parts)
 
@@ -114,30 +221,128 @@ def capture_notes(agent: Any, call: ToolCall) -> ToolCall:
     return call
 
 
+def _record_request(
+    request_fn: RequestFn,
+    telemetry: DecisionTelemetry,
+    messages: List[Dict[str, Any]],
+    api_tools: List[Dict[str, Any]],
+) -> Tuple[Optional[ToolCall], RequestRecord]:
+    """Make one request, recording what it cost whether or not it succeeded.
+
+    An **infrastructure** failure (:func:`~src.arena.agent.is_infrastructure_error`:
+    an empty envelope, a dropped connection, an SDK error) is retried with the *same*
+    messages, up to :data:`PROVIDER_ATTEMPTS` in all. Each failed attempt goes to
+    ``telemetry.provider_failures``, billed but never counted as something the model
+    did. Once the attempts run out the last failure is re-raised unchanged: a
+    :class:`~src.arena.agent.ProviderError` is logged as ``provider_error`` by the turn
+    driver, anything else escapes the match, and either way the runner excludes it.
+
+    A :class:`~src.arena.agent.RejectedResponse` raised inside the request (arguments
+    the adapter could not decode) is the model's answer, not the provider's failure: it
+    is recorded as a request and re-raised at once, never retried. So is any other
+    exception — a bug is not the weather.
+    """
+    for attempt in range(1, PROVIDER_ATTEMPTS + 1):
+        started = time.perf_counter()
+        try:
+            call, record = request_fn(messages, api_tools)
+        except RejectedResponse as exc:
+            if exc.record is not None:
+                telemetry.requests.append(exc.record)
+            raise
+        except Exception as exc:
+            if not is_infrastructure_error(exc):
+                raise
+            telemetry.provider_failures.append(_failure_record(exc, started))
+            if attempt == PROVIDER_ATTEMPTS:
+                raise
+            retry_sleep(PROVIDER_BACKOFF_SECONDS[attempt - 1])
+            continue
+        telemetry.requests.append(record)
+        return call, record
+    raise AssertionError("unreachable: the last attempt returns or raises")
+
+
+def _failure_record(exc: BaseException, started: float) -> RequestRecord:
+    """The record of a failed request: the adapter's own, or one built here."""
+    record = getattr(exc, "record", None)
+    if isinstance(record, RequestRecord):
+        return record
+    return RequestRecord(
+        latency_ms=(time.perf_counter() - started) * 1000.0,
+        error=f"{type(exc).__name__}: {exc}",
+    )
+
+
 def decide_one_action(
     request_fn: RequestFn,
     agent: Any,
     observation: Dict[str, Any],
-    tools: List[Dict[str, Any]],
+    interface: ActionInterface,
 ) -> ToolCall:
     """The shared decide skeleton: render → request → one retry → capture notes.
 
-    *request_fn* is the adapter's provider call. If the model returns no tool call, we
-    re-prompt once; if still none, we fail loudly (never silently end the turn).
-    """
-    api_tools = augment_tools_with_notes(tools)
-    messages: List[Dict[str, Any]] = [
-        {"role": "user", "content": render_observation(agent.notes, observation)}
-    ]
+    *request_fn* is the adapter's provider call; *interface* is the study condition,
+    which owns the three things that vary — what the model is shown, what it is offered
+    and how its answer is read. The loop itself is the same for every condition, so
+    there is exactly one agent path no matter how many conditions exist (CLAUDE.md §3).
 
-    call = request_fn(messages, api_tools)
-    if call is None:  # model replied without a tool call — correct it once
-        messages.append(
-            {"role": "user", "content": "Respond with exactly one tool call."}
+    If the interface cannot make an action out of the response we re-prompt once; if it
+    still cannot, we fail loudly (never silently end the turn). A response the interface
+    *refuses with a code* (:class:`~src.arena.agent.RejectedResponse`) is not retried:
+    it propagates to the turn driver as a rejected action, as an executor refusal would.
+
+    Every request's cost is accumulated onto ``agent.telemetry`` as it happens — before
+    any raise — so a decision that ended in failure still reports the tokens it spent.
+    A failed decision is not a free one, and the study divides cost by *accepted*
+    actions precisely to capture that.
+    """
+    shown = interface.shape_observation(observation)
+    api_tools = augment_tools_with_notes(interface.api_tools(shown))
+    messages: List[Dict[str, Any]] = [
+        {
+            "role": "user",
+            "content": render_observation(
+                agent.notes, shown, interface.format_rejected
+            ),
+        }
+    ]
+    telemetry = DecisionTelemetry(
+        menu_length=interface.menu_length(observation),
+        menu_truncated=interface.menu_truncated(observation),
+    )
+    agent.telemetry = telemetry
+
+    action = _attempt(
+        request_fn, telemetry, messages, api_tools, interface, observation
+    )
+    if action is None:  # the model gave nothing usable — correct it once
+        messages.append({"role": "user", "content": interface.correction()})
+        action = _attempt(
+            request_fn, telemetry, messages, api_tools, interface, observation
         )
-        call = request_fn(messages, api_tools)
-    if call is None:
+    if action is None:
         raise NoToolCallError(
-            f"{agent.name}: the model returned no tool call after a retry; cannot act."
+            f"{agent.name}: the model returned no usable action after a retry "
+            f"(condition {interface.name}); cannot act."
         )
-    return capture_notes(agent, call)
+    return capture_notes(agent, action)
+
+
+def _attempt(
+    request_fn: RequestFn,
+    telemetry: DecisionTelemetry,
+    messages: List[Dict[str, Any]],
+    api_tools: List[Dict[str, Any]],
+    interface: ActionInterface,
+    observation: Dict[str, Any],
+) -> Optional[ToolCall]:
+    """One request, decoded by the condition into an executable action or ``None``.
+
+    The interface sees both the decoded call and the raw record, so a text condition
+    can read ``record.raw_output`` without this loop knowing which kind it is driving.
+    *observation* is the **unshaped** one: decoding resolves against ground truth, not
+    against the trimmed copy the model was shown.
+    """
+    call, record = _record_request(request_fn, telemetry, messages, api_tools)
+    return interface.interpret(call, record, observation)

@@ -2,10 +2,11 @@
 
 from typing import Any, Dict, List
 
-from src.arena.agent import Agent, NoToolCallError, ScriptedAgent
+from src.arena.agent import Agent, NoToolCallError, RejectedResponse, ScriptedAgent
 from src.arena.tools import ToolCall
 from src.arena.transcript import Transcript
 from src.arena.turn_driver import run_turn
+from src.errors import UNKNOWN_TARGET
 
 import math
 
@@ -20,9 +21,7 @@ class _SequenceAgent(Agent):
         self._calls = calls
         self._i = 0
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
         call = self._calls[min(self._i, len(self._calls) - 1)]
         self._i += 1
         return call
@@ -37,9 +36,7 @@ class _RecordingAgent(Agent):
         self._i = 0
         self.seen: List[Dict[str, Any]] = []
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
         self.seen.append(observation)
         call = self._calls[min(self._i, len(self._calls) - 1)]
         self._i += 1
@@ -89,13 +86,35 @@ def test_total_failure_budget_forces_end(make_entity, make_combat):
     combat = _started(make_combat, [fighter, goblin], fighter)
 
     bad = ToolCall("attack", {"action_name": "Nope", "defender_id": "bad"})
-    ok = ToolCall("move", {"x": 1, "z": 0})  # legal move (resets consecutive)
+    # Legal moves (reset the consecutive count). Each must go somewhere: repeating
+    # one from where it landed would be a no-op, refused as `no_effect`.
+    ok1 = ToolCall("move", {"x": 1, "z": 0})
+    ok2 = ToolCall("move", {"x": 2, "z": 0})
     # fail,fail,ok,fail,fail,ok,fail -> 5 total failures before 3-in-a-row
-    agent = _SequenceAgent([bad, bad, ok, bad, bad, ok, bad])
+    agent = _SequenceAgent([bad, bad, ok1, bad, bad, ok2, bad])
     outcome = run_turn(combat, fighter, agent)
 
     assert outcome.failures == 5
     assert outcome.actions_taken == 2  # the two successful moves
+    assert outcome.forced_end is True
+
+
+def test_repeating_a_move_in_place_ends_by_the_failure_budget(make_entity, make_combat):
+    """The pilot's loop (ledger A31): a model re-moving to where it stands.
+
+    Once accepted as free valid actions, these ran until the per-turn action cap.
+    Refused now, they count as failures, and the failure budget ends the turn after
+    three.
+    """
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(60, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+
+    stay = _SequenceAgent([ToolCall("move", {"x": 0, "z": 0})])
+    outcome = run_turn(combat, fighter, stay)
+
+    assert outcome.actions_taken == 0
+    assert outcome.failures == 3
     assert outcome.forced_end is True
 
 
@@ -105,7 +124,7 @@ class _NoToolAgent(Agent):
     def __init__(self):
         super().__init__("NoTool", "a")
 
-    def decide(self, observation, tools):
+    def decide(self, observation):
         raise NoToolCallError("no tool call")
 
 
@@ -172,7 +191,8 @@ def test_success_clears_rejection_feedback(make_entity, make_combat):
 
 
 def test_kite_option_ends_turn_out_of_reach(make_entity, make_combat):
-    """Choosing the kite_range move opens distance and lands the archer out of melee reach."""
+    """Choosing the kite_range move opens distance and lands the archer out of melee
+    reach."""
     archer = make_entity("Archer", team="a", pos=(0, 0, 0), attacks=[ranged_attack()])
     bruiser = make_entity("Bruiser", team="b", pos=(40, 0, 0), attacks=[melee_attack()])
     combat = _started(make_combat, [archer, bruiser], archer)
@@ -205,3 +225,96 @@ def test_transcript_records_turn(make_entity, make_combat):
     assert transcript.records_of("turn_start")
     assert transcript.records_of("action")
     assert transcript.records_of("turn_end")
+
+
+class _RefusedAgent(Agent):
+    """Its every answer is refused by the interface with a code — an invented menu
+    id."""
+
+    def __init__(self):
+        super().__init__("Refused", "a")
+        self.observations = []
+
+    def decide(self, observation):
+        self.observations.append(observation)
+        raise RejectedResponse(
+            UNKNOWN_TARGET,
+            "No listed action 'attack:dagger:ghost'.",
+            ToolCall("choose", {"action_id": "attack:dagger:ghost"}),
+        )
+
+
+def test_an_interface_refusal_is_recorded_with_its_code(make_entity, make_combat):
+    """Logged as the attempted call under its real code — not as `no_tool_call`."""
+    fighter = make_entity("Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()])
+    goblin = make_entity("Goblin", team="b", pos=(5, 0, 0))
+    combat = _started(make_combat, [fighter, goblin], fighter)
+    agent = _RefusedAgent()
+    transcript = Transcript()
+
+    outcome = run_turn(combat, fighter, agent, transcript=transcript)
+
+    assert outcome.failures == 3  # counted against the budget
+    assert outcome.forced_end is True
+    first = transcript.records_of("action")[0]
+    assert first["call"] == {
+        "name": "choose",
+        "arguments": {"action_id": "attack:dagger:ghost"},
+    }
+    assert first["result"]["code"] == UNKNOWN_TARGET
+    assert first["result"]["stage"] == "interface"
+    # ...and fed back, so the model can correct itself like any rejection.
+    fed_back = agent.observations[1]["rejected_actions"][0]
+    assert fed_back["code"] == UNKNOWN_TARGET
+    assert fed_back["action"]["name"] == "choose"
+
+
+# -- why a turn ended is recorded, not reconstructed (review 2026-09-24, M-6) --------
+
+
+def _cause_of(combat, actor, agent, **kwargs):
+    transcript = Transcript()
+    run_turn(combat, actor, agent, transcript=transcript, **kwargs)
+    (turn_end,) = transcript.records_of("turn_end")
+    return turn_end["end_cause"]
+
+
+def test_each_way_a_turn_ends_is_recorded(make_entity, make_combat):
+    def fight():
+        fighter = make_entity(
+            "Fighter", team="a", pos=(0, 0, 0), attacks=[melee_attack()]
+        )
+        goblin = make_entity("Goblin", team="b", pos=(60, 0, 0), hp=30)
+        return _started(make_combat, [fighter, goblin], fighter), fighter
+
+    combat, fighter = fight()
+    assert _cause_of(combat, fighter, _SequenceAgent([ToolCall("end_turn")])) == "agent"
+
+    combat, fighter = fight()
+    bad = ToolCall("attack", {"action_name": "Longsword", "defender_id": "nobody"})
+    assert _cause_of(combat, fighter, _SequenceAgent([bad])) == "budget"
+
+    combat, fighter = fight()
+    step = ToolCall("move", {"x": 0, "z": 1})  # always legal, never ends the turn
+    agent = _SequenceAgent([step, ToolCall("move", {"x": 0, "z": 0})] * 5)
+    assert _cause_of(combat, fighter, agent, max_actions=3) == "cap"
+
+    combat, fighter = fight()
+    fighter.current_hp = 0
+    assert _cause_of(combat, fighter, _SequenceAgent([ToolCall("end_turn")])) == "skip"
+
+
+def test_metrics_read_the_recorded_cause_and_only_reconstruct_old_transcripts():
+    from src.arena.metrics import group_turns
+
+    action = {"kind": "action", "call": {"name": "end_turn"}, "result": {"ok": True}}
+    recorded = [
+        {"kind": "turn_start", "entity_id": "x"},
+        action,
+        {"kind": "turn_end", "entity_id": "x", "end_cause": "budget"},
+    ]
+    legacy = [dict(r) for r in recorded]
+    legacy[-1].pop("end_cause")
+
+    assert group_turns(recorded)[0].end_cause == "budget"  # the record is the truth
+    assert group_turns(legacy)[0].end_cause == "agent"  # reconstructed for old files

@@ -15,13 +15,21 @@ Note: not every free model supports function/tool calling. Pick a tool-capable o
 exactly how a flaw surfaces.
 """
 
-import json
+import time
 from types import ModuleType
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-from src.arena.agent import Agent
+from src.arena.agent import Agent, ProviderError, RejectedResponse
 from src.arena.credentials import resolve_credential
-from src.arena.llm_common import SYSTEM_PROMPT, decide_one_action
+from src.arena.error_codes import MALFORMED_OUTPUT
+from src.arena.interfaces import C2_MENU, ActionInterface, get_interface
+from src.arena.llm_common import (
+    decide_one_action,
+    decode_arguments,
+    distinct_call_count,
+    message_text,
+)
+from src.arena.telemetry import RequestRecord
 from src.arena.tools import ToolCall
 
 # Declared Optional up front so the ImportError fallback below type-checks.
@@ -31,16 +39,39 @@ try:  # optional dependency — only this module needs it (pip install -e ".[age
 except ImportError:  # pragma: no cover - exercised via the missing-dep message
     openai = None
 
-DEFAULT_MODEL = (
-    "nvidia/nemotron-nano-9b-v2:free"  # free + tool-capable; override with --model
-)
+# The example scripts' default when no model is named. The study's grids always name
+# their models, so this is never used there. The study's own small model: live, tool-
+# capable and very cheap, but not free (the old free default was retired and 404s).
+DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning"
 DEFAULT_MAX_TOKENS = 4096
+# V1_PLAN §3.2 holds sampling at the provider minimum and records it. Still not
+# deterministic — the study says so rather than claiming otherwise.
+DEFAULT_TEMPERATURE = 0.0
+#: Leave the temperature to the provider: the parameter is not sent at all. Some models
+#: refuse any value but their own (Sonnet 5.5 answers 400), and Google advises against
+#: lowering Gemini 3's. Recorded as this literal in every manifest, never as absent.
+PROVIDER_DEFAULT_TEMPERATURE = "default"
+#: A temperature setting: a number, or :data:`PROVIDER_DEFAULT_TEMPERATURE`.
+Temperature = Union[float, str]
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+#: The attempt recorded when the response's tool call carried no readable function.
+UNREADABLE_TOOL_CALL = "(unreadable_tool_call)"
 # Optional OpenRouter attribution headers (harmless; used only for their leaderboards).
 _RANKING_HEADERS = {
     "HTTP-Referer": "https://github.com/Nitrix119/arbiter-arena",
     "X-Title": "Arbiter Arena",
 }
+
+
+def _served_provider(response: Any) -> Optional[str]:
+    """The upstream host OpenRouter routed this request to, if the response says.
+
+    OpenRouter adds a ``provider`` field the OpenAI SDK keeps as an extra attribute.
+    """
+    provider = getattr(response, "provider", None)
+    if provider is None:
+        provider = (getattr(response, "model_extra", None) or {}).get("provider")
+    return str(provider) if provider else None
 
 
 def _to_openai_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -58,6 +89,99 @@ def _to_openai_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     ]
 
 
+def _usage(response: Any) -> Tuple[Optional[int], Optional[int]]:
+    """``(input_tokens, output_tokens)`` from an OpenAI-style ``usage`` block.
+
+    Either may be ``None``: "not reported" is not "zero", and a provider that omits
+    ``usage`` must not read as a free call in the cost metric.
+    """
+    usage = getattr(response, "usage", None)
+    return (
+        getattr(usage, "prompt_tokens", None),
+        getattr(usage, "completion_tokens", None),
+    )
+
+
+def _cache_usage(response: Any) -> Tuple[Optional[int], Optional[int]]:
+    """``(cache_read, cache_write)`` tokens from OpenRouter's ``prompt_tokens_details``.
+
+    ``None`` for whichever the provider does not report, never ``0``: an unreported
+    count is not evidence that nothing was cached.
+    """
+    usage = getattr(response, "usage", None)
+    details = getattr(usage, "prompt_tokens_details", None)
+    if isinstance(details, dict):
+        return details.get("cached_tokens"), details.get("cache_write_tokens")
+    return (
+        getattr(details, "cached_tokens", None),
+        getattr(details, "cache_write_tokens", None),
+    )
+
+
+#: ``reasoning_details`` part types that carry readable text, and the key holding it.
+#: ``reasoning.encrypted`` parts are opaque by design and are skipped.
+_READABLE_REASONING = {"reasoning.summary": "summary", "reasoning.text": "text"}
+
+
+def _field(item: Any, key: str) -> Any:
+    """*key* from a dict, an attribute, or a pydantic model's extras."""
+    if isinstance(item, dict):
+        return item.get(key)
+    value = getattr(item, key, None)
+    if value is None:
+        value = (getattr(item, "model_extra", None) or {}).get(key)
+    return value
+
+
+def _reasoning(message: Any, response: Any) -> Tuple[Optional[str], Optional[int]]:
+    """The model's reasoning text and its token count, where the provider gives them.
+
+    OpenRouter returns plain ``message.reasoning`` when it can, and structured
+    ``reasoning_details`` parts otherwise; readable parts are joined in order. Either
+    value is ``None`` when absent.
+    """
+    text = _field(message, "reasoning")
+    if not text:
+        parts = []
+        for detail in _field(message, "reasoning_details") or []:
+            key = _READABLE_REASONING.get(_field(detail, "type"))
+            if key and _field(detail, key):
+                parts.append(str(_field(detail, key)))
+        text = "\n".join(parts) or None
+    usage = getattr(response, "usage", None)
+    details = _field(usage, "completion_tokens_details") if usage else None
+    tokens = _field(details, "reasoning_tokens") if details is not None else None
+    return (str(text) if text else None), tokens
+
+
+def _first_message(response: Any, model: str, record: RequestRecord) -> Any:
+    """Return the first choice's message, or refuse as a *provider* failure.
+
+    A free host under load answers with an error body or an empty payload rather than
+    a completion, and ``response.choices[0]`` on that raises ``TypeError`` mid-match
+    (observed live, 2026-09-15). A four-day background grid cannot die on one flaky
+    response, so this is a counted, recorded failure instead — and one tagged as
+    infrastructure, since the model never got to make a choice. *record* travels with
+    the error so the failed request's latency is not lost.
+    """
+    choices = getattr(response, "choices", None)
+    if not choices:
+        detail = getattr(response, "error", None)
+        message = (
+            f"{model}: the provider returned no choices"
+            + (f" ({detail})" if detail else "")
+            + " — an empty or error payload, not a model decision."
+        )
+        record.error = message
+        raise ProviderError(message, record=record)
+    message_obj = getattr(choices[0], "message", None)
+    if message_obj is None:
+        message = f"{model}: the provider returned a choice with no message."
+        record.error = message
+        raise ProviderError(message, record=record)
+    return message_obj
+
+
 class OpenRouterAgent(Agent):
     """Drives a team by asking an OpenRouter model for one action at a time via
     tool use."""
@@ -68,10 +192,19 @@ class OpenRouterAgent(Agent):
         team: Optional[str] = None,
         *,
         model: str = DEFAULT_MODEL,
+        temperature: Temperature = DEFAULT_TEMPERATURE,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        interface: Optional[ActionInterface] = None,
         client: Any = None,
+        hosts: Sequence[str] = (),
+        seed: Optional[int] = None,
+        reasoning: Optional[Dict[str, Any]] = None,
+        cache_prompt: bool = False,
     ) -> None:
         super().__init__(name, team)
+        #: Mark the system prompt for prompt caching — for providers that cache only
+        #: what a request marks (Anthropic). Changes cost, never the words sent.
+        self.cache_prompt = cache_prompt
         if client is None:
             if openai is None:
                 raise ImportError(
@@ -82,36 +215,126 @@ class OpenRouterAgent(Agent):
             api_key = resolve_credential("OPENROUTER_API_KEY", "openrouter.key")
             client = openai.OpenAI(base_url=OPENROUTER_BASE_URL, api_key=api_key)
         self._client = client
+        #: Upstream hosts allowed to serve the model, in order, fallbacks off. Empty
+        #: leaves routing to OpenRouter — recorded per request either way.
+        self.hosts = tuple(hosts)
+        #: Sampling seed, forwarded to hosts that honour it (the match's seed).
+        self.seed = seed
+        #: OpenRouter's ``reasoning`` setting for a thinking model (e.g.
+        #: ``{"effort": "low"}``). Pinned by the grid rather than left to host
+        #: defaults, which can differ; ``None`` sends nothing.
+        self.reasoning = dict(reasoning) if reasoning is not None else None
         self.model = model
+        self.temperature = temperature
         self.max_tokens = max_tokens
+        #: The study condition. Held on the agent, not passed by the turn driver:
+        #: which interface a model is given is the thing under test, and the driver
+        #: must stay ignorant of it.
+        self.interface = interface or get_interface(C2_MENU)
 
-    def decide(
-        self, observation: Dict[str, Any], tools: List[Dict[str, Any]]
-    ) -> ToolCall:
-        return decide_one_action(self._request_action, self, observation, tools)
+    def decide(self, observation: Dict[str, Any]) -> ToolCall:
+        return decide_one_action(
+            self._request_action, self, observation, self.interface
+        )
 
     def _request_action(
         self, messages: List[Dict[str, Any]], api_tools: List[Dict[str, Any]]
-    ) -> Optional[ToolCall]:
-        """One OpenRouter (chat-completions) request; return the first tool call,
-        or None."""
-        oai_messages = [{"role": "system", "content": SYSTEM_PROMPT}, *messages]
+    ) -> Tuple[Optional[ToolCall], RequestRecord]:
+        """One OpenRouter (chat-completions) request; return its tool call and cost."""
+        system = self.interface.system_prompt()
+        system_message: Dict[str, Any] = {"role": "system", "content": system}
+        if self.cache_prompt:
+            # One breakpoint after the system prompt caches the whole fixed prefix
+            # (tools, then system: the provider's caching order). The words are
+            # unchanged; only the marker is added. Below the provider's minimum the
+            # request simply runs uncached, with no write billed.
+            system_message["content"] = [
+                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+            ]
+        oai_messages = [system_message, *messages]
+        # A text condition (C1) offers no tools, and the API refuses `tool_choice`
+        # without `tools` — so both are omitted rather than sent empty.
+        tool_fields: Dict[str, Any] = {}
+        if api_tools:
+            # One action per response, as every condition's prompt asks. Hosts that
+            # honour this return one call; any that still send several different
+            # ones are refused by the interface, exactly as C1 refuses two lines.
+            tool_fields = {
+                "tools": _to_openai_tools(api_tools),
+                "tool_choice": "auto",
+                "parallel_tool_calls": False,
+            }
+        extra_body: Dict[str, Any] = {}
+        if self.hosts:
+            extra_body["provider"] = {
+                "order": list(self.hosts),
+                "allow_fallbacks": False,
+            }
+        if self.reasoning is not None:
+            extra_body["reasoning"] = dict(self.reasoning)
+        if extra_body:
+            tool_fields["extra_body"] = extra_body
+        if self.seed is not None:
+            tool_fields["seed"] = self.seed
+        if self.temperature != PROVIDER_DEFAULT_TEMPERATURE:
+            tool_fields["temperature"] = self.temperature
+        started = time.perf_counter()
         response = self._client.chat.completions.create(
             model=self.model,
             messages=oai_messages,
-            tools=_to_openai_tools(api_tools),
-            tool_choice="auto",
             max_tokens=self.max_tokens,
             extra_headers=_RANKING_HEADERS,
+            **tool_fields,
         )
-        message = response.choices[0].message
-        for tc in getattr(message, "tool_calls", None) or []:
+        input_tokens, output_tokens = _usage(response)
+        cache_read, cache_write = _cache_usage(response)
+        record = RequestRecord(
+            latency_ms=(time.perf_counter() - started) * 1000.0,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read,
+            cache_write_tokens=cache_write,
+            # The router may serve a different model than the one asked for, so record
+            # what actually answered (§3.1), not what we requested.
+            served_model=getattr(response, "model", None),
+            served_provider=_served_provider(response),
+        )
+
+        message = _first_message(response, self.model, record)
+        # Not `content or None`: a host may answer with content parts rather than a
+        # string, and `content` is C1's whole channel — see `message_text`.
+        record.raw_output = message_text(getattr(message, "content", None))
+        record.reasoning, record.reasoning_tokens = _reasoning(message, response)
+        choice = response.choices[0]
+        record.finish_reason = getattr(choice, "finish_reason", None)
+
+        returned = getattr(message, "tool_calls", None) or []
+        # An entry whose `function` is missing carries no call we can read. Dropped
+        # here rather than crashing on `tc.function.name`, which is not an
+        # infrastructure error and so would stop the whole grid.
+        tool_calls = [
+            tc for tc in returned if getattr(tc, "function", None) is not None
+        ]
+        record.extra_tool_calls = max(0, len(returned) - 1)
+        record.distinct_tool_calls = distinct_call_count(
+            (tc.function.name, tc.function.arguments) for tc in tool_calls
+        )
+        for tc in tool_calls:
             fn = tc.function
             arguments = fn.arguments
-            args = (
-                json.loads(arguments)
-                if isinstance(arguments, str)
-                else dict(arguments or {})
+            record.tool_call = {"name": fn.name, "arguments": arguments}
+            args = decode_arguments(fn.name, arguments, record)
+            return ToolCall(fn.name, args, call_id=getattr(tc, "id", None)), record
+        if returned:
+            # The model answered and every entry was unreadable. Not `no_tool_call`,
+            # which means "attempted nothing" and grants a free correction that the
+            # other refusal paths do not (the unfairness closed for C3's invented ids
+            # in `4b1198b`): a counted `malformed_output`, like undecodable arguments.
+            raise RejectedResponse(
+                MALFORMED_OUTPUT,
+                f"{self.model}: the response's tool call could not be read — it "
+                "carried no function. Make exactly one named tool call.",
+                ToolCall(UNREADABLE_TOOL_CALL, {}),
+                record=record,
             )
-            return ToolCall(fn.name, args, call_id=getattr(tc, "id", None))
-        return None
+        return None, record
