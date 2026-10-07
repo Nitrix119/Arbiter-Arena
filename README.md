@@ -17,7 +17,7 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
 pip install -e ".[web,dev]"
 
-# Run the whole study pipeline against mock models: 60 matches, a few minutes, no cost.
+# Run the whole study pipeline against mock models: 60 matches, under a minute, no cost.
 python -m src.arena.study run examples/study/demo.toml --out results/demo
 python -m src.arena.study report results/demo      # metrics, CSVs and summary.md
 python -m src.arena.study verify results/demo      # every match must replay: 100%

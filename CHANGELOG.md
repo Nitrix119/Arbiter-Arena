@@ -21,6 +21,11 @@ The release that ships the action-interface study.
   state by state.
 - The pre-registration (`docs/current/PREREGISTRATION.md`), frozen at the
   `study-freeze` tag before the final run.
+- A decision panel in the playback viewer: each model decision's verdict, rejection
+  code, reasoning, prose and call, with `/playback?match=<file>&step=<n>` deep links
+  (A33).
+- The write-up's charts (`tools/plot_study.py`, behind a new `[plots]` extra), drawn
+  from a report's `matches.csv` with the report's own estimators (A11).
 
 ### Changed
 - Licensed under Apache-2.0 (was PolyForm Noncommercial 1.0.0). SRD 5.1
@@ -32,6 +37,8 @@ The release that ships the action-interface study.
 - Adjacent creatures were refused as overlapping (A29).
 - A move to the creature's own position was a free, valid action; it is now
   refused as `no_effect` (A31).
+- Every web page (`/`, `/battle`, `/playback`) returned 500 on a fresh install,
+  which resolves Starlette 1.x and its new `TemplateResponse` signature.
 
 ## [0.2.0] — 2026-09-19
 
