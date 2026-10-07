@@ -1068,6 +1068,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "show":
         from src.arena.study_report import describe
 
+        # A model may write any script (Sonnet switched to Chinese mid-match), and a
+        # Windows console's code page cannot encode most of it. Escape what it can't
+        # show instead of crashing on it.
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(errors="backslashreplace")
         print(describe(_read(args.transcript), refused_only=args.refused), end="")
         return 0
 
