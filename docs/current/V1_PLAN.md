@@ -457,9 +457,13 @@ remains._
       `docs/phase4-writeup`.)_
 
 ### Phase 4 — Analyse, write, release (≈3–4 sessions)
-- [ ] Run the report on the frozen bundle, write up H1–H3 as confirmed or not, then exploratory
+- [x] Run the report on the frozen bundle, write up H1–H3 as confirmed or not, then exploratory
       findings. _(The report is run and the verdicts are final, both in
       `FINAL_RUN_FINDINGS.md`. The write-up itself is still to do.)_
+      _(2026-10-08: written up as `ARTICLE_DRAFT.md` §6, with the charts in place. Every
+      number was checked against `summary.md` and `matches.csv`, and three errors were
+      corrected: Gemini's H3 verdict, the cost claim, and the win-rate rounding. §6.6's
+      [YOUR VOICE] paragraph on the audit is left for the author.)_
 - [ ] Pick **one failure story**, a replay that illustrates the headline (e.g. fluent reasoning
       leading to an impossible spatial action in C1, vs a legal but weaker choice in C3).
       _Candidates from the data:_
