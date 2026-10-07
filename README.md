@@ -55,7 +55,7 @@ The design, hypotheses, metrics and exclusions were frozen before the final run,
 
 ![First-attempt validity by condition for each model, with 95% intervals](docs/figures/validity.png)
 
-Constraining the interface raises validity as predicted, but how much depends on the model. For the weakest model it is transformative (its win rate rises from 32% to 62%); for the strongest it barely registers. Sonnet reverses one predicted step: it is worse with bare tool calls than with prose. The full write-up and a worked failure case are in progress; the working record is [FINAL_RUN_FINDINGS.md](docs/current/FINAL_RUN_FINDINGS.md).
+Constraining the interface raises validity as predicted, but how much depends on the model. For the weakest model it is transformative (it wins 13 of 40 matches in C1 and 25 of 40 in C3); for the strongest it barely registers. Sonnet reverses one predicted step: it is worse with bare tool calls than with prose. The full write-up and a worked failure case are in progress; the working record is [FINAL_RUN_FINDINGS.md](docs/current/FINAL_RUN_FINDINGS.md).
 
 ### Limitations
 

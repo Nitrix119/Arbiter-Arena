@@ -126,12 +126,12 @@ First-attempt valid-action rate, over fresh decisions:
 | Gemini 3.8 Flash | 0.99 | 0.99 | 1.00 | 1.00 |
 | Claude Sonnet 5.5 | 0.98 | 0.89 | 0.98 | 1.00 |
 
-**[CHART: validity by condition, one line per model.]**
+![First-attempt validity by condition for each model, with 95% intervals](../figures/validity.png)
 
 - **For the small model, the interface is everything.** Nemotron supports every
   pre-registered hypothesis, with the full ordering C3 > C2+M > C2 > C1, each step
   clear.
-  - Its win rate rises from 0.33 in C1 to 0.62 in C3.
+  - It wins 13 of 40 matches in C1 and 25 of 40 in C3.
   - In the protection scenario, its fragile ally survives 6 times in 10 under the menu,
     against 1–2 in 10 otherwise.
 - **For Gemini, the interface barely matters.** It is valid 99–100% of the time and wins
@@ -139,12 +139,14 @@ First-attempt valid-action rate, over fresh decisions:
   agent.
 - **Sonnet is the interesting one** (§6.3).
 
-**Registered verdicts:**
+**Registered verdicts.** These are the report's paired cluster-bootstrap verdicts over
+the 40 shared (scenario, seed) pairs per model. *Supported* means the 95% interval of the
+contrast lies entirely above zero.
 
 | Model | H1 (C3 > C2+M > C2 > C1) | H2 (the deficit is spatial) | H3 (constraint buys legality more than tactics) |
 |---|---|---|---|
 | Nemotron | Supported | Supported | Supported |
-| Gemini | Only C2+M > C2 (tiny; ceiling) | Supported (small effect) | Not testable (tactics saturated) |
+| Gemini | Only C2+M > C2 (tiny; ceiling) | Supported (small effect) | Not supported (wins at the ceiling in 3 of 4 scenarios) |
 | Sonnet | C3 > C2+M > C2 supported; **C2 < C1, reversed** | Supported | Not supported |
 
 ### 6.2 Where validity fails: the taxonomy, not just the rate
@@ -159,12 +161,25 @@ Refusals by type tell a different story per model.
 - **The menu removes whole categories outright.** C3 had zero refusals of any kind,
   for every model.
 
-**[CHART: refusals by code per model × condition, stacked bars.]**
+Refused decisions by the engine's rejection code, for every cell with any refusals (C3 has
+none):
+
+| Model | Condition | Destination blocked | Action spent | Not enough resource | No effect | Out of range | Unknown target |
+|---|---|---|---|---|---|---|---|
+| Nemotron | C1 | 638 | 308 | 177 | 150 | 82 | 0 |
+| Nemotron | C2 | 497 | 40 | 419 | 754 | 5 | 0 |
+| Nemotron | C2+M | 0 | 0 | 288 | 60 | 40 | 0 |
+| Sonnet | C1 | 21 | 0 | 1 | 0 | 0 | 2 |
+| Sonnet | C2 | 36 | 56 | 0 | 0 | 1 | 0 |
+| Sonnet | C2+M | 35 | 0 | 0 | 0 | 0 | 0 |
+| Gemini | C1 | 9 | 1 | 0 | 0 | 1 | 0 |
+| Gemini | C2 | 11 | 5 | 1 | 0 | 0 | 0 |
+| Gemini | C2+M | 1 | 0 | 0 | 0 | 0 | 0 |
 
 Validity and effectiveness can come apart.
 - In C2, Nemotron is *more* valid than in C1 (0.58 against 0.33) but wins far *less*
   (0.05 against 0.33).
-- In C2, 1,460 of its 1,614 decisions were moves. The tool-call format seemed to pull it
+- In C2, 1,460 of its 1,614 fresh decisions were moves. The tool-call format seemed to pull it
   into wandering instead of fighting.
 
 ### 6.3 Sonnet: the one condition that hurts it
@@ -177,10 +192,15 @@ tactics follow the same shape:
 | Win rate | 0.80 | **0.60** | 0.78 | 0.83 |
 | Kiting: archer survives | 10/10 | **4/10** | 9/10 | 10/10 |
 
-**[CHART: Sonnet's win rate and kiting survival by condition.]**
+![Claude Sonnet 5.5's matches won, HP left, kiting survival and time out of melee, by condition](../figures/sonnet_tactics.png)
 
-Bare C2 is the one condition where the strongest model visibly struggles. Two things
-rescue it, and they are different:
+Bare C2 is the one condition where the strongest model visibly struggles, and its
+failure is specific. Of its 56 refusals for acting with its action already spent, **52
+came straight after an attack the engine had just accepted**: it tried to attack a second
+time in the same turn. That never happens in C1. It also ends its turn less often in C2
+(283 times, against 371 in C1).
+
+Two things rescue it, and they are different:
 - **Working it out in the open (C1).** Free text invites prose. Sonnet wrote a line of
   working around **53%** of its C1 commands, against **24–27%** in every other
   condition. That working is spatial bookkeeping, done out loud: "edge to edge that is
@@ -191,7 +211,8 @@ rescue it, and they are different:
   9 kiting survivals in 10.
 
 **Why Sonnet and not Gemini?** At "low" effort the two vendors do different things.
-- Gemini still thinks briefly on almost every turn: ~200–330 output tokens per action.
+- Gemini still thinks briefly on almost every turn: ~185–330 output tokens per accepted
+  action.
 - Sonnet's adaptive thinking judges these turns too simple and mostly skips thinking:
   in the pilot, 19 of 663 requests returned any reasoning.
 
@@ -205,7 +226,7 @@ model's working. Here the restrictive format is the bare tool call. The new obse
 is that *showing the legal options* compensates for the lost working, even without
 restricting the model to them.
 
-### 6.4 The menu prevents friendly fire
+### 6.4 Choosing from the menu ends friendly fire
 
 Allies caught per Fireball cast:
 
@@ -215,19 +236,23 @@ Allies caught per Fireball cast:
 | Gemini | 0.13 | 0.18 | 0.00 | 0.00 |
 | Nemotron | 1.30 | — | 1.46 | 0.13 |
 
-The menu tags placements that would catch an ally. Strong models use the tag even in
-C2+M, where they still aim by raw coordinates; Nemotron does not. The number of enemies
-caught is about the same everywhere. On area spells, then, an enumerated aim does not
+Each menu placement lists everyone it would catch, each marked ally or enemy. Gemini and
+Sonnet use that list even in C2+M, where they still aim by raw coordinates; Nemotron sees
+the same list and still catches 1.46 allies per cast. Only *choosing* from the menu (C3)
+ends friendly fire for every model. The number of enemies caught stays roughly the same
+throughout (1.4–1.9 per cast). On area spells, then, an enumerated aim does not
 cost expressivity, and it *beats* free aiming on the thing that matters most. This
 supports a direction for H4b that was revised and registered before the data.
 
-**[CHART: allies caught per cast, by condition.]**
+![Allies caught per area cast by condition for each model, with the number of casts](../figures/friendly_fire.png)
 
 ### 6.5 Cost
 
 Dollars per *accepted* action, at list price:
-- **For the strong models, free text is cheapest.** There are no tool definitions in the
-  prompt, and few retries. Sonnet: $0.0041 in C1 against $0.0069 in C2.
+- **For Sonnet, free text is cheapest.** There are no tool definitions in the prompt,
+  and few retries: $0.0041 in C1 against $0.0069 in C2.
+- **For Gemini, the menu is cheapest** ($0.0019 in C3 against $0.0021 in C1): it writes
+  fewer output tokens when choosing from a list (208 per accepted action, against 300).
 - **For the weak model, the menu is cheapest by far:** retries are what cost money.
   Nemotron: $0.00012 in C3 against $0.00042 in C2.
 
@@ -348,8 +373,9 @@ release bundle (transcripts, CSVs, prompts and report) is linked from the README
 
 - [ ] The [YOUR VOICE] sections: motivation (§1), what I decided (§4), the audit (§6.6)
       and what surprised me (§8).
-- [ ] Charts (A11): validity by condition, refusals by code, Sonnet's tactics, and
-      friendly fire.
+- [x] Charts (A11): validity, Sonnet's tactics and friendly fire are in §6 (2026-10-08).
+      Refusals by code became a table in §6.2: Nemotron's counts are a hundred times
+      the others', so stacked bars would show only Nemotron.
 - [ ] Architecture diagram (§3).
 - [ ] A replay viewer clip of the seed-108 pair (A33), for §7 and the demo GIF.
 - [ ] Cut to 2,500–3,500 words. Candidates to trim: §2, §6.5, and the setup detail in §5.

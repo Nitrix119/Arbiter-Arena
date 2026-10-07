@@ -44,7 +44,7 @@ First-attempt validity, over fresh decisions:
 predicted, but the size of the effect depends on the model. For the weak model it is
 transformative:
 - Nemotron's validity goes from 33% in C1 to 100% in C3.
-- Its win rate goes from 32% to 62%.
+- It wins 13 of 40 matches in C1 and 25 of 40 in C3.
 - In protect_squishy, the protected ally survives 6 times in 10 in C3, against 1–2 in
   10 elsewhere.
 
