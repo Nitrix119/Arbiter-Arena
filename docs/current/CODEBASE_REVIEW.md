@@ -514,6 +514,11 @@ names where it should be addressed. Append; strike through and date an item when
   - **Accepted as a known limitation (user decision, 2026-09-30).** It is unlikely to
     affect a between-condition measure measurably. Worth fixing after the study.
     Recorded in prereg §9; the prompt is unchanged.
+- **A40. ~~`study show` crashed on a Windows console.~~ Fixed 2026-10-08.** Sonnet switched
+  to Chinese in round 10 of the seed-108 C2+M kiting match. Printing that through a
+  cp1252 console raised `UnicodeEncodeError`, so a documented command crashed on a real
+  transcript. `show` now escapes characters the console can't encode. Pinned by
+  `test_show_survives_a_console_that_cannot_encode_the_models_text`.
 - **A39. Ten spells describe upcasting but never upcast. Open.**
   - Found 2026-10-08 while rewriting the spell guide. Each has `higher_level_scaling`
     text but no `scaling` arg: Burning Hands, Cone of Cold, Cure Wounds, Fireball,

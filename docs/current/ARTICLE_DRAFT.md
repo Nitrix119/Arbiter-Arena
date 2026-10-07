@@ -272,36 +272,50 @@ the response whose prose argued for one position and committed to another.
 
 ## 7. A failure story: Sonnet, kiting, seed 108
 
-*(Source: `study show` on
-`results/final/anthropic-claude-sonnet-5.5/{C2,C2M}/kiting/seed108.jsonl`. Ideal for the
-replay viewer once A33 lands.)*
-
 Same model, same seed, same tool-call format. The only difference is whether the legal
-actions are listed.
+actions are listed. An archer (18 HP, 40 ft of movement, a longbow) faces a slower
+Bruiser (45 HP, a greatsword). The winning play is to shoot and step back, every turn.
 
-**In C2**, the archer shoots, and then, in round 1, tries to shoot again: *refused,
-action already spent*. In rounds 2 and 3 it shoots and **ends its turn without moving**,
-so the slower brute closes the gap. In round 4, with the brute next to it, it explains
-itself:
+**In C2**, the archer shoots, then tries to shoot again: *refused, action already
+spent*. Told why, it retreats. But in rounds 2 and 3 it shoots and **ends its turn
+without moving**, and the Bruiser closes the gap. In round 4, with the Bruiser next to
+it, it explains itself:
 
-> "The Bruiser is 5.5 ft away, so it's adjacent… so I'll kite. First I'll move away to get
-> distance, then shoot next turn. **I can't do both in one action, so I'll attack now.**"
+> "The Bruiser is 5.5 ft away, so it's adjacent. I have no opportunity attacks to worry
+> about, so I'll kite. First I'll move away to get distance, then shoot next turn. **I
+> can't do both in one action, so I'll attack now.**"
 
 Then it shoots and ends its turn, still in melee. It has confused the prompt's rule of
-*one tool call per response* with *one action per turn*. It recovers for a while, but the
-archer dies.
+*one tool call per response* with *one action per turn*. From round 5 it moves and
+shoots again, but the early damage has been done. The archer dies in round 10 with the
+Bruiser on 14 of 45 HP: three turns of standing still cost it the match.
 
-**In C2+M**, the same opening plays out differently. After shooting, it sees its actions
-at 0 beside a list that still offers moves:
+**In C2+M**, the first turn already differs. After shooting, it reads its action count
+off the list and doesn't try a second shot: "My action count is 0, so I can't attack this
+turn." From round 2 it shoots and then retreats, on almost every turn:
 
 > "Actions are 0, so I can't attack. I'll retreat to keep my distance from the Bruiser and
 > stay in longbow range."
 
-It retreats every turn it can and wins with 12 of 18 HP. In C3 it wins at full health.
+It wins in round 16 with 12 of 18 HP. In C3, on the same seed, it wins at full health.
 
 The model did not lack the knowledge: in C2 it said in so many words that it should
 kite. What it lacked was a prompt, at the moment it mattered, that options remained. The
 menu provided that prompt.
+
+**Watch it.** Both matches ship with the repository. Run `uvicorn web.app:app` and open:
+
+| Moment | Link |
+|---|---|
+| C2, round 1: the refused second shot | `/playback?match=sonnet_kiting_seed108_C2.jsonl&step=4` |
+| C2, round 2: shoots, then ends the turn in place | `/playback?match=sonnet_kiting_seed108_C2.jsonl&step=11` |
+| C2, round 4: "I can't do both in one action" | `/playback?match=sonnet_kiting_seed108_C2.jsonl&step=21` |
+| C2+M, round 1: "My action count is 0" | `/playback?match=sonnet_kiting_seed108_C2M.jsonl&step=4` |
+| C2+M, round 2: shoots, then retreats | `/playback?match=sonnet_kiting_seed108_C2M.jsonl&step=10` |
+
+The source transcripts are
+`results/final/anthropic-claude-sonnet-5.5/{C2,C2M}/kiting/seed108.jsonl`, and
+`python -m src.arena.study show` prints either one, decision by decision.
 
 **Aside, from the audit.** In C1, Sonnet once reasoned towards moving to (8, 3), then to
 (11, 4), and then committed to `move to x=10 z=4`. The parser executed the committed
@@ -377,7 +391,8 @@ release bundle (transcripts, CSVs, prompts and report) is linked from the README
       Refusals by code became a table in §6.2: Nemotron's counts are a hundred times
       the others', so stacked bars would show only Nemotron.
 - [ ] Architecture diagram (§3).
-- [ ] A replay viewer clip of the seed-108 pair (A33), for §7 and the demo GIF.
+- [ ] A replay viewer clip of the seed-108 pair, for §7 and the demo GIF. The
+      transcripts and deep links are in place (2026-10-08); capture from those.
 - [ ] Cut to 2,500–3,500 words. Candidates to trim: §2, §6.5, and the setup detail in §5.
 - [ ] Read *DungeonBench* (arXiv 2607.29577) and place this work relative to it in §1.
 - [ ] A title. The working title is a suggestion; alternatives: "The menu is the

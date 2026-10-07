@@ -464,7 +464,7 @@ remains._
       number was checked against `summary.md` and `matches.csv`, and three errors were
       corrected: Gemini's H3 verdict, the cost claim, and the win-rate rounding. §6.6's
       [YOUR VOICE] paragraph on the audit is left for the author.)_
-- [ ] Pick **one failure story**, a replay that illustrates the headline (e.g. fluent reasoning
+- [x] Pick **one failure story**, a replay that illustrates the headline (e.g. fluent reasoning
       leading to an impossible spatial action in C1, vs a legal but weaker choice in C3).
       _Candidates from the data:_
       - Sonnet in bare C2 attacking after its action is spent, set against the same seed in
@@ -473,6 +473,12 @@ remains._
         `ACTION:` commits to a third.
       - Nemotron in C2 "moving" in place until the failure budget ends its turn.
       - A free-aim Fireball that catches allies, set against the menu's tagged placement.
+      _(2026-10-08: the first candidate, Sonnet kiting seed 108, C2 against C2+M, is written
+      up as `ARTICLE_DRAFT.md` §7. Every quote and outcome was checked against the
+      transcripts, and three details were corrected: the C2+M quote is from round 2, it
+      does not retreat every turn, and in C2 it does retreat in round 1 after the
+      refusal. Both transcripts are in `web/static/matches/`, with five verified
+      `/playback` deep links. The GIF is the separate bullet below.)_
 - [x] Charts (ledger A11): validity by condition per model, friendly fire, and Sonnet's
       tactics by condition. Draw them from `results/final/report/*.csv` in a separate script,
       so the harness does not depend on a plotting library.
