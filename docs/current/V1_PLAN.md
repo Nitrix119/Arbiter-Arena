@@ -413,6 +413,10 @@ remains._
       `RuleEngine`, and no "Future Goals". The chart is still to add once A11 exists.
       Follow-up: `examples/spells/SPELL_DEFINITION_GUIDE.md` still documents the deleted
       `effects` pipeline; the README now points to `BLOCK_REFERENCE.md` instead.)_
+      _(2026-10-08: follow-up done. The guide is rewritten around block programs, and
+      every example is loaded by `tests/test_authoring_guides.py` and held to the
+      shipped spell. BLOCK_REFERENCE.md now also generates the Events and Context keys
+      sections. Gaps found on the way are in ledger A37–A39.)_
 - [x] `docs/ARCHITECTURE.md` (one page plus one diagram). Move superseded plans to `docs/archive/`
       with a "historical" banner. _(2026-10-06: written, with a Mermaid diagram; every
       archived doc now carries the banner.)_

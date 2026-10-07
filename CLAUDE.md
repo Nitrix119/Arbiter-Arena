@@ -111,6 +111,11 @@ Non-negotiable. Every change should be justifiable against these.
 - **The authoring reference is generated.** `docs/current/BLOCK_REFERENCE.md` is rendered from the
   block `REGISTRY` (`python -m src.spells.reference`) and drift-tested, so it cannot fall
   behind the code. Adding a block means writing its docstring and contract, then regenerating.
+  It also lists each event's fields (from `EVENT_DATA_CLASSES`) and every context key
+  with its writers, so a block that writes a key must declare it in `writes`.
+  The hand-written guide (`examples/spells/SPELL_DEFINITION_GUIDE.md`) teaches the
+  patterns. `tests/test_authoring_guides.py` loads every example in it and holds each
+  one to the shipped spell it names.
 - **`src/rules` is data; `src/spells` is the engine.** `src/rules` defines a rule (`Rule`),
   loads it (`RuleLoader`), catalogues it (`EffectRegistry`) and evaluates expressions.
   *Installing* a rule is `src/spells/rules.py`. Never let the data layer reach into the
@@ -292,6 +297,19 @@ leave a brief note here.
 - **What went wrong:** the mistake or surprise.
 - **Rule going forward:** the concrete, testable rule.
 ```
+
+### 2026-10-08 — An authoring guide with no test outlived the engine it described
+- **Context:** Rewriting `SPELL_DEFINITION_GUIDE.md` for V1.
+- **What went wrong:** the whole `effects` engine was deleted, but its guide survived for
+  weeks. It documented deleted blocks, linked to deleted files, and gave `target` values
+  the validator rejects, so even its "new form" examples failed to load. Everything
+  around it (the generated block reference, the drift tests) stayed honest, because
+  only the guide had no test.
+- **Rule going forward:** a hand-written doc that shows code must have a test that runs
+  that code. `tests/test_authoring_guides.py` loads every JSON example through the real
+  loader and holds each one to the shipped file it names. When a doc's facts can be
+  generated instead (event fields, context keys), generate them. A doc nobody executes
+  is a comment, the same as a schema nobody checks (2026-09-03).
 
 ### 2026-10-07 — Green CI on fresh dependencies, while every page returned 500
 - **Context:** The V1 fresh-clone test, run just before merging the study to `main`.

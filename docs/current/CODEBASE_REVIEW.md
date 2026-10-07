@@ -514,6 +514,36 @@ names where it should be addressed. Append; strike through and date an item when
   - **Accepted as a known limitation (user decision, 2026-09-30).** It is unlikely to
     affect a between-condition measure measurably. Worth fixing after the study.
     Recorded in prereg §9; the prompt is unchanged.
+- **A39. Ten spells describe upcasting but never upcast. Open.**
+  - Found 2026-10-08 while rewriting the spell guide. Each has `higher_level_scaling`
+    text but no `scaling` arg: Burning Hands, Cone of Cold, Cure Wounds, Fireball,
+    Guiding Bolt, Inflict Wounds, Lightning Bolt, Magic Missile, Scorching Ray and
+    Thunderwave. Cast with a higher slot, they behave as their base level.
+  - Damage dice can be fixed in data today (`damage.scaling`). Healing has no `scaling`
+    arg, and the extra darts or rays need count scaling, which is the deferred
+    upcasting design.
+  - The arena does let a model upcast (`cast_spell`'s `slot_level`, plus the menu's
+    enumerated levels). Checked 2026-10-08: no upcast happened in `results/final`. Its
+    only explicit `slot_level` values are 27 Fireballs at level 3, the base, so the
+    study is unaffected. A future study that offers upcasting should fix this first,
+    or an upcast would buy nothing and look like a mistake.
+- **A38. Three authored fields are never loaded. Open.**
+  - `aoe.height_ft` and `aoe.width_ft` exist on `AOEProperties`, but
+    `StatBlockLoader._parse_action` reads only `shape` and `size_ft`. A custom cylinder
+    height or line width is silently ignored.
+  - `damage_half_on_save` on a weapon is written by `to_dict`, but never read back, so
+    it doesn't round-trip.
+  - The rewritten spell guide documents only what loads. It says a custom height or
+    width is not supported yet.
+- **A37. `roll_once` outside `for_each_target` is accepted and ignored. Open.**
+  - An area spell written flat still runs once per target
+    (`evaluator.resolve_program`), but each target rolls its own damage, and the
+    `roll_once` meant to prevent that does nothing. The validator accepts it silently,
+    which breaks fail-loudly (CLAUDE.md §2.5).
+  - Fix: `validate.py` should reject `roll_once` on a `damage` block that is not inside
+    an iterator. All shipped area spells already use `for_each_target`, so nothing
+    would break.
+  - The guide now warns about this trap.
 - **A36. Re-casting Vampiric Touch while concentrating applies its healing twice. Open.**
   - Found 2026-10-05 while cleaning the test lint (A7): an unused variable turned out to
     be a missing assertion.

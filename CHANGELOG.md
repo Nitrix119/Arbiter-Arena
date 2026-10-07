@@ -32,6 +32,10 @@ The release that ships the action-interface study.
   attribution and the trademark notice are in `NOTICE`.
 - The test spell Armor of Agathys, which is not in SRD 5.1, is replaced by an
   original spell with the same mechanics, Rime Ward.
+- The spell definition guide is rewritten around block programs; it still described
+  the retired `effects` form. Its examples are now tested against the shipped spells.
+- `BLOCK_REFERENCE.md` also lists each event's fields and every context key, generated
+  like the rest of it.
 
 ### Fixed
 - Adjacent creatures were refused as overlapping (A29).
