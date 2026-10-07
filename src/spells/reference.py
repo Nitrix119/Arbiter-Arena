@@ -186,7 +186,68 @@ def generate_block_reference(registry: BlockRegistry = REGISTRY) -> str:
             out.append(detail)
             out.append("")
 
+    out += _events_section()
+    out += _context_section(registry)
     return "\n".join(out).rstrip() + "\n"
+
+
+def _events_section() -> List[str]:
+    """The fields each event carries — what a trigger's ``event.<field>`` may name.
+
+    Read from ``EVENT_DATA_CLASSES``, the same schema ``validate._check_event_refs``
+    checks against, so this list and the loader cannot disagree.
+    """
+    # Imported here, as validate.py does, to keep spells -> combat out of module load.
+    from dataclasses import fields
+
+    from src.combat.event_data import EVENT_DATA_CLASSES
+    from src.combat.events import EventType
+
+    out = [
+        "## Events",
+        "",
+        "The events a `trigger` can subscribe to, and the fields each carries. Inside "
+        "a trigger, an `event.<field>` expression must name one of its event's "
+        "fields, or the spell fails to load.",
+        "",
+        "| Event | Fields |",
+        "|---|---|",
+    ]
+    for event_type in EventType:
+        cls = EVENT_DATA_CLASSES.get(event_type)
+        names = [f"`{f.name}`" for f in fields(cls)] if cls else []
+        out.append(f"| `{event_type.name}` | {', '.join(names) or '_(none)_'} |")
+    out.append("")
+    return out
+
+
+def _context_section(registry: BlockRegistry) -> List[str]:
+    """Every ``context.X`` key, which blocks write it, and its value before any do."""
+    from .context import seed_context
+
+    seeded = seed_context(0)
+    writers = {
+        key: sorted(
+            t for t in registry.types() if key in registry.get(t).contract.writes
+        )
+        for key in seeded
+    }
+    out = [
+        "## Context keys",
+        "",
+        "Every key a `context.X` expression may read. Each starts at its initial "
+        "value and is overwritten by the blocks that write it; any other key is "
+        "rejected at load. `slot_level` is set from the slot the spell is cast at.",
+        "",
+        "| Key | Written by | Initial value |",
+        "|---|---|---|",
+    ]
+    for key in sorted(seeded):
+        by = ", ".join(f"`{t}`" for t in writers[key]) or "_(set at cast)_"
+        initial = "the cast slot" if key == "slot_level" else f"`{seeded[key]!r}`"
+        out.append(f"| `{key}` | {by} | {initial} |")
+    out.append("")
+    return out
 
 
 def main() -> None:
