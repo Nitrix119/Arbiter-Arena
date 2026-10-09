@@ -57,6 +57,17 @@ The design, hypotheses, metrics and exclusions were frozen before the final run,
 
 Constraining the interface raises validity as predicted, but how much depends on the model. For the weakest model it is transformative (it wins 13 of 40 matches in C1 and 25 of 40 in C3); for the strongest it barely registers. Sonnet reverses one predicted step: it is worse with bare tool calls than with prose. The full write-up and a worked failure case are in progress; the working record is [FINAL_RUN_FINDINGS.md](docs/current/FINAL_RUN_FINDINGS.md).
 
+### Check the results yourself
+
+The complete data is a release asset: all 600 transcripts, the report, the blind parser audit, the exact prompt each condition was shown, and the pre-registration as frozen. **[TODO: link the v1.0.0 release asset.]** Unzip it into the repository root, then:
+
+```bash
+python -m src.arena.study verify results/final   # every match must replay: 600/600
+python -m src.arena.study report results/final   # rewrites report/ byte for byte
+```
+
+Neither command needs an API key. The bundle is built by `tools/make_bundle.py`, which refuses to export a prompt that no longer hashes to what the transcripts recorded.
+
 ### Limitations
 
 - **One environment.** Tactical combat is a controlled setting, not a sample of real tool-use tasks.

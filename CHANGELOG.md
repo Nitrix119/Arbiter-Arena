@@ -26,6 +26,10 @@ The release that ships the action-interface study.
   (A33).
 - The write-up's charts (`tools/plot_study.py`, behind a new `[plots]` extra), drawn
   from a report's `matches.csv` with the report's own estimators (A11).
+- `tools/make_bundle.py`, which packs the release's data bundle: results, audit,
+  prompts and both versions of the pre-registration, with checksums. It refuses an
+  incomplete audit, a prompt that no longer hashes to what the transcripts recorded,
+  and anything key-shaped.
 
 ### Changed
 - Licensed under Apache-2.0 (was PolyForm Noncommercial 1.0.0). SRD 5.1
