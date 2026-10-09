@@ -12,16 +12,37 @@
 
 ---
 
-## 1. The problem: models propose, software must preserve invariants  [YOUR VOICE, then the framing below]
+## 1. The problem: models propose, software must preserve invariants
 
-**[YOUR VOICE: motivation.]** Why you built this. Notes to draw on:
-- You built a D&D combat engine first, for its own sake, and it turned into a test bed.
-- The question that made it a study: when an LLM agent acts through tools, how much of
-  its failure is the model, and how much is the *interface we hand it*?
-- Why it matters beyond games: every production agent proposes actions that software must
-  validate: bookings, API calls, database writes.
+The plan for this project was always to have LLMs interact with an SRD-compatible combat
+engine, but the focus was initially far different to what it became. My original vision
+was a tool that would simply simulate battles with realistic, well-coordinated tactics,
+so that a game master could quickly simulate how an encounter might play out. But while
+building it, I realised how many questions there were to answer to get to the point of
+an LLM playing the game. And rather than rush a solution, I wanted to explore those
+questions.
 
-**Framing (draft).** Tool-using agents fail in two different ways. They choose badly, or
+The first of these, naturally, was how a model interacted with the engine and the world
+model. I had heard that the latest paradigm was that the harnesses and interfaces were
+far more important than the model itself, but I wanted to test for myself what impact
+the interface could have upon the way these models interact with the same underlying
+system: where and why they failed, and what influence the interface alone could have
+over it.
+
+The setting itself — effectively Dungeons & Dragons combat — was a perfect fit that
+I felt I knew well enough to be deeply invested in building and exploring. An
+environment that is deterministic for the harness, but full of uncertainty and long-term
+planning for the model, which must contend with it solely by making tool calls and
+individual decisions from an observation. It mirrors many of the elements of real,
+high-stakes use cases for LLMs today, across areas involving autonomous control: a model
+that is asked to take action, based on a set of potentially imperfect observations, and
+within the confines of what it is able to and permitted to do.
+
+Going in, I expected the interface to prove extremely impactful, as the paradigm
+suggested — for each new element introduced to make taking action easier, I anticipated
+that there would be a clear payoff visible in the metrics.
+
+Tool-using agents fail in two different ways. They choose badly, or
 they propose actions the system cannot accept: a target that does not exist, a move into
 a wall, a second attack after the first used up the turn. The second kind is often
 blamed on the model. But the same model can be asked to act in very different ways. It
@@ -49,7 +70,7 @@ fixed and varies only that choice.
 
 ## 3. Architecture
 
-**[CHART/DIAGRAM: observation → interface → validator → executor → recorder.]**
+![One decision: the observation goes through the interface to the model; the engine validates and executes what it proposes, and the recorder keeps everything](../figures/architecture.png)
 
 1. **Observation.** The game state as structured data: positions, HP, resources, and
    each creature's own capabilities. Every condition sees the same body.
@@ -74,14 +95,35 @@ failure budget (3 consecutive or 5 total refusals) ends a turn that goes nowhere
 C2+M is the control that makes the design work. It separates *seeing* the options from
 *being restricted to* them.
 
-**[YOUR VOICE: "what I decided".]** The design choices worth owning:
-- **No LLM parser for C1.** A second model inside the measurement would make failures
-  unattributable.
-- **Freezing the design before collecting data**, as a pre-registration with a tag.
-- **C2+M as a full condition.**
-- **The pilot fixed only method bugs, not results.** It found an adjacency bug and a
-  free "move nowhere" action, and fixed both. When the strong models solved the
-  scenarios, they were *not* made harder.
+**What I decided, and why.** Avoiding an LLM parser for C1 was a clear and important
+decision to me, despite it being initially considered. The heart of that choice was
+simple: a non-deterministic factor parsing the model's action would leave doubt about
+whether the outcome was solely because of the interface itself, or influenced by the LLM
+performing parsing. This want for authenticity was carried into the way the study was
+carried out, and my choice to pre-register and freeze the project was guided by a strong
+trust in the scientific method. I truly believe that regardless of the scope or
+importance of a study, it will benefit from an honest, proper methodology.
+
+I realised that I needed to add the fourth interface condition of C2+M when first seeing
+a chart of what each of the first three interfaces contained, and noting that there were
+distinctly two changes between C2 and C3 — the menu, and the action selection format. If
+one were to prove superior, I realised I could not truly be sure which of these two
+changes had caused it, and to what extent, so a middle ground was necessary.
+
+When I realised during the pilot that Gemini had all but solved the four scenarios, I
+chose not to change them for honesty and to value the answer that it came with: for a
+powerful enough LLM, in a simple enough setting, the interface barely matters — it will
+find the way. That is a finding in itself, and making the scenarios harder would have
+only been likely to degrade the results for the other two models which had not solved
+them. Ultimately, it was not a study on how hard of a scenario it took to confound the
+models.
+
+I felt proudest about how neutral and fair I feel the menus are, particularly when
+offering AoE targeting: unique sets of targets are provided, but little guidance on what
+the model actually wants to hit. Beyond naming its moves, nowhere does a menu
+truly guide the model to do something more clever — it is only by having its options
+laid out plainly that Sonnet was seen to perform distinctly better when provided with
+it, despite doing little reasoning of its own.
 
 ## 5. Setup and reproducibility
 
@@ -226,7 +268,7 @@ model's working. Here the restrictive format is the bare tool call. The new obse
 is that *showing the legal options* compensates for the lost working, even without
 restricting the model to them.
 
-### 6.4 Choosing from the menu ends friendly fire
+### 6.4 Choosing from the menu all but ends friendly fire
 
 Allies caught per Fireball cast:
 
@@ -239,14 +281,47 @@ Allies caught per Fireball cast:
 Each menu placement lists everyone it would catch, each marked ally or enemy. Gemini and
 Sonnet use that list even in C2+M, where they still aim by raw coordinates; Nemotron sees
 the same list and still catches 1.46 allies per cast. Only *choosing* from the menu (C3)
-ends friendly fire for every model. The number of enemies caught stays roughly the same
+all but ends friendly fire for every model: Gemini and Sonnet catch no allies, and
+Nemotron 2 in 15 casts. The number of enemies caught stays roughly the same
 throughout (1.4–1.9 per cast). On area spells, then, an enumerated aim does not
 cost expressivity, and it *beats* free aiming on the thing that matters most. This
 supports a direction for H4b that was revised and registered before the data.
 
 ![Allies caught per area cast by condition for each model, with the number of casts](../figures/friendly_fire.png)
 
-### 6.5 Cost
+### 6.5 What the menu gave up: movement
+
+A menu can only offer the options someone thought to list. That cost can be measured
+before any model runs, so it was (H4a, measured offline and registered with the design).
+Sampled across the positions real matches pass through:
+- **Area spells:** the aim menu reaches at least 75% of the distinct sets of creatures a
+  Fireball could catch (median 92%).
+- **Movement:** the menu offers a few named destinations per creature: close in,
+  retreat, kite to range. At worst it reaches only **33%** of the distinct tactical
+  positions that free movement can.
+
+On paper, then, movement is where the menu should hurt. The registered prediction there
+was that C3 would do no better than the free-movement conditions. It did not hurt.
+Kiting is the scenario that rewards movement most, and its score is the share of the
+match the archer spends out of melee (10 matches per cell):
+
+| Kiting: time out of melee | C1 | C2 | C2+M | C3 |
+|---|---|---|---|---|
+| Nemotron | 0.18 | 0.15 | 0.72 | 0.76 |
+| Gemini | 0.98 | 0.98 | 0.98 | 0.98 |
+| Sonnet | 0.89 | 0.73 | 0.92 | 0.98 |
+
+For every model, C3 kites at least as well as any condition with free movement. In C3,
+Sonnet kites exactly as well as the hand-built heuristic agent (0.98, and 16.1 of 18 HP
+left on average), which Gemini matches in every condition. The menu's positions are few,
+but "step back to range" is one of them, and that is the move kiting needs.
+
+So the loss H4a measured is real, but these scenarios never needed the positions the menu
+lost. A scenario that rewards one precise spot, such as a flank, a doorway or cover,
+would test it properly, and none of the four does. H4 has no registered decision rule,
+so this is a description rather than a verdict.
+
+### 6.6 Cost
 
 Dollars per *accepted* action, at list price:
 - **For Sonnet, free text is cheapest.** There are no tool definitions in the prompt,
@@ -256,7 +331,7 @@ Dollars per *accepted* action, at list price:
 - **For the weak model, the menu is cheapest by far:** retries are what cost money.
   Nemotron: $0.00012 in C3 against $0.00042 in C2.
 
-### 6.6 Did the parser decide the result?
+### 6.7 Did the parser decide the result?
 
 No, and it was checked twice.
 1. **C1 is scored three ways:** a strict reading, the live parser, and a lenient one. All
@@ -267,8 +342,20 @@ No, and it was checked twice.
      reasoning and committed action disagreed.
    - Even at the worst-case error rate, every verdict stands.
 
-**[YOUR VOICE: the audit.]** What labelling 200 responses by hand was like, and noticing
-the response whose prose argued for one position and committed to another.
+**Doing the audit.** Labelling 200 responses was a mix of tedious and interesting,
+solely based on which model I was labelling. Sonnet's reasoning prose was interesting to
+read and occasionally quite charming, while labelling plain tool calls was fairly tedious
+after dozens of very similar labels. Blind labelling definitely felt different, however,
+because I fully believed the parser to be infallible. Were it to have made a genuine
+mistake, or in the case where Sonnet's reasoning was inconsistent but its action properly
+formatted, I would have been too likely to not question it had I been able to see the
+parser's label. Finding that one of the two disagreements was my own error felt mildly
+annoying, but ultimately was a mark of honest human labelling.
+
+Overall, the experience did change my views of free text as an interface in a small way.
+I had assumed that any form of free response would be plagued by inconsistent wording
+causing parser errors, so I was pleasantly surprised to find how well even the weakest
+model adopted the simple action syntax.
 
 ## 7. A failure story: Sonnet, kiting, seed 108
 
@@ -338,12 +425,24 @@ working we can read, and it can disagree with the action.
 - **Small models need structure.** For a small fast model, enumeration was the difference
   between losing most fights and winning most of them.
 
-**[YOUR VOICE: "what surprised me".]** Candidates:
-- Sonnet doing worse in C2 than C1.
-- The reasoning-effort difference.
-- How little the interface mattered to Gemini.
-- Nemotron's wandering in C2.
-- How cheap a well-run experiment was: about $40 across the pilots and the final run.
+**What surprised me.** The result that surprised me the most was, without a doubt, that
+Sonnet performed worse with bare tool calls than free text. The only instance of a model
+becoming less reliable as the interface became more structured came from the model I
+believed to be the best, which was greatly unexpected, and the way it lost track of what
+it had already done was not a regression I had considered would occur.
+
+Gemini, on the other hand, completely exceeded my expectations. To find that it hardly
+mattered which interface it got was almost worrying, before I accepted that it does not
+harm the study as a whole.
+
+It goes without saying that I also could not have expected how strikingly different
+"low" reasoning actually is between vendors, to the degree that Sonnet skipped it
+entirely most of the time while Gemini only tried to keep it short.
+
+So did the idea that the interface matters more than the model hold up? It depended
+entirely on the model: for Nemotron it held emphatically, for Gemini it barely applied,
+and for Sonnet it mattered only when the interface took away both its room to reason and
+its view of the options.
 
 ## 9. Limitations
 
@@ -357,15 +456,26 @@ working we can read, and it can disagree with the action.
   A single borderline interval (e.g. Gemini's C2+M > C2) is weaker.
 - **Exploratory, not registered:** the reasoning-effort explanation, the between-model
   comparison, and Nemotron's wandering.
-- **Sampling differs between models.** Only Nemotron ran at temperature 0 with a seed.
-  Sonnet accepts neither, and Google advises against lowering Gemini's temperature.
+- **Sampling and reasoning differ between models.** Only Nemotron ran at temperature 0
+  with a seed. Sonnet accepts neither, and Google advises against lowering Gemini's
+  temperature. And "low" reasoning effort means a different amount of thinking per
+  vendor (§6.3), so the between-model comparison mixes capability with both.
+- **One neutral prompt.** Every condition shares a prompt that scripts no tactics, and it
+  was not tuned to any model. A prompt engineered for each model might narrow the gaps.
+- **Menu discretisation.** The movement menu reaches as little as a third of the
+  positions free movement can (§6.5), and no scenario rewards a precise position, so
+  that cost is measured but untested.
 - **Ceiling effects.** Gemini saturates validity and tactics, so H3 is untestable for it.
 - **Format and affordance confound.** The menu also carries tactical hints in its labels,
   such as "retreat". C2+M separates seeing from restriction, but not the hint from the
   list.
 - **Engine simplifications.** Moves are not blocked by creatures in the way (only by
   where they end), and opportunity attacks are not modelled. Both apply equally to every
-  condition.
+  condition, but they make escaping in the positioning scenarios easier than the rules
+  intend.
+- **One author.** The same person built the engine, the interfaces and the scenarios.
+  The pre-registration and the blind parser audit limit how much that can shape the
+  results, but do not remove it.
 
 ## 10. Reproduce it
 
@@ -385,12 +495,15 @@ release bundle (transcripts, CSVs, prompts and report) is linked from the README
 
 ### Still to write or decide
 
-- [ ] The [YOUR VOICE] sections: motivation (§1), what I decided (§4), the audit (§6.6)
-      and what surprised me (§8).
+- [x] The [YOUR VOICE] sections: motivation (§1), what I decided (§4), the audit (§6.7)
+      and what surprised me (§8). Written by interview, 2026-10-10: the author's answers,
+      with spelling, grammar and approved accuracy fixes only.
+- [x] H4 (2026-10-10): the movement side, which had gone unreported, is §6.5. The
+      limitations now cover every threat declared in prereg §9.
 - [x] Charts (A11): validity, Sonnet's tactics and friendly fire are in §6 (2026-10-08).
       Refusals by code became a table in §6.2: Nemotron's counts are a hundred times
       the others', so stacked bars would show only Nemotron.
-- [ ] Architecture diagram (§3).
+- [x] Architecture diagram (§3): `docs/figures/architecture.{svg,png}` (2026-10-10).
 - [ ] A replay viewer clip of the seed-108 pair, for §7 and the demo GIF. The
       transcripts and deep links are in place (2026-10-08); capture from those.
 - [ ] Cut to 2,500–3,500 words. Candidates to trim: §2, §6.5, and the setup detail in §5.

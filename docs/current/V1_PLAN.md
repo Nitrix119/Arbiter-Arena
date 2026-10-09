@@ -492,7 +492,7 @@ remains._
 - [ ] Article (~2,500–3,500 words), structure below. **Write the motivation, the surprises and the
       "what I decided" sections in your own voice.** That is the ownership evidence the review
       stresses.
-- [ ] Threats to validity: one environment; 3 models; format and affordance confound; menu
+- [x] Threats to validity: one environment; 3 models; format and affordance confound; menu
       discretisation; LLM nondeterminism; tactics underpowered (and saturated for Gemini);
       neutral-prompt choice.
       Added by the run (prereg §9):
@@ -500,8 +500,19 @@ remains._
       - sampling differs between models (only Nemotron runs at temperature 0 with a seed)
       - no multiplicity correction
       - A30, moves through hostile creatures not checked
+      _(2026-10-10: all are in `ARTICLE_DRAFT.md` §9, along with the declared
+      "one author" threat. H4's movement arm, which the draft had left out, is now
+      §6.5: the menu loses up to two thirds of positions, yet C3 kites best for every
+      model.)_
 - [ ] Release bundle: transcripts (non-sensitive), CSVs, prereg, prompts, report. Zenodo DOI optional.
+      _(2026-10-10: built by `tools/make_bundle.py`, and rehearsed end to end on the
+      real data: 619 files, 4 MB, checksums pass, and the unzipped copy verifies
+      600/600 and reports identically. A secret scan of `results/final` found nothing.
+      **Waiting on the real `audit/` folder**, which was not on this machine; the tool
+      refuses to build without it.)_
 - [ ] Bump to `1.0.0`, tag `v1.0.0`, GitHub release notes.
+      _(2026-10-10: `pyproject.toml` is at 1.0.0. The tag and the release are still to
+      do; the CHANGELOG stays "Unreleased" until the tag has a date.)_
 - [ ] Short demo GIF or video; update CV/LinkedIn with the **measured** numbers.
 
 **Article outline:** (1) problem: models propose, software must preserve invariants; (2) why a
@@ -514,12 +525,20 @@ production tool-using agents; (9) limitations; (10) reproduce it.
 
 ## 5. V1.0.0 definition of done
 - [x] `main` contains all arena, RNG and study work; CI green with a badge.
-- [ ] `pip install -e ".[web,dev]"`, then one no-key command runs a match and writes a verifiable transcript.
+- [x] `pip install -e ".[web,dev]"`, then one no-key command runs a match and writes a verifiable transcript.
+      _(The fresh-clone test, 2026-10-07.)_
 - [ ] One documented command reproduces the report from the published bundle.
-- [ ] Pre-registration frozen *before* the final-run commit (visible in git history).
-- [ ] Replays verify 100%; transcripts contain no secrets.
-- [ ] README, ARCHITECTURE and limitations match the code; historical docs labelled.
-- [ ] Licence, SRD attribution and naming resolved.
+      _(Documented in the README and the bundle's own README. Rehearsed on
+      2026-10-10: the report rebuilt from an unzipped bundle is byte-identical. This
+      ticks once the bundle is published.)_
+- [x] Pre-registration frozen *before* the final-run commit (visible in git history).
+      _(All 600 transcripts record commit `52db99d`, the `study-freeze` tag, with
+      `git_dirty: false`.)_
+- [x] Replays verify 100%; transcripts contain no secrets.
+      _(2026-10-10: 600/600 at today's HEAD as well as at the tag. No key shapes,
+      auth headers, email addresses or local paths in `results/final`.)_
+- [x] README, ARCHITECTURE and limitations match the code; historical docs labelled.
+- [x] Licence, SRD attribution and naming resolved.
 - [ ] Article published and linked from the README; `v1.0.0` tagged.
 - [ ] You can explain, without notes: one resolution path, block validation, the action-interface
       design, one real bug found by a test, and what Claude Code did vs. what you decided.
