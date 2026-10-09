@@ -53,6 +53,25 @@ legal.
 That choice belongs to the system's designer, not the model. This study holds the model
 fixed and varies only that choice.
 
+**Related work.** The closest work to this one is *DungeonBench* (Ismayilov, Kara and
+Oktay, 2026), a far broader benchmark of D&D combat. It covers most of the SRD's combat
+rules, links fights into whole adventuring days, and evaluates five frontier models. Its
+models always act by choosing from an indexed list of legal options: this study's C3,
+and the same contract D20Bench uses. It appeared in July, and I found it only while
+verifying citations at the freeze, so the two designs converged independently. That is
+no surprise, given how popular D&D is and how simple its combat is next to other
+tabletop games. I suspect we are the same kind of enthusiast, each wanting to try our
+own ideas for LLMs and D&D.
+
+I see it as a complement, not a competitor. DungeonBench goes broad, across the rules
+and across a whole day of play; this study goes deep on the one design decision it holds
+fixed. Nothing in it challenges the results here, and the results here support its
+choice: the menu was the most reliable interface tested, for every model. But they also
+show that the choice shapes the scores and how the models behave, so a benchmark's
+numbers are partly a property of its interface. Its much finer movement enumeration is
+an idea I would like to try in future, with care to balance resolution against a list
+too long to be useful.
+
 ## 2. Why a deterministic tactical engine is a good laboratory
 
 - **Every action has a ruling.** The engine implements SRD 5.1 combat. A proposed
@@ -507,6 +526,7 @@ release bundle (transcripts, CSVs, prompts and report) is linked from the README
 - [ ] A replay viewer clip of the seed-108 pair, for §7 and the demo GIF. The
       transcripts and deep links are in place (2026-10-08); capture from those.
 - [ ] Cut to 2,500–3,500 words. Candidates to trim: §2, §6.5, and the setup detail in §5.
-- [ ] Read *DungeonBench* (arXiv 2607.29577) and place this work relative to it in §1.
+- [x] Read *DungeonBench* (arXiv 2607.29577) and place this work relative to it in §1
+      (2026-10-10, "Related work").
 - [ ] A title. The working title is a suggestion; alternatives: "The menu is the
       reasoning", "Same model, four interfaces".
