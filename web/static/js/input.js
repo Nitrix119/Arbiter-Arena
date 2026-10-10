@@ -7,6 +7,7 @@ import {
     tokens, state, createToken,
 } from './state.js';
 import { draw, getActionRangeFt } from './renderer.js';
+import { zoomAt } from './camera.js';
 import {
     updateInfoPanel, updateTargetPanel,
     setTargetingAction, openActionPanel, closeActionPanel,
@@ -246,18 +247,8 @@ export function initInputHandlers() {
 
     canvas.addEventListener("wheel", (e) => {
         e.preventDefault();
-
-        const oldZoom = camera.zoom;
-        const delta   = -e.deltaY * ZOOM_SPEED * camera.zoom;
-        camera.zoom   = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, camera.zoom + delta));
-
-        const mx     = e.offsetX;
-        const my     = e.offsetY;
-        const worldX = (mx - camera.x) / oldZoom;
-        const worldY = (my - camera.y) / oldZoom;
-        camera.x = mx - worldX * camera.zoom;
-        camera.y = my - worldY * camera.zoom;
-
+        zoomAt(camera, e.offsetX, e.offsetY, e.deltaY,
+            { min: ZOOM_MIN, max: ZOOM_MAX, speed: ZOOM_SPEED });
         draw();
     }, { passive: false });
 

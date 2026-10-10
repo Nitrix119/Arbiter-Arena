@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arbiter-arena"
-version = "1.0.0"
+version = "1.0.1"
 description = "A deterministic evaluation harness for tool-using LLM agents, on an SRD 5.1-compatible combat engine"
 readme = "README.md"
 # Matches what CI actually tests (3.11 and 3.13). Claiming an older floor would

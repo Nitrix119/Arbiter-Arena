@@ -5,16 +5,19 @@
 
 import {
     tokens, camera, canvas, state,
-    CELL_PX, CELL_FEET, ZOOM_MIN, ZOOM_MAX,
+    CELL_PX, CELL_FEET, ZOOM_MIN, ZOOM_MAX, ZOOM_SPEED,
 } from './state.js';
 import { draw, resize, spawnFloatingLabel } from './renderer.js';
 import { parseJsonl, buildSteps, boundsOf } from './playback-data.js';
 import { createPlayer } from './playback-controls.js';
+import { zoomAt, uncoveredRect, fitToRect } from './camera.js';
 
 const DEFAULT_MATCH = '/static/matches/sample_match.jsonl';
 
 // ── DOM handles ─────────────────────────────────────────────────────────────
 const el = {
+    caption:  document.getElementById('pb-caption'),
+    controls: document.getElementById('pb-controls'),
     round:    document.getElementById('pb-round'),
     desc:     document.getElementById('pb-desc'),
     panels:   document.getElementById('combatant-panels'),
@@ -44,20 +47,28 @@ let cardRefs = {};      // entity id → { root, hpFill, hpText, pos, cond }
 let tlRefs = [];        // step index → timeline row element
 let player = null;
 
-// ── Camera auto-fit (no pan/zoom input on this page) ────────────────────────
+// ── Camera: auto-fit, then free pan (drag) and zoom (wheel) ─────────────────
+const ZOOM_LIMITS = { min: ZOOM_MIN, max: ZOOM_MAX, speed: ZOOM_SPEED };
+
+// The panels float over the canvas, so the board is fitted to the area between
+// them; fitting to the whole canvas left tokens hidden beneath the side panels.
+function overlayRects() {
+    const rectsOf = (...els) => els
+        .filter((e) => e && !e.hidden && e.offsetWidth > 0 && e.offsetHeight > 0)
+        .map((e) => e.getBoundingClientRect());
+    return {
+        left: rectsOf(el.timeline, el.decision),
+        right: rectsOf(el.panels),
+        top: rectsOf(el.caption, document.getElementById('pb-source')),
+        bottom: rectsOf(el.controls),
+    };
+}
+
 function fitCamera() {
-    const b = boundsOf(steps);
-    const pad = 1.5;                       // cells of breathing room
-    const worldW = (b.maxX - b.minX) + pad * 2;
-    const worldH = (b.maxY - b.minY) + pad * 2;
-    const zoomX = canvas.width / (worldW * CELL_PX);
-    const zoomY = canvas.height / (worldH * CELL_PX);
-    const zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.min(zoomX, zoomY, 1.4)));
-    camera.zoom = zoom;
-    const cx = (b.minX + b.maxX) / 2;
-    const cy = (b.minY + b.maxY) / 2;
-    camera.x = canvas.width / 2 - cx * CELL_PX * zoom;
-    camera.y = canvas.height / 2 - cy * CELL_PX * zoom;
+    const viewport = { width: canvas.width, height: canvas.height };
+    const rect = uncoveredRect(viewport, overlayRects(), { margin: 12 });
+    fitToRect(camera, boundsOf(steps), rect,
+        { cellPx: CELL_PX, pad: 1.5, maxFit: 1.4, min: ZOOM_MIN, max: ZOOM_MAX });
 }
 
 // ── Combatant cards ─────────────────────────────────────────────────────────
@@ -375,9 +386,40 @@ el.speed.addEventListener('click', (e) => {
     el.speed.querySelectorAll('.pb-speed-btn').forEach((b) => b.classList.toggle('active', b === btn));
 });
 
+// Pan by dragging the board (left or middle button), zoom with the wheel about the
+// cursor, and double-click to fit the whole match again. The panels sit above the
+// canvas, so these only fire on the board itself.
+let panLast = null;
+canvas.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 && e.button !== 1) return;
+    e.preventDefault();
+    panLast = { x: e.clientX, y: e.clientY };
+    canvas.style.cursor = 'grabbing';
+});
+window.addEventListener('mouseup', () => {
+    panLast = null;
+    canvas.style.cursor = '';
+});
+canvas.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    zoomAt(camera, e.offsetX, e.offsetY, e.deltaY, ZOOM_LIMITS);
+    if (steps.length) draw();
+}, { passive: false });
+canvas.addEventListener('dblclick', () => {
+    if (!steps.length) return;
+    fitCamera();
+    draw();
+});
+
 // Track the cursor's grid position so renderer's bottom-left readout works, the same
-// conversion the battle page uses (input.js). No pan/zoom here, so this is all we need.
+// conversion the battle page uses (input.js), and move the camera while panning.
 window.addEventListener('mousemove', (e) => {
+    if (panLast) {
+        camera.x += e.clientX - panLast.x;
+        camera.y += e.clientY - panLast.y;
+        panLast = { x: e.clientX, y: e.clientY };
+    }
     state.cursorWorld.x = (e.clientX - camera.x) / (CELL_PX * camera.zoom);
     state.cursorWorld.y = (e.clientY - camera.y) / (CELL_PX * camera.zoom);
     if (steps.length) draw();
