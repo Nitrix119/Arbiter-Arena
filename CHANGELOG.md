@@ -4,6 +4,17 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] — 2026-10-11
+
+### Fixed
+- The playback page could not be panned or zoomed, and its auto-fit centred the
+  board on the whole window, so tokens could sit hidden beneath the side panels.
+  Drag now pans, the wheel zooms about the cursor, a double-click refits, and the
+  fit uses only the area the panels leave clear. The camera maths is shared with
+  the battle page (`web/static/js/camera.js`) and checked under node in the suite.
+
+The study's data is unchanged: the v1.0.0 bundle remains the dataset.
+
 ## [1.0.0] — 2026-10-11
 
 The release that ships the action-interface study.

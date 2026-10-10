@@ -26,7 +26,7 @@ python -m src.arena.study show results/demo/mock/C1/aoe_placement/seed1.jsonl --
 
 Use the venv's Python for every command. A system `python` without the dependencies installed fails in confusing ways.
 
-To watch a match: run `uvicorn web.app:app`, open `http://localhost:8000/playback`, and use **Open…** to load any transcript. The replay shows the board, and for every model decision, what the model thought, wrote and called, and how the referee ruled.
+To watch a match: run `uvicorn web.app:app`, open `http://localhost:8000/playback`, and use **Open…** to load any transcript. Drag to pan, scroll to zoom, and double-click to fit the board again. The replay shows the board, and for every model decision, what the model thought, wrote and called, and how the referee ruled.
 
 Requires Python 3.11+. Real models need the `[agents]` extra and a key; see [AGENT_ARENA_LLM_SETUP.md](docs/current/AGENT_ARENA_LLM_SETUP.md).
 
