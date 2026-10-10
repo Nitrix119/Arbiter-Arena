@@ -42,3 +42,38 @@ def test_every_block_has_a_summary():
     """A block with no docstring would render '(undocumented)' — catch it here
     rather than shipping a reference with a hole in it."""
     assert "_(undocumented)_" not in _checked_in()
+
+
+def test_every_event_and_its_fields_are_documented():
+    # A trigger's event.<field> is checked at load against event_fields(), so the
+    # reference must say which fields each event carries.
+    from src.combat.event_data import event_fields
+    from src.combat.events import EventType
+
+    doc = _checked_in()
+    events = doc.split("## Events", 1)[1].split("\n## ", 1)[0]
+    for event_type in EventType:
+        line = next(
+            (ln for ln in events.splitlines() if f"`{event_type.name}`" in ln), None
+        )
+        assert line is not None, f"{event_type.name} missing from the reference"
+        for field in event_fields(event_type):
+            assert f"`{field}`" in line, f"{event_type.name}.{field} undocumented"
+
+
+def test_every_context_key_is_documented():
+    from src.spells.context import CONTEXT_KEYS
+
+    doc = _checked_in()
+    keys = doc.split("## Context keys", 1)[1].split("\n## ", 1)[0]
+    for key in CONTEXT_KEYS:
+        assert f"| `{key}` |" in keys, f"context.{key} missing from the reference"
+
+
+def test_every_context_key_but_the_slot_has_a_declared_writer():
+    # A block that writes a key without declaring it leaves the reference saying
+    # nothing writes it (attack_roll's attack_cancelled/had_advantage did).
+    from src.spells.context import CONTEXT_KEYS
+
+    declared = {k for t in REGISTRY.types() for k in REGISTRY.get(t).contract.writes}
+    assert CONTEXT_KEYS - declared == {"slot_level"}

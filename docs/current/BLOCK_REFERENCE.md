@@ -94,7 +94,7 @@ Emit ATTACK_DECLARED, roll to hit, emit ATTACK_ROLLED/ATTACK_HIT.
 | | |
 |---|---|
 | **Reads context** | _(none)_ |
-| **Writes context** | `hit`, `attack_roll`, `attack_total`, `critical_hit`, `critical_miss` |
+| **Writes context** | `hit`, `attack_roll`, `attack_total`, `critical_hit`, `critical_miss`, `attack_cancelled`, `had_advantage`, `had_disadvantage` |
 | **Target** | acts on the current target, which must be exactly one entity |
 | **Category** | gate (a roll that later blocks are conditioned on) |
 
@@ -375,3 +375,50 @@ Subscribe this block's ``then`` to an event; scope it to the open lifetime.
 | **Writes context** | _(none)_ |
 | **Target** | acts on the current target, which must be exactly one entity |
 | **Category** | installs reactions (subscribes handlers to future events) |
+
+## Events
+
+The events a `trigger` can subscribe to, and the fields each carries. Inside a trigger, an `event.<field>` expression must name one of its event's fields, or the spell fails to load.
+
+| Event | Fields |
+|---|---|
+| `ROUND_START` | `round_num` |
+| `TURN_START` | `entity`, `round_num`, `turn_num` |
+| `TURN_END` | `entity`, `round_num`, `turn_num` |
+| `ROUND_END` | `round_num` |
+| `ATTACK_DECLARED` | `attacker`, `defender`, `action`, `advantage`, `disadvantage`, `critical_hit`, `critical_miss` |
+| `ATTACK_ROLLED` | `attacker`, `defender`, `action`, `roll`, `total`, `critical_hit`, `critical_miss` |
+| `ATTACK_HIT` | `attacker`, `defender`, `action`, `roll`, `critical_hit` |
+| `ATTACK_MISS` | `attacker`, `defender`, `action`, `roll` |
+| `SPELL_CAST` | `caster`, `defenders`, `action`, `origin` |
+| `SPELL_HIT` | `caster`, `defender`, `action`, `roll`, `save_success`, `save_roll` |
+| `SAVING_THROW_DECLARED` | `defender`, `ability`, `dc`, `advantage`, `disadvantage` |
+| `DAMAGE_INCOMING` | `defender`, `damage_list` |
+| `DAMAGE_DEALT` | `defender`, `damage_list`, `total`, `source`, `action_name` |
+| `HEALING_APPLIED` | `target`, `amount` |
+| `ENTITY_DIES` | `entity`, `killer` |
+| `CONDITION_ADDED` | `entity`, `condition` |
+| `CONDITION_REMOVED` | `entity`, `condition_type` |
+
+## Context keys
+
+Every key a `context.X` expression may read. Each starts at its initial value and is overwritten by the blocks that write it; any other key is rejected at load. `slot_level` is set from the slot the spell is cast at.
+
+| Key | Written by | Initial value |
+|---|---|---|
+| `attack_cancelled` | `attack_roll` | `False` |
+| `attack_roll` | `attack_roll` | `None` |
+| `attack_total` | `attack_roll` | `None` |
+| `critical_hit` | `attack_roll` | `False` |
+| `critical_miss` | `attack_roll` | `False` |
+| `damage_dealt` | `damage` | `0` |
+| `damage_rolled` | `damage` | `0` |
+| `had_advantage` | `attack_roll` | `False` |
+| `had_disadvantage` | `attack_roll` | `False` |
+| `healing_amount` | `healing` | `0` |
+| `hit` | `attack_roll` | `True` |
+| `save_dc` | `saving_throw` | `None` |
+| `save_roll` | `saving_throw` | `None` |
+| `save_success` | `saving_throw` | `True` |
+| `slot_level` | _(set at cast)_ | the cast slot |
+| `temp_hp_granted` | `grant_temporary_hp` | `0` |

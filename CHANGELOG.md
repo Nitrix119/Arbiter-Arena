@@ -4,7 +4,7 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [1.0.0] — Unreleased
+## [1.0.0] — 2026-10-11
 
 The release that ships the action-interface study.
 
@@ -21,17 +21,32 @@ The release that ships the action-interface study.
   state by state.
 - The pre-registration (`docs/current/PREREGISTRATION.md`), frozen at the
   `study-freeze` tag before the final run.
+- A decision panel in the playback viewer: each model decision's verdict, rejection
+  code, reasoning, prose and call, with `/playback?match=<file>&step=<n>` deep links
+  (A33).
+- The write-up's charts (`tools/plot_study.py`, behind a new `[plots]` extra), drawn
+  from a report's `matches.csv` with the report's own estimators (A11).
+- `tools/make_bundle.py`, which packs the release's data bundle: results, audit,
+  prompts and both versions of the pre-registration, with checksums. It refuses an
+  incomplete audit, a prompt that no longer hashes to what the transcripts recorded,
+  and anything key-shaped.
 
 ### Changed
 - Licensed under Apache-2.0 (was PolyForm Noncommercial 1.0.0). SRD 5.1
   attribution and the trademark notice are in `NOTICE`.
 - The test spell Armor of Agathys, which is not in SRD 5.1, is replaced by an
   original spell with the same mechanics, Rime Ward.
+- The spell definition guide is rewritten around block programs; it still described
+  the retired `effects` form. Its examples are now tested against the shipped spells.
+- `BLOCK_REFERENCE.md` also lists each event's fields and every context key, generated
+  like the rest of it.
 
 ### Fixed
 - Adjacent creatures were refused as overlapping (A29).
 - A move to the creature's own position was a free, valid action; it is now
   refused as `no_effect` (A31).
+- Every web page (`/`, `/battle`, `/playback`) returned 500 on a fresh install,
+  which resolves Starlette 1.x and its new `TemplateResponse` signature.
 
 ## [0.2.0] — 2026-09-19
 

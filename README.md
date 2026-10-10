@@ -1,5 +1,7 @@
 # Arbiter Arena
 
+[![CI](https://github.com/Nitrix119/Arbiter-Arena/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nitrix119/Arbiter-Arena/actions/workflows/ci.yml)
+
 **A deterministic evaluation harness for tool-using LLM agents, built on an SRD 5.1-compatible tactical combat engine.**
 
 An agent proposes an action; the engine validates it against the rules, executes it, and records exactly what happened and why — so an agent's reliability can be measured rather than eyeballed. Every match is seeded, recorded as a JSONL transcript, and replays to the same states, so any result can be re-checked and any single decision inspected.
@@ -15,7 +17,7 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
 pip install -e ".[web,dev]"
 
-# Run the whole study pipeline against mock models: 60 matches, a few minutes, no cost.
+# Run the whole study pipeline against mock models: 60 matches, under a minute, no cost.
 python -m src.arena.study run examples/study/demo.toml --out results/demo
 python -m src.arena.study report results/demo      # metrics, CSVs and summary.md
 python -m src.arena.study verify results/demo      # every match must replay: 100%
@@ -51,7 +53,20 @@ The design, hypotheses, metrics and exclusions were frozen before the final run,
 | Gemini 3.8 Flash | 0.991 | 0.986 | 0.999 | 1.000 |
 | Claude Sonnet 5.5 | 0.981 | 0.893 | 0.979 | 1.000 |
 
-Constraining the interface raises validity as predicted, but how much depends on the model. For the weakest model it is transformative (its win rate rises from 32% to 62%); for the strongest it barely registers. Sonnet reverses one predicted step: it is worse with bare tool calls than with prose. The full write-up, charts and a worked failure case are in progress; the working record is [FINAL_RUN_FINDINGS.md](docs/current/FINAL_RUN_FINDINGS.md).
+![First-attempt validity by condition for each model, with 95% intervals](docs/figures/validity.png)
+
+Constraining the interface raises validity as predicted, but how much depends on the model. For the weakest model it is transformative (it wins 13 of 40 matches in C1 and 25 of 40 in C3); for the strongest it barely registers. Sonnet reverses one predicted step: it is worse with bare tool calls than with prose. The full write-up and a worked failure case are in progress; the working record is [FINAL_RUN_FINDINGS.md](docs/current/FINAL_RUN_FINDINGS.md).
+
+### Check the results yourself
+
+The complete data is a release asset: all 600 transcripts, the report, the blind parser audit, the exact prompt each condition was shown, and the pre-registration as frozen. Download [`arbiter-arena-study-1.0.0.zip`](https://github.com/Nitrix119/Arbiter-Arena/releases/download/v1.0.0/arbiter-arena-study-1.0.0.zip) from the [v1.0.0 release](https://github.com/Nitrix119/Arbiter-Arena/releases/tag/v1.0.0). Unzip it into the repository root, then:
+
+```bash
+python -m src.arena.study verify results/final   # every match must replay: 600/600
+python -m src.arena.study report results/final   # rewrites report/ byte for byte
+```
+
+Neither command needs an API key. The bundle is built by `tools/make_bundle.py`, which refuses to export a prompt that no longer hashes to what the transcripts recorded.
 
 ### Limitations
 

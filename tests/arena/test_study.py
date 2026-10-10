@@ -6,6 +6,8 @@ fakes whose failures are shaped like the real SDKs' (an exception class whose mo
 """
 
 import json
+import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -979,3 +981,20 @@ def test_the_final_grid_holds_its_registered_settings():
     assert live["anthropic/claude-sonnet-5.5"].cache_prompt is True
     baselines = {m.policy for m in grid.models if m.provider == "baseline"}
     assert baselines == {"scripted", "random", "heuristic"}
+
+
+def test_show_survives_a_console_that_cannot_encode_the_models_text():
+    # Sonnet switched to Chinese mid-match (seed 108, C2+M). On a Windows console
+    # (cp1252) printing that raised UnicodeEncodeError and `show` crashed.
+    import subprocess
+
+    root = Path(__file__).resolve().parents[2]
+    transcript = root / "web" / "static" / "matches" / "sonnet_kiting_seed108_C2M.jsonl"
+    result = subprocess.run(
+        [sys.executable, "-m", "src.arena.study", "show", str(transcript)],
+        cwd=root,
+        capture_output=True,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+    )
+    assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
+    assert b"Actions are 0" in result.stdout

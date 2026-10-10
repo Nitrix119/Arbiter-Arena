@@ -385,13 +385,15 @@ main deliverable.
    `docs/current/ARTICLE_DRAFT.md`, about 2,900 words. The method and results are drafted;
    the [YOUR VOICE] sections are left with notes. The failure story is Sonnet, kiting,
    seed 108, C2 against C2+M.
-2. **Charts** (A11). Small and separate, and the article needs them.
+2. ~~**Charts** (A11)~~ **Done 2026-10-07:** `tools/plot_study.py` writes
+   `docs/figures/{validity,friendly_fire,sonnet_tactics}.{svg,png}`.
 3. **Replay viewer** (Phase 3 playback item plus A33). This makes the failure story and the
    demo GIF showable.
 4. **The user-voice sections** of the article: motivation, surprises, and "what I decided".
 5. **README, ARCHITECTURE, licence/NOTICE, CITATION and CHANGELOG**, then the fresh-clone
    test.
-6. **Merge to `main`**, then the release bundle and `v1.0.0`.
+6. ~~**Merge to `main`**~~ **Done 2026-10-07** (PR #7, `fa3b90d`). Then the release
+   bundle and `v1.0.0`.
 
 The ledger session (A30, A36) can come any time after step 1. Run `verify` at the
 `study-freeze` tag after any engine change.
@@ -411,6 +413,10 @@ remains._
       `RuleEngine`, and no "Future Goals". The chart is still to add once A11 exists.
       Follow-up: `examples/spells/SPELL_DEFINITION_GUIDE.md` still documents the deleted
       `effects` pipeline; the README now points to `BLOCK_REFERENCE.md` instead.)_
+      _(2026-10-08: follow-up done. The guide is rewritten around block programs, and
+      every example is loaded by `tests/test_authoring_guides.py` and held to the
+      shipped spell. BLOCK_REFERENCE.md now also generates the Events and Context keys
+      sections. Gaps found on the way are in ledger A37–A39.)_
 - [x] `docs/ARCHITECTURE.md` (one page plus one diagram). Move superseded plans to `docs/archive/`
       with a "historical" banner. _(2026-10-06: written, with a Mermaid diagram; every
       archived doc now carries the banner.)_
@@ -441,18 +447,24 @@ remains._
       green. Fixed test-first (`TestPages`). Also: a free-threaded `python3.13t` cannot
       build `watchfiles`, so `py -3` can pick an interpreter that fails to install.
       Playback checked by eye on both a loaded file and the deep link.)_
-- [ ] Merge `feat/interface-study` into `main` by PR. `main` is 102 commits behind, and the
+- [x] Merge `feat/interface-study` into `main` by PR. `main` is 102 commits behind, and the
       V1 definition of done (§5) needs the study on `main` with CI green.
       _(2026-10-07: PR #7 is open, 109 commits, with no conflicts. CI is green on
       `90d4141`: tests on py3.11 and py3.13, plus format, lint and types. Use a merge
       commit, not squash, so the pre-registration freeze and `study-freeze` stay in
-      `main`'s history. Tick this box once it is merged.)_
+      `main`'s history. Merged 2026-10-07 as `fa3b90d`, by merge commit, with
+      the Starlette fix; CI green on `main`. Phase 4 continues on
+      `docs/phase4-writeup`.)_
 
 ### Phase 4 — Analyse, write, release (≈3–4 sessions)
-- [ ] Run the report on the frozen bundle, write up H1–H3 as confirmed or not, then exploratory
+- [x] Run the report on the frozen bundle, write up H1–H3 as confirmed or not, then exploratory
       findings. _(The report is run and the verdicts are final, both in
       `FINAL_RUN_FINDINGS.md`. The write-up itself is still to do.)_
-- [ ] Pick **one failure story**, a replay that illustrates the headline (e.g. fluent reasoning
+      _(2026-10-08: written up as `ARTICLE_DRAFT.md` §6, with the charts in place. Every
+      number was checked against `summary.md` and `matches.csv`, and three errors were
+      corrected: Gemini's H3 verdict, the cost claim, and the win-rate rounding. §6.6's
+      [YOUR VOICE] paragraph on the audit is left for the author.)_
+- [x] Pick **one failure story**, a replay that illustrates the headline (e.g. fluent reasoning
       leading to an impossible spatial action in C1, vs a legal but weaker choice in C3).
       _Candidates from the data:_
       - Sonnet in bare C2 attacking after its action is spent, set against the same seed in
@@ -461,13 +473,26 @@ remains._
         `ACTION:` commits to a third.
       - Nemotron in C2 "moving" in place until the failure budget ends its turn.
       - A free-aim Fireball that catches allies, set against the menu's tagged placement.
-- [ ] Charts (ledger A11): validity by condition per model, friendly fire, and Sonnet's
+      _(2026-10-08: the first candidate, Sonnet kiting seed 108, C2 against C2+M, is written
+      up as `ARTICLE_DRAFT.md` §7. Every quote and outcome was checked against the
+      transcripts, and three details were corrected: the C2+M quote is from round 2, it
+      does not retreat every turn, and in C2 it does retreat in round 1 after the
+      refusal. Both transcripts are in `web/static/matches/`, with five verified
+      `/playback` deep links. The GIF is the separate bullet below.)_
+- [x] Charts (ledger A11): validity by condition per model, friendly fire, and Sonnet's
       tactics by condition. Draw them from `results/final/report/*.csv` in a separate script,
       so the harness does not depend on a plotting library.
+      _(2026-10-07: `tools/plot_study.py`, behind a `[plots]` extra. It reuses the
+      report's own estimators at the same seed, so every value matches `summary.md`.
+      The palette was checked for colour blindness, and each condition is also named
+      on its axis. The README shows the validity chart.
+      The friendly-fire headline was corrected before it shipped: Nemotron still hits
+      allies in C2+M, so only choosing from the menu (C3) ends friendly fire for
+      every model.)_
 - [ ] Article (~2,500–3,500 words), structure below. **Write the motivation, the surprises and the
       "what I decided" sections in your own voice.** That is the ownership evidence the review
       stresses.
-- [ ] Threats to validity: one environment; 3 models; format and affordance confound; menu
+- [x] Threats to validity: one environment; 3 models; format and affordance confound; menu
       discretisation; LLM nondeterminism; tactics underpowered (and saturated for Gemini);
       neutral-prompt choice.
       Added by the run (prereg §9):
@@ -475,8 +500,23 @@ remains._
       - sampling differs between models (only Nemotron runs at temperature 0 with a seed)
       - no multiplicity correction
       - A30, moves through hostile creatures not checked
+      _(2026-10-10: all are in `ARTICLE_DRAFT.md` §9, along with the declared
+      "one author" threat. H4's movement arm, which the draft had left out, is now
+      §6.5: the menu loses up to two thirds of positions, yet C3 kites best for every
+      model.)_
 - [ ] Release bundle: transcripts (non-sensitive), CSVs, prereg, prompts, report. Zenodo DOI optional.
+      _(2026-10-10: built by `tools/make_bundle.py`, and rehearsed end to end on the
+      real data: 619 files, 4 MB, checksums pass, and the unzipped copy verifies
+      600/600 and reports identically. A secret scan of `results/final` found nothing.
+      **Waiting on the real `audit/` folder**, which was not on this machine; the tool
+      refuses to build without it.)_
+      _(2026-10-11: built. `dist/arbiter-arena-study-1.0.0.zip`, 619 files, 4.06 MB,
+      SHA-256 `24e9140872406a9378f88dabd67928739d01387ab723f490a16f9279518244a3`.
+      Its own unzipped copy passes its checksums, replays 600/600, and re-scores the
+      audit to an identical report. Still to do: upload it as a release asset.)_
 - [ ] Bump to `1.0.0`, tag `v1.0.0`, GitHub release notes.
+      _(2026-10-10: `pyproject.toml` is at 1.0.0. The tag and the release are still to
+      do; the CHANGELOG stays "Unreleased" until the tag has a date.)_
 - [ ] Short demo GIF or video; update CV/LinkedIn with the **measured** numbers.
 
 **Article outline:** (1) problem: models propose, software must preserve invariants; (2) why a
@@ -488,13 +528,21 @@ production tool-using agents; (9) limitations; (10) reproduce it.
 ---
 
 ## 5. V1.0.0 definition of done
-- [ ] `main` contains all arena, RNG and study work; CI green with a badge.
-- [ ] `pip install -e ".[web,dev]"`, then one no-key command runs a match and writes a verifiable transcript.
+- [x] `main` contains all arena, RNG and study work; CI green with a badge.
+- [x] `pip install -e ".[web,dev]"`, then one no-key command runs a match and writes a verifiable transcript.
+      _(The fresh-clone test, 2026-10-07.)_
 - [ ] One documented command reproduces the report from the published bundle.
-- [ ] Pre-registration frozen *before* the final-run commit (visible in git history).
-- [ ] Replays verify 100%; transcripts contain no secrets.
-- [ ] README, ARCHITECTURE and limitations match the code; historical docs labelled.
-- [ ] Licence, SRD attribution and naming resolved.
+      _(Documented in the README and the bundle's own README. Rehearsed on
+      2026-10-10: the report rebuilt from an unzipped bundle is byte-identical. This
+      ticks once the bundle is published.)_
+- [x] Pre-registration frozen *before* the final-run commit (visible in git history).
+      _(All 600 transcripts record commit `52db99d`, the `study-freeze` tag, with
+      `git_dirty: false`.)_
+- [x] Replays verify 100%; transcripts contain no secrets.
+      _(2026-10-10: 600/600 at today's HEAD as well as at the tag. No key shapes,
+      auth headers, email addresses or local paths in `results/final`.)_
+- [x] README, ARCHITECTURE and limitations match the code; historical docs labelled.
+- [x] Licence, SRD attribution and naming resolved.
 - [ ] Article published and linked from the README; `v1.0.0` tagged.
 - [ ] You can explain, without notes: one resolution path, block validation, the action-interface
       design, one real bug found by a test, and what Claude Code did vs. what you decided.

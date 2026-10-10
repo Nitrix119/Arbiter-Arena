@@ -474,7 +474,7 @@ A large creature with legendary actions and multiple attack options at different
 
 ### Inline Spell — Creature with an Embedded Spell Action
 
-Spell actions can be defined directly in the `"actions"` array without a separate spell file. This is useful for creature-specific abilities that use the effects pipeline. See the [Spell Definition Guide](../spells/SPELL_DEFINITION_GUIDE.md) for the full spell action format.
+Spell actions can be defined directly in the `"actions"` array without a separate spell file. This is useful for creature-specific abilities. Like any spell, it is a block `program`; see the [Spell Definition Guide](../spells/SPELL_DEFINITION_GUIDE.md) for the full spell action format.
 
 ```json
 {
@@ -503,9 +503,9 @@ Spell actions can be defined directly in the `"actions"` array without a separat
       "casting_time": { "type": "action" },
       "duration": { "unit": "instantaneous" },
       "components": { "verbal": true, "somatic": true },
-      "effects": [
-        { "type": "attack_roll", "attack_bonus": "use_caster_bonus" },
-        { "type": "damage", "damage_type": "FIRE", "formula": "2d6", "requires_hit": true }
+      "program": [
+        { "block": "attack_roll", "attack_bonus": "use_caster_bonus" },
+        { "block": "damage", "damage_type": "FIRE", "formula": "2d6", "requires_hit": true }
       ]
     }
   ]
