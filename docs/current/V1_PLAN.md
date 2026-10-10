@@ -504,7 +504,7 @@ remains._
       "one author" threat. H4's movement arm, which the draft had left out, is now
       §6.5: the menu loses up to two thirds of positions, yet C3 kites best for every
       model.)_
-- [ ] Release bundle: transcripts (non-sensitive), CSVs, prereg, prompts, report. Zenodo DOI optional.
+- [x] Release bundle: transcripts (non-sensitive), CSVs, prereg, prompts, report. Zenodo DOI optional.
       _(2026-10-10: built by `tools/make_bundle.py`, and rehearsed end to end on the
       real data: 619 files, 4 MB, checksums pass, and the unzipped copy verifies
       600/600 and reports identically. A secret scan of `results/final` found nothing.
@@ -513,10 +513,14 @@ remains._
       _(2026-10-11: built. `dist/arbiter-arena-study-1.0.0.zip`, 619 files, 4.06 MB,
       SHA-256 `24e9140872406a9378f88dabd67928739d01387ab723f490a16f9279518244a3`.
       Its own unzipped copy passes its checksums, replays 600/600, and re-scores the
-      audit to an identical report. Still to do: upload it as a release asset.)_
-- [ ] Bump to `1.0.0`, tag `v1.0.0`, GitHub release notes.
+      audit to an identical report.)_ _(2026-10-11: uploaded to the v1.0.0 release; the
+      downloaded asset's SHA-256 matches. Zenodo is still optional.)_
+- [x] Bump to `1.0.0`, tag `v1.0.0`, GitHub release notes.
       _(2026-10-10: `pyproject.toml` is at 1.0.0. The tag and the release are still to
       do; the CHANGELOG stays "Unreleased" until the tag has a date.)_
+      _(2026-10-11: PR #8 merged as `960c5fa`, CI green; tagged `v1.0.0` and released at
+      https://github.com/Nitrix119/Arbiter-Arena/releases/tag/v1.0.0. The notes say the
+      article link follows once it is published.)_
 - [ ] Short demo GIF or video; update CV/LinkedIn with the **measured** numbers.
 
 **Article outline:** (1) problem: models propose, software must preserve invariants; (2) why a
@@ -531,10 +535,10 @@ production tool-using agents; (9) limitations; (10) reproduce it.
 - [x] `main` contains all arena, RNG and study work; CI green with a badge.
 - [x] `pip install -e ".[web,dev]"`, then one no-key command runs a match and writes a verifiable transcript.
       _(The fresh-clone test, 2026-10-07.)_
-- [ ] One documented command reproduces the report from the published bundle.
+- [x] One documented command reproduces the report from the published bundle.
       _(Documented in the README and the bundle's own README. Rehearsed on
-      2026-10-10: the report rebuilt from an unzipped bundle is byte-identical. This
-      ticks once the bundle is published.)_
+      2026-10-10: the report rebuilt from an unzipped bundle is byte-identical.
+      Published 2026-10-11.)_
 - [x] Pre-registration frozen *before* the final-run commit (visible in git history).
       _(All 600 transcripts record commit `52db99d`, the `study-freeze` tag, with
       `git_dirty: false`.)_

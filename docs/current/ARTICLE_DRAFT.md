@@ -346,9 +346,10 @@ The model did not lack the knowledge: in C2 it said in so many words that it sho
 kite. What it lacked was a prompt, at the moment it mattered, that options remained. The
 menu provided that prompt.
 
-**Watch it.** Both matches ship with the repository and open in its replay viewer;
-`/playback?match=sonnet_kiting_seed108_C2.jsonl&step=21` is the "I can't do both"
-turn. **[TODO: the GIF of the pair, once recorded.]**
+**Watch it.** Both matches ship with the repository. In a clone, run
+`uvicorn web.app:app` and open
+`http://localhost:8000/playback?match=sonnet_kiting_seed108_C2.jsonl&step=21` for
+the "I can't do both" turn. **[TODO: the GIF of the pair, once recorded.]**
 
 ## 7. Implications for tool-using agents
 
