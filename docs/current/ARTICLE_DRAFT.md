@@ -413,16 +413,17 @@ its view of the options.
 ## 9. Reproduce it
 
 ```
-pip install -e ".[web,dev,agents]"
+pip install -e ".[web,dev]"
 python -m src.arena.study run examples/study/demo.toml --out results/demo   # no API key
-git checkout study-freeze
-python -m src.arena.study verify results/final                              # must be 100%
-python -m src.arena.study report results/final
+# download the data bundle (below) and unzip it into the repository root, then:
+python -m src.arena.study verify results/final   # must be 100%
+python -m src.arena.study report results/final   # rebuilds the report byte for byte
 ```
 
-The pre-registration is `docs/current/PREREGISTRATION.md` at the `study-freeze` tag. The
-release bundle (transcripts, CSVs, prompts and report) is linked from the README.
-**[TODO: release link.]**
+The data is [`arbiter-arena-study-1.0.0.zip`](https://github.com/Nitrix119/Arbiter-Arena/releases/download/v1.0.0/arbiter-arena-study-1.0.0.zip), from the
+[v1.0.0 release](https://github.com/Nitrix119/Arbiter-Arena/releases/tag/v1.0.0): every transcript, the report, the blind audit, each
+condition's exact prompt, and the pre-registration both as frozen at the
+`study-freeze` tag and as it stands with its dated deviations.
 
 ---
 

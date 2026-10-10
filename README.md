@@ -59,7 +59,7 @@ Constraining the interface raises validity as predicted, but how much depends on
 
 ### Check the results yourself
 
-The complete data is a release asset: all 600 transcripts, the report, the blind parser audit, the exact prompt each condition was shown, and the pre-registration as frozen. **[TODO: link the v1.0.0 release asset.]** Unzip it into the repository root, then:
+The complete data is a release asset: all 600 transcripts, the report, the blind parser audit, the exact prompt each condition was shown, and the pre-registration as frozen. Download [`arbiter-arena-study-1.0.0.zip`](https://github.com/Nitrix119/Arbiter-Arena/releases/download/v1.0.0/arbiter-arena-study-1.0.0.zip) from the [v1.0.0 release](https://github.com/Nitrix119/Arbiter-Arena/releases/tag/v1.0.0). Unzip it into the repository root, then:
 
 ```bash
 python -m src.arena.study verify results/final   # every match must replay: 600/600
