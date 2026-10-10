@@ -1,16 +1,6 @@
 # Show, don't make them guess: how the action interface shapes LLM agents in a tactical game
 
-> **DRAFT, started 2026-10-05.** Built from `FINAL_RUN_FINDINGS.md`, the frozen
-> pre-registration and the report in `results/final/report/`.
-> - Sections marked **[YOUR VOICE]** are left for the author: notes and facts to draw on
->   are provided, but the words should be yours.
-> - Numbers are from the final run unless marked as pilot.
-> - Chart slots are marked **[CHART]**; they are drawn from `results/final/report/*.csv`
->   (ledger A11).
-> - Target length is 2,500–3,500 words. This draft runs long in places on purpose, so it
->   can be cut.
-
----
+*Logan Nilson, October 2026. Code, data and pre-registration: [github.com/Nitrix119/Arbiter-Arena](https://github.com/Nitrix119/Arbiter-Arena).*
 
 ## 1. The problem: models propose, software must preserve invariants
 
@@ -69,7 +59,7 @@ too long to be useful.
 
 ## 2. Architecture
 
-![One decision: the observation goes through the interface to the model; the engine validates and executes what it proposes, and the recorder keeps everything](../figures/architecture.png)
+![One decision: the observation goes through the interface to the model; the engine validates and executes what it proposes, and the recorder keeps everything](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.0.0/docs/figures/architecture.png)
 
 Every proposed action is either legal or refused with a typed reason
 (`destination_blocked`, `action_economy_spent`, `out_of_range`, …), so validity is
@@ -155,7 +145,7 @@ First-attempt valid-action rate, over fresh decisions:
 | Gemini 3.8 Flash | 0.99 | 0.99 | 1.00 | 1.00 |
 | Claude Sonnet 5.5 | 0.98 | 0.89 | 0.98 | 1.00 |
 
-![First-attempt validity by condition for each model, with 95% intervals](../figures/validity.png)
+![First-attempt validity by condition for each model, with 95% intervals](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.0.0/docs/figures/validity.png)
 
 - **For the small model, the interface is everything.** Nemotron supports every
   pre-registered hypothesis, with the full ordering C3 > C2+M > C2 > C1, each step
@@ -202,7 +192,7 @@ tactics follow the same shape:
 | Win rate | 0.80 | **0.60** | 0.78 | 0.83 |
 | Kiting: archer survives | 10/10 | **4/10** | 9/10 | 10/10 |
 
-![Claude Sonnet 5.5's matches won, HP left, kiting survival and time out of melee, by condition](../figures/sonnet_tactics.png)
+![Claude Sonnet 5.5's matches won, HP left, kiting survival and time out of melee, by condition](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.0.0/docs/figures/sonnet_tactics.png)
 
 Bare C2 is the one condition where the flagship model visibly struggles, and its
 failure is specific. Of its 56 refusals for acting with its action already spent, **52
@@ -259,7 +249,7 @@ throughout (1.4–1.9 per cast). On area spells, then, an enumerated aim does no
 cost expressivity, and it *beats* free aiming on the thing that matters most. This
 supports a direction for H4b that was revised and registered before the data.
 
-![Allies caught per area cast by condition for each model, with the number of casts](../figures/friendly_fire.png)
+![Allies caught per area cast by condition for each model, with the number of casts](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.0.0/docs/figures/friendly_fire.png)
 
 **Movement: the menu kited best.** The registered prediction was that C3 would do no
 better than free movement here. Kiting is the scenario that rewards movement most, and
@@ -333,7 +323,7 @@ Then it shoots and ends its turn, still in melee. It has confused the prompt's r
 shoots again, but the early damage has been done. The archer dies in round 10 with the
 Bruiser on 14 of 45 HP: three turns of standing still cost it the match.
 
-![Seed 108 in C2: the archer shoots and stays put while the Bruiser closes in, and the archer dies](../figures/seed108_C2.gif)
+![Seed 108 in C2: the archer shoots and stays put while the Bruiser closes in, and the archer dies](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/main/docs/figures/seed108_C2.gif)
 
 **In C2+M**, the first turn already differs. After shooting, it reads its action count
 off the list and doesn't try a second shot: "My action count is 0, so I can't attack this
@@ -344,7 +334,7 @@ turn." From round 2 it shoots and then retreats, on almost every turn:
 
 It wins in round 16 with 12 of 18 HP. In C3, on the same seed, it wins at full health.
 
-![Seed 108 in C2+M: the archer shoots and steps back every turn, keeps its distance, and wins](../figures/seed108_C2M.gif)
+![Seed 108 in C2+M: the archer shoots and steps back every turn, keeps its distance, and wins](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/main/docs/figures/seed108_C2M.gif)
 
 The model did not lack the knowledge: in C2 it said in so many words that it should
 kite. What it lacked was a prompt, at the moment it mattered, that options remained. The
@@ -429,27 +419,3 @@ The data is [`arbiter-arena-study-1.0.0.zip`](https://github.com/Nitrix119/Arbit
 [v1.0.0 release](https://github.com/Nitrix119/Arbiter-Arena/releases/tag/v1.0.0): every transcript, the report, the blind audit, each
 condition's exact prompt, and the pre-registration both as frozen at the
 `study-freeze` tag and as it stands with its dated deviations.
-
----
-
-### Still to write or decide
-
-- [x] The [YOUR VOICE] sections: motivation (§1), what I decided (§4), the audit (§6.7)
-      and what surprised me (§8). Written by interview, 2026-10-10: the author's answers,
-      with spelling, grammar and approved accuracy fixes only.
-- [x] H4 (2026-10-10): the movement side, which had gone unreported, is §6.5. The
-      limitations now cover every threat declared in prereg §9.
-- [x] Charts (A11): validity, Sonnet's tactics and friendly fire are in §6 (2026-10-08).
-      Refusals by code became a table in §6.2: Nemotron's counts are a hundred times
-      the others', so stacked bars would show only Nemotron.
-- [x] Architecture diagram (§3): `docs/figures/architecture.{svg,png}` (2026-10-10).
-- [x] A replay viewer clip of the seed-108 pair, for §7 and the demo GIF
-      (2026-10-11: `docs/figures/seed108_{C2,C2M}.gif`, recorded by the author). The
-      transcripts and deep links are in place (2026-10-08); capture from those.
-- [x] Cut to 2,500–3,500 words (2026-10-11, cuts A–L, approved by the author). The
-      old §2 is folded into Architecture, so every later section moved up one; the
-      section numbers in the items above are from before the cut.
-- [x] Read *DungeonBench* (arXiv 2607.29577) and place this work relative to it in §1
-      (2026-10-10, "Related work").
-- [ ] A title. The working title is a suggestion; alternatives: "The menu is the
-      reasoning", "Same model, four interfaces".
