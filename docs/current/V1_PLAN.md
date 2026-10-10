@@ -510,6 +510,10 @@ remains._
       600/600 and reports identically. A secret scan of `results/final` found nothing.
       **Waiting on the real `audit/` folder**, which was not on this machine; the tool
       refuses to build without it.)_
+      _(2026-10-11: built. `dist/arbiter-arena-study-1.0.0.zip`, 619 files, 4.06 MB,
+      SHA-256 `24e9140872406a9378f88dabd67928739d01387ab723f490a16f9279518244a3`.
+      Its own unzipped copy passes its checksums, replays 600/600, and re-scores the
+      audit to an identical report. Still to do: upload it as a release asset.)_
 - [ ] Bump to `1.0.0`, tag `v1.0.0`, GitHub release notes.
       _(2026-10-10: `pyproject.toml` is at 1.0.0. The tag and the release are still to
       do; the CHANGELOG stays "Unreleased" until the tag has a date.)_

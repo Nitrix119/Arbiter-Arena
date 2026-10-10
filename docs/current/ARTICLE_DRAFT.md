@@ -42,16 +42,11 @@ Going in, I expected the interface to prove extremely impactful, as the paradigm
 suggested — for each new element introduced to make taking action easier, I anticipated
 that there would be a clear payoff visible in the metrics.
 
-Tool-using agents fail in two different ways. They choose badly, or
-they propose actions the system cannot accept: a target that does not exist, a move into
-a wall, a second attack after the first used up the turn. The second kind is often
-blamed on the model. But the same model can be asked to act in very different ways. It
-can write free text that a parser must interpret. It can fill in a tool call's raw
-parameters. Or it can pick from a list of actions the system has already checked are
-legal.
-
-That choice belongs to the system's designer, not the model. This study holds the model
-fixed and varies only that choice.
+Tool-using agents fail by choosing badly, or by proposing actions the system cannot
+accept, and the second kind is usually blamed on the model. But how a model may act
+(free text for a parser, a tool call's raw parameters, or a pick from a list of actions
+already checked as legal) is the designer's choice, not the model's. This study holds
+the model fixed and varies only that choice.
 
 **Related work.** The closest work to this one is *DungeonBench* (Ismayilov, Kara and
 Oktay, 2026), a far broader benchmark of D&D combat. It covers most of the SRD's combat
@@ -72,37 +67,17 @@ numbers are partly a property of its interface. Its much finer movement enumerat
 an idea I would like to try in future, with care to balance resolution against a list
 too long to be useful.
 
-## 2. Why a deterministic tactical engine is a good laboratory
-
-- **Every action has a ruling.** The engine implements SRD 5.1 combat. A proposed
-  action is either legal or refused, with a typed reason: `destination_blocked`,
-  `action_economy_spent`, `out_of_range`, and so on. Validity is *measured*, never
-  judged.
-- **Everything is reproducible.** All randomness flows through one seeded generator.
-  Every match is recorded as a transcript, and replaying the recorded decisions
-  reproduces the match exactly. All 600 final matches replay at 100%.
-- **Spatial and non-spatial actions mix naturally.** Moving to a point and aiming an area
-  spell are open-ended and continuous. Attacking a named target is discrete. That
-  contrast is one of the hypotheses (H2).
-- **The tactics have real stakes.** Kite a melee brute, protect a fragile ally, place a
-  Fireball without hitting your own side.
-
-## 3. Architecture
+## 2. Architecture
 
 ![One decision: the observation goes through the interface to the model; the engine validates and executes what it proposes, and the recorder keeps everything](../figures/architecture.png)
 
-1. **Observation.** The game state as structured data: positions, HP, resources, and
-   each creature's own capabilities. Every condition sees the same body.
-2. **Interface (the variable).** How the model expresses an action; see §4.
-3. **Validator and executor.** The engine itself. There is one resolution path: the same
-   code rules on a free-text command, a tool call or a menu choice.
-4. **Recorder.** Every request, response, ruling, token count, the served model and
-   host, and (where the provider gives it) the model's reasoning.
+Every proposed action is either legal or refused with a typed reason
+(`destination_blocked`, `action_economy_spent`, `out_of_range`, …), so validity is
+*measured*, never judged. A refused action is fed back with the referee's reason, and
+the model may try again. A failure budget (3 consecutive or 5 total refusals) ends a
+turn that goes nowhere.
 
-A refused action is fed back with the referee's reason, and the model may try again. A
-failure budget (3 consecutive or 5 total refusals) ends a turn that goes nowhere.
-
-## 4. The four interface conditions
+## 3. The four interface conditions
 
 | Condition | How the model acts | What it sees |
 |---|---|---|
@@ -144,7 +119,7 @@ truly guide the model to do something more clever — it is only by having its o
 laid out plainly that Sonnet was seen to perform distinctly better when provided with
 it, despite doing little reasoning of its own.
 
-## 5. Setup and reproducibility
+## 4. Setup and reproducibility
 
 - **Models**, each at the lowest reasoning setting its provider allows, on one pinned
   host, through OpenRouter:
@@ -155,29 +130,22 @@ it, despite doing little reasoning of its own.
   | Gemini 3.8 Flash | Fast commercial | Google AI Studio | Low |
   | Claude Sonnet 5.5 | Flagship commercial | Google Vertex | Low |
 
-  These are product classes, not a capability ranking. On a public benchmark, Gemini
-  matches Sonnet at equal reasoning effort.
-- **Scenarios:** four.
-  - `kiting`: an archer against a slower brute
-  - `alpha_strike`: a 2v2 melee
-  - `protect_squishy`: keep a fragile ally alive
-  - `aoe_placement`: a Fireball caster among allies and enemies
-- **Opponent:** a fixed scripted agent.
+  These are product classes, not a capability ranking.
+- **Scenarios:** `kiting` (an archer against a slower brute), `alpha_strike` (a 2v2
+  melee), `protect_squishy` (keep a fragile ally alive) and `aoe_placement` (a Fireball
+  caster among allies and enemies), each against a fixed scripted opponent.
 - **Design:** 3 models × 4 conditions × 4 scenarios × 10 paired seeds = 480 matches,
-  plus 120 baseline matches.
-  - Baselines: random, scripted (a mirror match) and a utility-scoring heuristic.
-- **Pre-registered** before any confirmatory data, and tagged `study-freeze`.
-  - Hypotheses, metrics, exclusions, decision rules, seeds and prompt hashes were all
-    fixed in advance.
-  - Every later change is a dated deviation in the pre-registration.
-- **Cost and integrity:**
-  - 18,023 model decisions, about 31M tokens.
-  - $24.30 billed ($29.90 at list price; the difference is prompt caching).
-  - No infrastructure exclusions, and 100% replay.
+  plus 120 baseline matches (random, scripted and a utility-scoring heuristic).
+- **Pre-registered** before any confirmatory data and tagged `study-freeze`:
+  hypotheses, metrics, exclusions, decision rules, seeds and prompt hashes. Every later
+  change is a dated deviation in the pre-registration.
+- **Cost and integrity:** 18,023 model decisions and about 31M tokens; $24.30 billed
+  ($29.90 at list price, the difference being prompt caching); no infrastructure
+  exclusions, and 100% replay.
 
-## 6. Results
+## 5. Results
 
-### 6.1 The headline: constraint buys validity, and how much depends on the model
+### 5.1 The headline: constraint buys validity, and how much depends on the model
 
 First-attempt valid-action rate, over fresh decisions:
 
@@ -195,10 +163,6 @@ First-attempt valid-action rate, over fresh decisions:
   - It wins 13 of 40 matches in C1 and 25 of 40 in C3.
   - In the protection scenario, its fragile ally survives 6 times in 10 under the menu,
     against 1–2 in 10 otherwise.
-- **For Gemini, the interface barely matters.** It is valid 99–100% of the time and wins
-  82–90% of matches whatever it is given, about the level of the hand-built heuristic
-  agent.
-- **Sonnet is the interesting one** (§6.3).
 
 **Registered verdicts.** These are the report's paired cluster-bootstrap verdicts over
 the 40 shared (scenario, seed) pairs per model. *Supported* means the 95% interval of the
@@ -210,7 +174,7 @@ contrast lies entirely above zero.
 | Gemini | Only C2+M > C2 (tiny; ceiling) | Supported (small effect) | Not supported (wins at the ceiling in 3 of 4 scenarios) |
 | Sonnet | C3 > C2+M > C2 supported; **C2 < C1, reversed** | Supported | Not supported |
 
-### 6.2 Where validity fails: the taxonomy, not just the rate
+### 5.2 Where validity fails: the taxonomy, not just the rate
 
 Refusals by type tell a different story per model.
 - **Nemotron's failures are spatial and bookkeeping errors:**
@@ -220,30 +184,15 @@ Refusals by type tell a different story per model.
 - **Sonnet's C2 failures are almost all bookkeeping:** 56 attacks after its action was
   spent.
 - **The menu removes whole categories outright.** C3 had zero refusals of any kind,
-  for every model.
-
-Refused decisions by the engine's rejection code, for every cell with any refusals (C3 has
-none):
-
-| Model | Condition | Destination blocked | Action spent | Not enough resource | No effect | Out of range | Unknown target |
-|---|---|---|---|---|---|---|---|
-| Nemotron | C1 | 638 | 308 | 177 | 150 | 82 | 0 |
-| Nemotron | C2 | 497 | 40 | 419 | 754 | 5 | 0 |
-| Nemotron | C2+M | 0 | 0 | 288 | 60 | 40 | 0 |
-| Sonnet | C1 | 21 | 0 | 1 | 0 | 0 | 2 |
-| Sonnet | C2 | 36 | 56 | 0 | 0 | 1 | 0 |
-| Sonnet | C2+M | 35 | 0 | 0 | 0 | 0 | 0 |
-| Gemini | C1 | 9 | 1 | 0 | 0 | 1 | 0 |
-| Gemini | C2 | 11 | 5 | 1 | 0 | 0 | 0 |
-| Gemini | C2+M | 1 | 0 | 0 | 0 | 0 | 0 |
+  for every model. (Every count is in the report's `summary.md`.)
 
 Validity and effectiveness can come apart.
 - In C2, Nemotron is *more* valid than in C1 (0.58 against 0.33) but wins far *less*
   (0.05 against 0.33).
-- In C2, 1,460 of its 1,614 fresh decisions were moves. The tool-call format seemed to pull it
-  into wandering instead of fighting.
+- In C2, 1,460 of its 1,614 fresh decisions were moves. The tool-call format seemed to
+  pull it into wandering instead of fighting.
 
-### 6.3 Sonnet: the one condition that hurts it
+### 5.3 Sonnet: the one condition that hurts it
 
 Sonnet's validity is 0.98 in C1, **0.89 in C2**, 0.98 in C2+M and 1.00 in C3. Its
 tactics follow the same shape:
@@ -255,11 +204,10 @@ tactics follow the same shape:
 
 ![Claude Sonnet 5.5's matches won, HP left, kiting survival and time out of melee, by condition](../figures/sonnet_tactics.png)
 
-Bare C2 is the one condition where the strongest model visibly struggles, and its
+Bare C2 is the one condition where the flagship model visibly struggles, and its
 failure is specific. Of its 56 refusals for acting with its action already spent, **52
 came straight after an attack the engine had just accepted**: it tried to attack a second
-time in the same turn. That never happens in C1. It also ends its turn less often in C2
-(283 times, against 371 in C1).
+time in the same turn. That never happens in C1.
 
 Two things rescue it, and they are different:
 - **Working it out in the open (C1).** Free text invites prose. Sonnet wrote a line of
@@ -271,25 +219,30 @@ Two things rescue it, and they are different:
   of legal actions, and that list takes Sonnet from 0.89 to 0.98 validity and from 4 to
   9 kiting survivals in 10.
 
-**Why Sonnet and not Gemini?** At "low" effort the two vendors do different things.
-- Gemini still thinks briefly on almost every turn: ~185–330 output tokens per accepted
-  action.
-- Sonnet's adaptive thinking judges these turns too simple and mostly skips thinking:
-  in the pilot, 19 of 663 requests returned any reasoning.
+**Why Sonnet and not Gemini?** At "low" effort Gemini still thinks briefly on almost
+every turn, while Sonnet's adaptive thinking mostly skips it: in the pilot, 19 of 663
+requests returned any reasoning. The menu and free text each put back, in different
+ways, the deliberation it skipped. This is an exploratory reading, not a registered
+hypothesis.
 
-So the turns that look simple are where Sonnet loses track. The menu and free text each
-put back, in different ways, the deliberation it skipped. This is an exploratory reading,
-not a registered hypothesis.
+**Link to prior work.** This echoes Tam et al. (*Let Me Speak Freely?*, EMNLP 2024):
+format restrictions hurt reasoning by squeezing out the model's working, not through
+parsing failures. Here the restrictive format is the bare tool call, and the new
+observation is that *showing* the legal options compensates, even without restricting
+the model to them.
 
-**Link to prior work.** This echoes Tam et al. (*Let Me Speak Freely?*, EMNLP 2024): format
-restrictions hurt reasoning, not through parsing failures, but by squeezing out the
-model's working. Here the restrictive format is the bare tool call. The new observation
-is that *showing the legal options* compensates for the lost working, even without
-restricting the model to them.
+### 5.4 What the menu costs, and what it buys (H4)
 
-### 6.4 Choosing from the menu all but ends friendly fire
+A menu can only offer the options someone thought to list. That cost was measured
+before any model ran (H4a), across the positions real matches pass through. The aim
+menu reaches at least 75% of the distinct sets of creatures a Fireball could catch
+(median 92%). The movement menu, a few named destinations per creature (close in,
+retreat, kite to range), reaches as little as **33%** of the positions free movement
+can. So the menu should cost a little on area spells and a lot on movement. It did
+neither.
 
-Allies caught per Fireball cast:
+**Area spells: choosing from the menu all but ends friendly fire.** Allies caught per
+Fireball cast:
 
 | Model | C1 | C2 | C2+M | C3 |
 |---|---|---|---|---|
@@ -308,21 +261,10 @@ supports a direction for H4b that was revised and registered before the data.
 
 ![Allies caught per area cast by condition for each model, with the number of casts](../figures/friendly_fire.png)
 
-### 6.5 What the menu gave up: movement
-
-A menu can only offer the options someone thought to list. That cost can be measured
-before any model runs, so it was (H4a, measured offline and registered with the design).
-Sampled across the positions real matches pass through:
-- **Area spells:** the aim menu reaches at least 75% of the distinct sets of creatures a
-  Fireball could catch (median 92%).
-- **Movement:** the menu offers a few named destinations per creature: close in,
-  retreat, kite to range. At worst it reaches only **33%** of the distinct tactical
-  positions that free movement can.
-
-On paper, then, movement is where the menu should hurt. The registered prediction there
-was that C3 would do no better than the free-movement conditions. It did not hurt.
-Kiting is the scenario that rewards movement most, and its score is the share of the
-match the archer spends out of melee (10 matches per cell):
+**Movement: the menu kited best.** The registered prediction was that C3 would do no
+better than free movement here. Kiting is the scenario that rewards movement most, and
+its score is the share of the match the archer spends out of melee (10 matches per
+cell):
 
 | Kiting: time out of melee | C1 | C2 | C2+M | C3 |
 |---|---|---|---|---|
@@ -340,26 +282,21 @@ lost. A scenario that rewards one precise spot, such as a flank, a doorway or co
 would test it properly, and none of the four does. H4 has no registered decision rule,
 so this is a description rather than a verdict.
 
-### 6.6 Cost
+### 5.5 Cost
 
-Dollars per *accepted* action, at list price:
-- **For Sonnet, free text is cheapest.** There are no tool definitions in the prompt,
-  and few retries: $0.0041 in C1 against $0.0069 in C2.
-- **For Gemini, the menu is cheapest** ($0.0019 in C3 against $0.0021 in C1): it writes
-  fewer output tokens when choosing from a list (208 per accepted action, against 300).
-- **For the weak model, the menu is cheapest by far:** retries are what cost money.
-  Nemotron: $0.00012 in C3 against $0.00042 in C2.
+Per accepted action at list price, free text is cheapest for Sonnet ($0.0041 against
+$0.0069 in C2): its prompt carries no tool definitions, and it rarely retries. For the
+other two the menu is cheapest: Gemini writes fewer output tokens when choosing from a
+list, and Nemotron stops paying for retries ($0.00012 in C3 against $0.00042 in C2).
 
-### 6.7 Did the parser decide the result?
+### 5.6 Did the parser decide the result?
 
-No, and it was checked twice.
-1. **C1 is scored three ways:** a strict reading, the live parser, and a lenient one. All
-   three agree exactly for every model, and no response was unreadable.
-2. **A blind human audit** of 200 C1 responses found 2 disagreements (1.0%, interval
-   0.3–3.6%).
-   - Neither is a parser fault: one was a typo in a label, the other a response whose
-     reasoning and committed action disagreed.
-   - Even at the worst-case error rate, every verdict stands.
+No, and it was checked twice. C1 is scored three ways (a strict reading, the live
+parser and a lenient one), and all three agree exactly for every model; no response
+was unreadable. A blind human audit of 200 C1 responses found 2 disagreements (1.0%,
+interval 0.3–3.6%), neither a parser fault: one was a typo in a label, the other a
+response whose reasoning and committed action disagreed. Even at the worst-case error
+rate, every verdict stands.
 
 **Doing the audit.** Labelling 200 responses was a mix of tedious and interesting,
 solely based on which model I was labelling. Sonnet's reasoning prose was interesting to
@@ -376,7 +313,7 @@ I had assumed that any form of free response would be plagued by inconsistent wo
 causing parser errors, so I was pleasantly surprised to find how well even the weakest
 model adopted the simple action syntax.
 
-## 7. A failure story: Sonnet, kiting, seed 108
+## 6. A failure story: Sonnet, kiting, seed 108
 
 Same model, same seed, same tool-call format. The only difference is whether the legal
 actions are listed. An archer (18 HP, 40 ft of movement, a longbow) faces a slower
@@ -409,26 +346,11 @@ The model did not lack the knowledge: in C2 it said in so many words that it sho
 kite. What it lacked was a prompt, at the moment it mattered, that options remained. The
 menu provided that prompt.
 
-**Watch it.** Both matches ship with the repository. Run `uvicorn web.app:app` and open:
+**Watch it.** Both matches ship with the repository and open in its replay viewer;
+`/playback?match=sonnet_kiting_seed108_C2.jsonl&step=21` is the "I can't do both"
+turn. **[TODO: the GIF of the pair, once recorded.]**
 
-| Moment | Link |
-|---|---|
-| C2, round 1: the refused second shot | `/playback?match=sonnet_kiting_seed108_C2.jsonl&step=4` |
-| C2, round 2: shoots, then ends the turn in place | `/playback?match=sonnet_kiting_seed108_C2.jsonl&step=11` |
-| C2, round 4: "I can't do both in one action" | `/playback?match=sonnet_kiting_seed108_C2.jsonl&step=21` |
-| C2+M, round 1: "My action count is 0" | `/playback?match=sonnet_kiting_seed108_C2M.jsonl&step=4` |
-| C2+M, round 2: shoots, then retreats | `/playback?match=sonnet_kiting_seed108_C2M.jsonl&step=10` |
-
-The source transcripts are
-`results/final/anthropic-claude-sonnet-5.5/{C2,C2M}/kiting/seed108.jsonl`, and
-`python -m src.arena.study show` prints either one, decision by decision.
-
-**Aside, from the audit.** In C1, Sonnet once reasoned towards moving to (8, 3), then to
-(11, 4), and then committed to `move to x=10 z=4`. The parser executed the committed
-line, as the rules say. A human could fairly call it ambiguous. Free text gives us
-working we can read, and it can disagree with the action.
-
-## 8. Implications for tool-using agents
+## 7. Implications for tool-using agents
 
 - **Measure the interface, not just the model.** A single "valid action rate" for a
   model is meaningless without the interface it was given. Here one model ranges from
@@ -439,10 +361,6 @@ working we can read, and it can disagree with the action.
 - **Bookkeeping is where capable models slip.** Action economy, remaining resources,
   what is already done. Surfacing state the model must otherwise track helps even
   flagship models.
-- **"Low effort" is not one setting.** Vendors implement reasoning effort differently,
-  and that changes how an agent behaves on routine steps. Test at the effort you deploy.
-- **Small models need structure.** For a small fast model, enumeration was the difference
-  between losing most fights and winning most of them.
 
 **What surprised me.** The result that surprised me the most was, without a doubt, that
 Sonnet performed worse with bare tool calls than free text. The only instance of a model
@@ -463,26 +381,22 @@ entirely on the model: for Nemotron it held emphatically, for Gemini it barely a
 and for Sonnet it mattered only when the interface took away both its room to reason and
 its view of the options.
 
-## 9. Limitations
+## 8. Limitations
 
 - **One environment**, four scenarios, three models, 10 seeds per cell.
-- **No multiplicity correction** across the seven contrasts per model. These results are
-  robust:
-  - Nemotron's ordering
-  - Sonnet's C2 reversal
-  - the friendly-fire gap
-
-  A single borderline interval (e.g. Gemini's C2+M > C2) is weaker.
+- **No multiplicity correction** across the seven contrasts per model. Nemotron's
+  ordering, Sonnet's C2 reversal and the friendly-fire gap are robust to it; a single
+  borderline interval, such as Gemini's C2+M > C2, is weaker.
 - **Exploratory, not registered:** the reasoning-effort explanation, the between-model
   comparison, and Nemotron's wandering.
 - **Sampling and reasoning differ between models.** Only Nemotron ran at temperature 0
   with a seed. Sonnet accepts neither, and Google advises against lowering Gemini's
   temperature. And "low" reasoning effort means a different amount of thinking per
-  vendor (§6.3), so the between-model comparison mixes capability with both.
+  vendor (§5.3), so the between-model comparison mixes capability with both.
 - **One neutral prompt.** Every condition shares a prompt that scripts no tactics, and it
   was not tuned to any model. A prompt engineered for each model might narrow the gaps.
 - **Menu discretisation.** The movement menu reaches as little as a third of the
-  positions free movement can (§6.5), and no scenario rewards a precise position, so
+  positions free movement can (§5.4), and no scenario rewards a precise position, so
   that cost is measured but untested.
 - **Ceiling effects.** Gemini saturates validity and tactics, so H3 is untestable for it.
 - **Format and affordance confound.** The menu also carries tactical hints in its labels,
@@ -496,7 +410,7 @@ its view of the options.
   The pre-registration and the blind parser audit limit how much that can shape the
   results, but do not remove it.
 
-## 10. Reproduce it
+## 9. Reproduce it
 
 ```
 pip install -e ".[web,dev,agents]"
@@ -525,7 +439,9 @@ release bundle (transcripts, CSVs, prompts and report) is linked from the README
 - [x] Architecture diagram (§3): `docs/figures/architecture.{svg,png}` (2026-10-10).
 - [ ] A replay viewer clip of the seed-108 pair, for §7 and the demo GIF. The
       transcripts and deep links are in place (2026-10-08); capture from those.
-- [ ] Cut to 2,500–3,500 words. Candidates to trim: §2, §6.5, and the setup detail in §5.
+- [x] Cut to 2,500–3,500 words (2026-10-11, cuts A–L, approved by the author). The
+      old §2 is folded into Architecture, so every later section moved up one; the
+      section numbers in the items above are from before the cut.
 - [x] Read *DungeonBench* (arXiv 2607.29577) and place this work relative to it in §1
       (2026-10-10, "Related work").
 - [ ] A title. The working title is a suggestion; alternatives: "The menu is the
