@@ -492,6 +492,9 @@ remains._
 - [ ] Article (~2,500–3,500 words), structure below. **Write the motivation, the surprises and the
       "what I decided" sections in your own voice.** That is the ownership evidence the review
       stresses.
+      _(2026-10-11: finished. The author's sections were written by interview, and the
+      text trimmed to about 3,600 words of prose. The publishable copy is
+      `docs/ARTICLE.md`, with absolute image links; it ticks once published.)_
 - [x] Threats to validity: one environment; 3 models; format and affordance confound; menu
       discretisation; LLM nondeterminism; tactics underpowered (and saturated for Gemini);
       neutral-prompt choice.
@@ -522,6 +525,8 @@ remains._
       https://github.com/Nitrix119/Arbiter-Arena/releases/tag/v1.0.0. The notes say the
       article link follows once it is published.)_
 - [ ] Short demo GIF or video; update CV/LinkedIn with the **measured** numbers.
+      _(2026-10-11: the GIFs are done: `docs/figures/seed108_{C2,C2M}.gif`, recorded by
+      the author and embedded in the failure story. CV/LinkedIn still to do.)_
 
 **Article outline:** (1) problem: models propose, software must preserve invariants; (2) why a
 deterministic tactical engine is a good controlled environment; (3) architecture: observation →
