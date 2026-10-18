@@ -19,22 +19,22 @@ the interface could have upon the way these models interact with the same underl
 system: where and why they failed, and what influence the interface alone could have
 over it.
 
-The setting itself (effectively Dungeons & Dragons combat) was a perfect fit that
-I felt I knew well enough to be deeply invested in building and exploring. An
-environment that is deterministic for the harness, but full of uncertainty and long-term
-planning for the model, which must contend with it solely by making tool calls and
-individual decisions from an observation. It mirrors many of the elements of real,
-high-stakes use cases for LLMs today, across areas involving autonomous control: a model
-that is asked to take action, based on a set of potentially imperfect observations, and
-within the confines of what it is able to and permitted to do.
+The setting itself (effectively Dungeons & Dragons combat) was a perfect fit that I felt
+I knew well enough to be deeply invested in building and exploring. An environment that
+is deterministic for the harness, but full of uncertainty and long-term planning for the
+model, which must contend with it solely by making tool calls and individual decisions
+from an observation. It mirrors many of the elements of real, high-stakes use cases for
+LLMs today, across areas involving autonomous control: a model that is asked to take
+action, based on a set of potentially imperfect observations, and within the confines of
+what it is able to and permitted to do.
 
-When a tool-using agent fails, it is generally for one of two reasons: it either chooses
-badly, or it proposes an action which the system cannot accept. The second of these is
-usually blamed on the model, however the way in which a model is able to act is decided
-by whoever designed the system. It might write free text for a parser, fill in a tool
-call's raw parameters, or pick from a list of actions which have already been checked as
-legal, and the model has no say in which of these it is given. With this in mind, this
-study holds the model fixed and varies only that one decision.
+The way I came to see it, a tool-using agent fails either by choosing badly, or by
+proposing an action which the system cannot accept. The second of these tends to be
+blamed on the model, but the way in which a model is able to act is decided by whoever
+designed the system, and the model has no say in it. It might be asked to write free
+text for a parser, fill in a tool call's raw parameters, or pick from a list of actions
+which have already been checked as legal. With this in mind, I chose to hold the model
+fixed and vary only that one decision.
 
 Going in, I expected the interface to prove extremely impactful, as the paradigm
 suggested, and for each new element introduced to make taking action easier, I
@@ -44,33 +44,32 @@ anticipated that there would be a clear payoff visible in the metrics.
 Oktay, 2026), a far broader benchmark of D&D combat. It covers most of the SRD's combat
 rules, links fights together into whole adventuring days, and evaluates five frontier
 models. Its models always act by choosing from an indexed list of legal options, which
-is effectively this study's C3. It was published in July, and I only found it while
+is effectively this study's C3 (§3). It was published in July, and I only found it while
 verifying citations at the study freeze (§4), so the two designs converged
-independently. This did not come as a great surprise, given how
-popular D&D is and how simple its combat is compared with other tabletop games, and I
-suspect we are the same kind of enthusiast, each wanting to try our own ideas for LLMs
-and D&D.
+independently. This did not come as a great surprise, given how popular D&D is and how
+simple its combat is compared with other tabletop games, and I suspect we are the same
+kind of enthusiast, each wanting to try our own ideas for LLMs and D&D.
 
-I see DungeonBench as complementary to this study rather than competing with it. It goes
-broad, across the rules and across a whole day of play, while this study goes deep on
-the one design decision which it holds fixed. Nothing in it challenges the results here,
-and the results here in fact support its choice, as the menu was the most reliable
-interface tested for every model. They also show, however, that this choice shapes both
-the scores and the way the models behave, which means a benchmark's numbers are partly a
-property of the interface it uses. Its much finer movement enumeration is an idea I
-would like to try in future, though it would need care to balance resolution against a
-list too long to be useful.
+I see DungeonBench as complementary to this study rather than competing with it. It
+covers far more of the rules and links fights into whole adventuring days, but always
+gives its models a menu, while this study looks only at that one choice. The results
+here support its use of a menu, since the menu was the most reliable interface tested
+for every model, and nothing in it appears to challenge them. They also show, however,
+that this choice shapes both the scores and the way the models behave, which means a
+benchmark's numbers are partly a property of the interface it uses. Its much finer
+movement enumeration is an idea I would like to try in future, though it would need care
+to balance resolution against a list too long to be useful.
 
 ## 2. Architecture
 
 ![One decision: the observation goes through the interface to the model; the engine validates and executes what it proposes, and the recorder keeps everything](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.0.0/docs/figures/architecture.png)
 
-Every action a model proposes is either accepted as legal, or refused with a typed reason
-(`destination_blocked`, `action_economy_spent`, `out_of_range`, …), which means that
-validity is something the engine measures directly rather than something which has to
-be judged. When an action is refused, the referee's reason is fed back to the model, and
-it may try again. A failure budget of 3 consecutive or 5 total refusals ends any turn
-which is going nowhere.
+Every action a model proposes is either accepted as legal, or refused with a typed
+reason (`destination_blocked`, `action_economy_spent`, `out_of_range`, …), which means
+that validity is something the engine measures directly rather than something which has
+to be judged. When an action is refused, the referee's reason is fed back to the model,
+and it may try again. A failure budget of 3 consecutive or 5 total refusals ends any
+turn which is going nowhere.
 
 ## 3. The four interface conditions
 
@@ -81,8 +80,8 @@ which is going nowhere.
 | **C2+M, tool calls plus menu** | The same raw tool calls | The state **plus** the list of legal actions |
 | **C3, menu choice** | `choose(action_id)` from the list | The state plus the list |
 
-C2+M acts as a control, and is what allows the design to work: it separates the effect
-of seeing the options from the effect of being restricted to them.
+C2+M uses the same raw tool calls as C2, but with the list of legal actions visible, and
+serves as the control between C2 and C3.
 
 **What I decided, and why.** Avoiding an LLM parser for C1 was a clear and important
 decision to me, despite it being initially considered. The heart of that choice was
@@ -103,18 +102,16 @@ When I realised during the pilot that Gemini had all but solved the four scenari
 chose not to change them for honesty and to value the answer that it came with: for a
 powerful enough LLM, in a simple enough setting, the interface barely matters - it will
 find the way. I felt that this was worth reporting as it stood, and making the scenarios
-harder would have
-only been likely to degrade the results for the other two models which had not solved
-them. Ultimately, it was not a study on how hard of a scenario it took to confound the
-models.
+harder would have only been likely to degrade the results for the other two models which
+had not solved them. Ultimately, it was not a study on how hard of a scenario it took to
+confound the models.
 
 I felt proudest about how neutral and fair I feel the menus are, particularly when
 offering AoE targeting: unique sets of targets are provided, but little guidance on what
 the model actually wants to hit. Beyond naming its moves (which, as §8 notes, is itself
-a small hint), nowhere does a menu
-truly guide the model to do something more clever, and it is only by having its options
-laid out plainly that Sonnet was seen to perform distinctly better when provided with
-it, despite doing little reasoning of its own.
+a small hint), nowhere does a menu truly guide the model to do something more clever,
+and it is only by having its options laid out plainly that Sonnet was seen to perform
+distinctly better when provided with it, despite doing little reasoning of its own.
 
 ## 4. Setup and reproducibility
 
@@ -146,7 +143,7 @@ it, despite doing little reasoning of its own.
 ### 5.1 Validity across the four interfaces
 
 The table below shows each model's first-attempt valid-action rate, measured over fresh
-decisions.
+decisions (first attempts only, not retries after a refusal).
 
 | Model | C1 | C2 | C2+M | C3 |
 |---|---|---|---|---|
@@ -156,10 +153,11 @@ decisions.
 
 ![First-attempt validity by condition for each model, with 95% intervals](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.0.0/docs/figures/validity.png)
 
-Nemotron, the small model, supported every pre-registered hypothesis, with the full
-ordering of C3 > C2+M > C2 > C1 and a clear gap at each step. It won 13 of its 40 matches
-in C1 and 25 of 40 in C3, and in the protection scenario its fragile ally survived 6
-times in 10 in C3, compared with only 1–2 in 10 in the other conditions.
+Nemotron, the small model, supported all three of the hypotheses with registered
+decision rules (H1–H3), with the full ordering of C3 > C2+M > C2 > C1 and a clear gap at
+each step. It won 13 of its 40 matches in C1 and 25 of 40 in C3, and in the protection
+scenario its fragile ally survived 6 times in 10 in C3, compared with only 1–2 in 10 in
+the other conditions.
 
 The registered verdicts for each hypothesis are given in the table below. These are the
 report's paired cluster-bootstrap verdicts over the 40 shared (scenario, seed) pairs for
@@ -172,31 +170,38 @@ above zero.
 | Gemini | Only C2+M > C2 (tiny; ceiling) | Supported (small effect) | Not supported (wins at the ceiling in 3 of 4 scenarios) |
 | Sonnet | C3 > C2+M > C2 supported; **C2 < C1, reversed** | Supported | Not supported |
 
+H2 should be read in terms of rates rather than counts. It asks whether the validity
+deficit in C1 and C2 is concentrated in spatial actions (moving, and aiming area spells)
+rather than in attacks or ending the turn, which depends on how often each type of
+action fails. This is why it can be supported for Sonnet even though its most common
+single error was in bookkeeping (§5.2): in C2, only 65% of its moves were valid at the
+first attempt, compared with 85% of its attacks.
+
 ### 5.2 How validity fails
 
-Breaking the refusals down by type showed a different pattern for each model.
-Nemotron's failures were a mix of spatial and bookkeeping errors, the most common of
-which were as follows:
+Breaking the refusals down by type showed a different pattern for each model. Nemotron's
+failures were a mix of spatial and bookkeeping errors, the most common of which were as
+follows:
 
 1. In C2, attempting to "move" to the position where it already stood (754 times)
 2. In C1, moving onto occupied ground (638 times)
 3. In C1, acting after its action had already been spent (308 times)
 
-Sonnet's failures in C2 were almost entirely bookkeeping, with 56 attacks made after its
-action had already been spent. The menu removed whole categories of error outright, and
-C3 had no refusals of any kind for any model. (Every count can be found in the report's
+Sonnet's failures in C2 were mostly bookkeeping, with 56 attacks made after its action
+had already been spent. The menu removed whole categories of error outright, and C3 had
+no refusals of any kind for any model. (Every count can be found in the report's
 `summary.md`.)
 
 Interestingly, however, validity and effectiveness did not always move together.
 Nemotron's validity was higher in C2 than in C1 (0.58, compared with 0.33), yet its win
-rate fell from 0.33 in C1 to only 0.05 in C2. Of its 1,614 fresh decisions in C2,
-1,460 were moves, and it appears that the tool-call format pulled it into wandering
-around the map rather than fighting.
+rate fell from 0.33 in C1 to only 0.05 in C2. Of its 1,614 fresh decisions in C2, 1,460
+were moves, and it appears that the tool-call format pulled it into wandering around the
+map rather than fighting.
 
 ### 5.3 Sonnet and the bare tool call
 
-Sonnet's first-attempt validity was 0.98 in C1, 0.89 in C2, 0.98 in C2+M and 1.00 in
-C3, and its tactical results followed the same pattern, dipping noticeably in C2 alone:
+Sonnet's first-attempt validity was 0.98 in C1, 0.89 in C2, 0.98 in C2+M and 1.00 in C3,
+and its tactical results followed the same pattern, dipping noticeably in C2 alone:
 
 | Sonnet | C1 | C2 | C2+M | C3 |
 |---|---|---|---|---|
@@ -212,16 +217,16 @@ accepted, meaning that it had tried to attack a second time in the same turn, a 
 which it never made once in C1.
 
 In C1, free text seemed to invite Sonnet to work through its turn in prose before
-committing to an action. It wrote a line of reasoning alongside
-around 53% of its C1 commands, compared with 24–27% in every other condition, and that
-reasoning was largely spatial bookkeeping done out loud, such as "edge to edge that is
-0 ft, so I'm already in melee range".
+committing to an action. It wrote a line of reasoning alongside around 53% of its C1
+commands, compared with 24–27% in every other condition, and that reasoning was largely
+spatial bookkeeping done out loud, such as "edge to edge that is 0 ft, so I'm already in
+melee range".
 
 Being shown the options (C2+M and C3) also prevented the mistake, but in a different
 way. C2 and C2+M use the same tool-call format and have a near-identical prose rate (26%
-and 24%), so the only difference between them is the visible list of legal actions.
-That list alone took Sonnet from 0.89
-to 0.98 validity, and from 4 to 9 kiting survivals in 10.
+and 24%), so the only difference between them is the visible list of legal actions. That
+list alone took Sonnet from 0.89 to 0.98 validity, and from 4 to 9 kiting survivals in
+10.
 
 My reading of why this affected Sonnet and not Gemini comes down to how each model
 treats its reasoning setting. At "low" effort, Gemini still thinks briefly on almost
@@ -258,6 +263,8 @@ The table below shows the number of allies caught per Fireball cast.
 | Gemini | 0.13 | 0.18 | 0.00 | 0.00 |
 | Nemotron | 1.30 | — | 1.46 | 0.13 |
 
+(Nemotron made no area casts at all in C2, so there is nothing to report in that cell.)
+
 Each placement in the menu lists every creature it would catch, with each marked as an
 ally or an enemy. Gemini and Sonnet both made use of that list even in C2+M, where they
 still had to aim by raw coordinates, while Nemotron saw the same list and still caught
@@ -266,8 +273,10 @@ friendly fire all but ended, with 2 allies caught across its 15 casts, while Gem
 Sonnet caught no allies at all in C3. The number of enemies caught stayed roughly the
 same throughout (1.4–1.9 per cast), which means that on area spells an enumerated aim
 did not cost any expressivity, and in fact did better than free aiming at avoiding
-allies. This supports the direction for H4b which was revised and registered before the
-data was collected.
+allies. H4b originally predicted that C3 would do no better than C2 here, however before
+any data was collected this was revised (as a dated deviation) to predict that C3 might
+do better on area spells, since C2 has to compute coordinates and can get them wrong.
+This result supports the revised direction.
 
 ![Allies caught per area cast by condition for each model, with the number of casts](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.0.0/docs/figures/friendly_fire.png)
 
@@ -283,11 +292,12 @@ share of the match which the archer spends out of melee (10 matches per cell):
 | Gemini | 0.98 | 0.98 | 0.98 | 0.98 |
 | Sonnet | 0.89 | 0.73 | 0.92 | 0.98 |
 
-For every model, C3 kited at least as well as any condition with free movement. In C3,
-Sonnet matched the hand-built heuristic agent's 0.98, as Gemini did in every condition,
-and its archer finished with 16.1 of 18 HP on average. Although the menu offers only
-a few positions, "step back to range" is one of them, and this is the move which kiting
-relies upon.
+This prediction did not hold. For every model, C3 kited at least as well as any
+condition with free movement, and better than all of them for Nemotron and Sonnet. In
+C3, Sonnet matched the hand-built heuristic agent's 0.98, as Gemini did in every
+condition, and its archer finished with 16.1 of 18 HP on average. Although the menu
+offers only a few positions, "step back to range" is one of them, and this is the move
+which kiting relies upon.
 
 The loss which H4a measured is therefore real, but it appears that none of these
 scenarios ever needed the positions the menu had lost. Testing this properly would
@@ -315,13 +325,13 @@ disagreed. Even at the worst-case error rate, every verdict still stands.
 
 **Doing the audit.** Labelling 200 responses was a mix of tedious and interesting,
 solely based on which model I was labelling. Sonnet's reasoning prose was interesting to
-read and occasionally quite charming, while labelling plain tool calls was fairly tedious
-after dozens of very similar labels. Blind labelling definitely felt different, however,
-because I fully believed the parser to be infallible. Were it to have made a genuine
-mistake, or in the case where Sonnet's reasoning was inconsistent but its action properly
-formatted, I would have been too likely to not question it had I been able to see the
-parser's label. Finding that one of the two disagreements was my own error felt mildly
-annoying, but ultimately was a mark of honest human labelling.
+read and occasionally quite charming, while labelling plain tool calls was fairly
+tedious after dozens of very similar labels. Blind labelling definitely felt different,
+however, because I fully believed the parser to be infallible. Were it to have made a
+genuine mistake, or in the case where Sonnet's reasoning was inconsistent but its action
+properly formatted, I would have been too likely to not question it had I been able to
+see the parser's label. Finding that one of the two disagreements was my own error felt
+mildly annoying, but ultimately was a mark of honest human labelling.
 
 Overall, the experience did change my views of free text as an interface in a small way.
 I had assumed that any form of free response would be plagued by inconsistent wording
@@ -333,9 +343,8 @@ model adopted the simple action syntax.
 The clearest single example of how the menu helped comes from a pair of kiting matches
 played by the same model, on the same seed, and with the same tool-call format, where
 the only difference is whether the legal actions are listed. In both, an archer (18 HP,
-40 ft of
-movement, and a longbow) faces a slower Bruiser (45 HP, with a greatsword), and the
-winning play is to shoot and then step back every turn.
+40 ft of movement, and a longbow) faces a slower Bruiser (45 HP, with a greatsword), and
+the winning play is to shoot and then step back every turn.
 
 In C2, the archer shoots, then immediately tries to shoot again, and is refused because
 its action has already been spent. After being told why, it retreats, however in rounds
@@ -348,10 +357,10 @@ close the gap. In round 4, with the Bruiser now next to it, it explains its reas
 
 It then shoots and ends its turn while still in melee, having confused the prompt's rule
 of 'one tool call per response' with a belief that it could only do one thing per turn,
-either moving or attacking but not both. From round 5 onwards it goes back to moving
-and shooting, but by then it has already taken too much damage, and the archer dies in
-round 10 with the Bruiser still on 14 of 45 HP, largely because of those three turns
-spent standing still.
+either moving or attacking but not both. From round 5 onwards it goes back to moving and
+shooting, but by then it has already taken too much damage, and the archer dies in round
+10 with the Bruiser still on 14 of 45 HP, largely because of those three turns spent
+standing still.
 
 ![Seed 108 in C2: the archer shoots and stays put while the Bruiser closes in, and the archer dies](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/main/docs/figures/seed108_C2.gif)
 
@@ -368,9 +377,10 @@ full health.
 
 ![Seed 108 in C2+M: the archer shoots and steps back every turn, keeps its distance, and wins](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/main/docs/figures/seed108_C2M.gif)
 
-In C2 the model stated quite plainly that it should kite, so it seems to have known what
-to do, but lost track of the move it still had left in its turn. In C2+M, the list of
-legal actions kept that move in front of it on every turn.
+In C2 the model stated quite plainly that it should kite, so it knew what it wanted to
+do, but it had misread the rule of one tool call per response as allowing only one thing
+per turn. In C2+M it could read its remaining actions off the list, and it stopped
+making that mistake.
 
 Both matches are included in the repository and can be watched directly. In a clone,
 run `uvicorn web.app:app` and open
@@ -379,18 +389,18 @@ run `uvicorn web.app:app` and open
 
 ## 7. Implications for tool-using agents
 
-The broadest implication of these results is that the interface should be measured
-along with the model. A single "valid action rate" for a model means very little without
+The broadest implication of these results is that the interface should be measured along
+with the model. A single "valid action rate" for a model means very little without
 knowing the interface it was given, and in this study one model ranged from 33% to 100%
 depending on the interface alone. Showing a model what is legal also appears to help,
 even without restricting it to those options. C2+M, which gave raw tool calls along with
 a visible list, recovered most of the gap for both Sonnet and Nemotron, and listing the
 options in this way is cheap to do, while enforcing them remains a separate choice.
 
-Bookkeeping also seems to be where capable models are most likely to slip. Keeping track
-of the action economy, remaining resources and what had already been done in a turn
-caught out even the flagship model, and so surfacing state which the model would
-otherwise have to track for itself is likely to help even the most capable models.
+For Sonnet at least, the slips were in bookkeeping, namely keeping track of what it had
+already done in a turn and what it still had left. Gemini did not make the same mistake,
+so this may not apply to every capable model, but surfacing that state rather than
+leaving the model to track it for itself appears to be a cheap way to help.
 
 **What surprised me.** The result that surprised me the most was, without a doubt, that
 Sonnet performed worse with bare tool calls than free text. The only instance of a model
@@ -406,8 +416,8 @@ It goes without saying that I also could not have expected how strikingly differ
 "low" reasoning actually is between vendors, to the degree that Sonnet skipped it
 entirely most of the time while Gemini only tried to keep it short.
 
-As for whether the idea that the interface matters more than the model actually held
-up, the answer depended almost entirely on which model was being tested. It held very
+As for whether the idea that the interface matters more than the model actually held up,
+the answer depended almost entirely on which model was being tested. It held very
 clearly for Nemotron, while it barely applied to Gemini at all, and for Sonnet the
 interface only seemed to matter when it took away both its room to reason and its view
 of the options.
