@@ -55,7 +55,7 @@ The design, hypotheses, metrics and exclusions were frozen before the final run,
 
 ![First-attempt validity by condition for each model, with 95% intervals](docs/figures/validity.png)
 
-Constraining the interface raises validity as predicted, but how much depends on the model. For the weakest model it is transformative (it wins 13 of 40 matches in C1 and 25 of 40 in C3); for the strongest it barely registers. Sonnet reverses one predicted step: it is worse with bare tool calls than with prose. The full write-up and a worked failure case are in progress; the working record is [FINAL_RUN_FINDINGS.md](docs/current/FINAL_RUN_FINDINGS.md).
+Constraining the interface raises validity as predicted, but how much depends on the model. For the weakest model it is transformative (it wins 13 of 40 matches in C1 and 25 of 40 in C3); for the strongest it barely registers. Sonnet reverses one predicted step: it is worse with bare tool calls than with prose. The full write-up, including a worked failure case, is in [the article](docs/ARTICLE.md), and the working record is [FINAL_RUN_FINDINGS.md](docs/current/FINAL_RUN_FINDINGS.md).
 
 ### Check the results yourself
 
@@ -76,7 +76,7 @@ Neither command needs an API key. The bundle is built by `tools/make_bundle.py`,
 - **The menu discretises** continuous choices (movement, area placement); it was measured to lose some options in some positions.
 - **Tactics are underpowered,** and saturated for the strongest model.
 - **No multiplicity correction** across the registered comparisons.
-- **A known engine gap:** a move's path through a hostile creature is not checked (ledger A30).
+- **A known engine gap:** a move's path through a hostile creature is not checked, only where the move ends.
 
 ---
 
