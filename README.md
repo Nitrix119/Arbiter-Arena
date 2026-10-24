@@ -1,12 +1,98 @@
 # Arbiter Arena
 
-[![CI](https://github.com/Nitrix119/Arbiter-Arena/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nitrix119/Arbiter-Arena/actions/workflows/ci.yml)
+Arbiter Arena is an environment for testing how well AI models act as agents within a
+system of strict rules, using Dungeons & Dragons combat as its setting.
 
-**A deterministic evaluation harness for tool-using LLM agents, built on an SRD 5.1-compatible tactical combat engine.**
+| With bare tool calls, Claude Sonnet shoots, stays put, and loses | Same model and seed, with its legal actions listed: it shoots, steps back, and wins |
+|---|---|
+| ![Seed 108 with bare tool calls: the archer shoots and stays put while the Bruiser closes in, and the archer dies](docs/figures/seed108_C2.gif) | ![Seed 108 with the legal actions listed: the archer shoots and steps back every turn, keeps its distance, and wins](docs/figures/seed108_C2M.gif) |
 
-An agent proposes an action; the engine validates it against the rules, executes it, and records exactly what happened and why — so an agent's reliability can be measured rather than eyeballed. Every match is seeded, recorded as a JSONL transcript, and replays to the same states, so any result can be re-checked and any single decision inspected.
+## What this is
 
-The repository ships one pre-registered study built on the harness: **how does the shape of an agent's action interface affect its reliability, cost and tactics?**
+In each battle, an AI model controls one side. Every turn it is shown the state of the
+board and proposes an action, which the rules engine either carries out or refuses, along
+with the reason for the refusal. Every battle is seeded and recorded in full, so any result
+can be replayed and checked decision by decision, and a model's reliability is something
+the engine measures directly.
+
+## Why it exists
+
+I built Arbiter Arena because I wanted a way to run experiments, tests and benchmarks on
+agentic AI in a setting which I could personally connect with. It began as a tool for game
+masters to simulate how an encounter might play out, however while building it I found far
+more interesting questions in how a model should be allowed to act at all, and the project
+grew into a platform for answering them.
+
+## Why D&D combat
+
+I have played D&D extensively at the table, and it is one of the few settings I understand
+deeply enough to build this kind of work around. It also happens to demand many of the same
+skills which matter for AI agents more broadly. A model has to reason about space and
+distance, keep track of resources such as whether it has already used its action this
+turn, plan several turns ahead, and act under the uncertainty of dice rolls.
+
+Its rules are complex but fully written down, and openly licensed through the SRD (the
+System Reference Document), so every action can be checked automatically as legal or
+illegal. Battles are seeded, so they can be replayed exactly, and they are cheap, at about
+5 US cents per model match.
+
+It is also easy to see what went wrong. A failure is visible at a glance on the board, and
+every decision is recorded alongside the model's own reasoning, so it is possible to follow
+not only what a model did but why it appears to have done it. With so much of AI still
+something of a black box, I see that kind of observability as one of the setting's
+strongest advantages.
+
+Importantly, the problem has the same shape as that of an agent working in a booking
+system, a CRM or a codebase. The model acts from a partial view of the world, within limits
+on what it is permitted to do, and has to remember what it has already done.
+
+## What I found
+
+The first study keeps each model fixed and changes only how it is allowed to act: writing
+its move as free text, calling tools, calling tools with the list of legal moves visible,
+or picking from that list. Across 600 battles and three models, the main results were as
+follows:
+
+1. The interface took the small open-weight model (Nemotron) from 33% to 100% valid
+   actions, and from 13 to 25 wins out of 40.
+2. The flagship model (Claude Sonnet) was the only one to become less reliable with more
+   structure, doing noticeably worse with bare tool calls than with free text.
+3. Simply showing the list of legal actions, without restricting the model to it,
+   recovered most of that loss, and was a cheap fix for both of the models which needed
+   it.
+4. Choosing from a menu cost far less than expected, and all but ended friendly fire with
+   area spells.
+
+![First-attempt validity by condition for each model, with 95% intervals](docs/figures/validity.png)
+
+The full write-up, including the match shown above, is in [the article](docs/ARTICLE.md).
+
+## Watch a match
+
+Both matches above are included in the repository, along with the model's reasoning at
+every turn. After following the quick start below, run `uvicorn web.app:app` and open
+`http://localhost:8000/playback?match=sonnet_kiting_seed108_C2.jsonl&step=21` to see the
+turn where the model explains that it "can't do both in one action", with its words beside
+the board.
+
+## Where this is going
+
+Arbiter Arena was built to be reused. The observation format, the interfaces, the rules
+validator, the replay system and the study runner are all independent of this first study,
+so new experiments can be built on top of them. The next experiments have not been decided
+yet, however I am most interested in richer agentic studies, since I see agents as the most
+relevant and interesting area of AI research and application right now.
+
+## Writing
+
+- [Show, don't make them guess](docs/ARTICLE.md): how the action interface shapes LLM
+  agents in a tactical game. The write-up of the first study.
+
+## About
+
+I'm Logan Nilson, an independent AI developer and researcher, with a peer-reviewed paper on
+LLM-based assessment of student work (ACE 2026), and a proud lifelong geek, which goes some
+way to explaining why the test bed is D&D. [LinkedIn](https://www.linkedin.com/in/logan-nilson/)
 
 ---
 
@@ -32,7 +118,7 @@ Requires Python 3.11+. Real models need the `[agents]` extra and a key; see [AGE
 
 ---
 
-## The study
+## The first study in detail
 
 Three models each played four tactical scenarios, ten seeds per cell, under four interface conditions. The engine, the scenarios and the opponent were identical across conditions; only the way the model expresses its action changed:
 
@@ -63,7 +149,7 @@ The complete data is a release asset: all 600 transcripts, the report, the blind
 
 ```bash
 python -m src.arena.study verify results/final   # every match must replay: 600/600
-python -m src.arena.study report results/final   # rewrites report/ byte for byte
+python -m src.arena.study report results/final   # rewrites report/ exactly
 ```
 
 Neither command needs an API key. The bundle is built by `tools/make_bundle.py`, which refuses to export a prompt that no longer hashes to what the transcripts recorded.
@@ -164,6 +250,8 @@ tests/           # pytest suite
 ```
 
 ## Development
+
+[![CI](https://github.com/Nitrix119/Arbiter-Arena/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nitrix119/Arbiter-Arena/actions/workflows/ci.yml)
 
 ```bash
 pytest tests/ -q            # the full suite
