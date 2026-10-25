@@ -3,9 +3,7 @@
 Arbiter Arena is an environment for testing how well AI models act as agents within a
 system of strict rules, using Dungeons & Dragons combat as its setting.
 
-| With bare tool calls, Claude Sonnet shoots, stays put, and loses | Same model and seed, with its legal actions listed: it shoots, steps back, and wins |
-|---|---|
-| ![Seed 108 with bare tool calls: the archer shoots and stays put while the Bruiser closes in, and the archer dies](docs/figures/seed108_C2.gif) | ![Seed 108 with the legal actions listed: the archer shoots and steps back every turn, keeps its distance, and wins](docs/figures/seed108_C2M.gif) |
+![Claude Sonnet 5.5 in round 4 of the same kiting match, seed 108. With bare tool calls, its archer stands next to the Bruiser and reasons "I can't do both in one action, so I'll attack now", and goes on to lose in round 10. With its legal actions listed, the archer is 30 ft away and keeps its distance, and goes on to win in round 16.](docs/figures/seed108_hero.png)
 
 ## What this is
 
@@ -69,7 +67,7 @@ The full write-up, including the match shown above, is in [the article](docs/ART
 
 ## Watch a match
 
-Both matches above are included in the repository, along with the model's reasoning at
+Both matches shown above are included in the repository, along with the model's reasoning at
 every turn. After following the quick start below, run `uvicorn web.app:app` and open
 `http://localhost:8000/playback?match=sonnet_kiting_seed108_C2.jsonl&step=21` to see the
 turn where the model explains that it "can't do both in one action", with its words beside
