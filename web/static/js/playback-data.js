@@ -11,6 +11,21 @@
 
 const CELL_FEET = 5;
 
+// A bare transcript file name, so a ?match= value can never fetch outside the
+// matches folder.
+const MATCH_NAME = /^[\w.+-]+\.jsonl$/;
+
+/**
+ * The match file to open first: a valid ?match= name if one was given (so any
+ * bundled match can be linked to), otherwise the first featured match, otherwise
+ * the fallback. `featured` may be null when the list failed to load.
+ */
+export function initialMatch(queryName, featured, fallback) {
+    if (queryName && MATCH_NAME.test(queryName)) return queryName;
+    if (featured && featured.length) return featured[0].file;
+    return fallback;
+}
+
 export function parseJsonl(text) {
     return text
         .split("\n")

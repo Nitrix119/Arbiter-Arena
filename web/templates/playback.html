@@ -4,15 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Playback — Arbiter Arena</title>
-    <link rel="stylesheet" href="/static/css/battle.css">
-    <link rel="stylesheet" href="/static/css/playback.css">
+    <!-- Relative paths: the page is also published as a static site under a
+         sub-path (GitHub Pages), where "/static/..." would not resolve. -->
+    <link rel="stylesheet" href="static/css/battle.css">
+    <link rel="stylesheet" href="static/css/playback.css">
 </head>
 <body>
     <canvas id="grid"></canvas>
 
-    <!-- Top-left: which match is loaded + a picker to open any .jsonl locally -->
+    <!-- Top-left: the featured matches, which match is loaded, and a picker to
+         open any .jsonl locally -->
     <div id="pb-source">
-        <span id="pb-source-name">sample_match.jsonl</span>
+        <select id="pb-featured" title="Featured matches" hidden>
+            <option value="" disabled>Featured matches…</option>
+        </select>
+        <span id="pb-source-name">Loading…</span>
         <label id="pb-file-label" title="Open a match transcript (.jsonl)">
             Open…
             <input type="file" id="pb-file" accept=".jsonl,.json,application/json" hidden>
@@ -54,6 +60,6 @@
         </div>
     </div>
 
-    <script type="module" src="/static/js/playback.js"></script>
+    <script type="module" src="static/js/playback.js"></script>
 </body>
 </html>

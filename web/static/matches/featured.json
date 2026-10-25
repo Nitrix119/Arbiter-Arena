@@ -1,0 +1,18 @@
+[
+  {
+    "file": "sonnet_kiting_seed108_C2.jsonl",
+    "label": "Sonnet · seed 108 · bare tool calls: loses"
+  },
+  {
+    "file": "sonnet_kiting_seed108_C2M.jsonl",
+    "label": "Sonnet · seed 108 · legal actions listed: wins"
+  },
+  {
+    "file": "sonnet_kiting_seed108_C3.jsonl",
+    "label": "Sonnet · seed 108 · menu choice: wins at full HP"
+  },
+  {
+    "file": "sample_match.jsonl",
+    "label": "Engine demo: a scripted duel, no model"
+  }
+]

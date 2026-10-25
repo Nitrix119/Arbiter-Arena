@@ -8,11 +8,14 @@ import {
     CELL_PX, CELL_FEET, ZOOM_MIN, ZOOM_MAX, ZOOM_SPEED,
 } from './state.js';
 import { draw, resize, spawnFloatingLabel } from './renderer.js';
-import { parseJsonl, buildSteps, boundsOf } from './playback-data.js';
+import { parseJsonl, buildSteps, boundsOf, initialMatch } from './playback-data.js';
 import { createPlayer } from './playback-controls.js';
 import { zoomAt, uncoveredRect, fitToRect } from './camera.js';
 
-const DEFAULT_MATCH = '/static/matches/sample_match.jsonl';
+// Paths are relative to the page, so the same page works served by FastAPI at
+// /playback and as a static site under a sub-path (GitHub Pages).
+const MATCHES_DIR = 'static/matches/';
+const FALLBACK_MATCH = 'sample_match.jsonl';
 
 // ── DOM handles ─────────────────────────────────────────────────────────────
 const el = {
@@ -34,6 +37,7 @@ const el = {
     meta:     document.getElementById('pb-meta'),
     decision: document.getElementById('pb-decision'),
     file:     document.getElementById('pb-file'),
+    featured: document.getElementById('pb-featured'),
 };
 
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) =>
@@ -339,27 +343,66 @@ function loadMatch(text, sourceName) {
     player.emitState();
 }
 
-// `?match=<file>` opens web/static/matches/<file>, and `&step=<n>` (1-based, as
-// the counter shows) starts there, so a replay moment can be linked to. A bare file
-// name only: the page never fetches outside that folder.
-function initialMatchUrl() {
-    const name = new URLSearchParams(window.location.search).get('match');
-    if (name && /^[\w.+-]+\.jsonl$/.test(name)) return `/static/matches/${name}`;
-    return DEFAULT_MATCH;
+// The featured matches (static/matches/featured.json) fill the picker, so a visitor
+// can watch the important matches without downloading anything. null if the list
+// is missing or fails to load; the page still works without it.
+async function loadFeatured() {
+    try {
+        const r = await fetch(`${MATCHES_DIR}featured.json`);
+        return r.ok ? await r.json() : null;
+    } catch {
+        return null;
+    }
 }
 
-async function loadDefault() {
-    const url = initialMatchUrl();
+function fillFeatured(featured) {
+    if (!featured?.length) return;
+    for (const m of featured) {
+        const opt = document.createElement('option');
+        opt.value = m.file;
+        opt.textContent = m.label;
+        el.featured.append(opt);
+    }
+    el.featured.hidden = false;
+}
+
+// Open a bundled match by file name, starting at `step` (1-based, as the counter
+// shows). The picker shows it if it is featured, or its placeholder if not.
+async function openBundled(name, step = 1) {
+    const url = MATCHES_DIR + name;
     try {
         const r = await fetch(url);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        loadMatch(await r.text(), url.split('/').pop());
-        const step = Number(new URLSearchParams(window.location.search).get('step'));
+        loadMatch(await r.text(), name);
+        const featured = [...el.featured.options].some((o) => o.value === name);
+        el.featured.value = featured ? name : '';
+        // The picker already names a featured match; the file name is then redundant.
+        el.srcName.hidden = featured;
         if (Number.isInteger(step) && step > 1) player.seek(Math.min(step, steps.length) - 1);
     } catch (err) {
         el.desc.textContent = `Could not load ${url} — use “Open…” to pick a file. (${err.message})`;
     }
 }
+
+// `?match=<file>` opens static/matches/<file>, and `&step=<n>` starts there, so a
+// replay moment can be linked to. With no ?match=, the first featured match opens.
+async function loadDefault() {
+    const featured = await loadFeatured();
+    fillFeatured(featured);
+    const params = new URLSearchParams(window.location.search);
+    const name = initialMatch(params.get('match'), featured, FALLBACK_MATCH);
+    await openBundled(name, Number(params.get('step')));
+}
+
+// Choosing a featured match also updates the address, so it can be shared.
+el.featured.addEventListener('change', () => {
+    const name = el.featured.value;
+    const url = new URL(window.location.href);
+    url.searchParams.set('match', name);
+    url.searchParams.delete('step');
+    history.replaceState(null, '', url);
+    openBundled(name);
+});
 
 // ── Wiring ──────────────────────────────────────────────────────────────────
 function initCanvas() {
@@ -429,6 +472,8 @@ el.file.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     loadMatch(await file.text(), file.name);
+    el.featured.value = '';
+    el.srcName.hidden = false;
 });
 
 window.addEventListener('keydown', (e) => {

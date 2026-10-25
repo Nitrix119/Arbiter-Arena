@@ -40,6 +40,28 @@
     transition: background 0.12s, border-color 0.12s;
 }
 
+#pb-featured {
+    font-size: 0.74rem;
+    color: rgba(255, 255, 255, 0.90);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    padding: 0.2rem 0.4rem;
+    /* Narrow enough that the bar clears the centred caption on a laptop screen;
+       the open list still shows each label in full. */
+    max-width: 20vw;
+    cursor: pointer;
+}
+
+#pb-source-name[hidden] {
+    display: none;
+}
+
+#pb-featured option {
+    color: #e8e8f0;
+    background: #1c1c2a;
+}
+
 #pb-file-label:hover {
     background: rgba(255, 255, 255, 0.14);
     border-color: rgba(255, 255, 255, 0.25);
