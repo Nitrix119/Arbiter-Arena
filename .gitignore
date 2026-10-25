@@ -152,3 +152,10 @@ docs/current/.tmp*
 # Study run output: result bundles and audit samples (published separately)
 results/
 audit/
+
+# SRD 5.1 source (CC-BY-4.0, ~3 MB) and its searchable text extract: kept locally,
+# not committed. Regenerate the text with the command in docs/current/SRD_FIDELITY.md §0.
+docs/SRD_CC_v5.1.pdf
+docs/reference/srd_5.1.txt
+# Working files for the SRD fidelity audit (sub-agent findings, progress log)
+.srd_work/
