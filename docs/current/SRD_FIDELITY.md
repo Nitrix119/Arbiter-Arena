@@ -39,7 +39,13 @@
 5. **Handle `Arena impact`.** `src/arena` encodes today's rules in its tools, menus,
    observation, heuristic and prompt text. A rules fix that leaves the arena telling
    models "not modelled" is half done.
-6. **Close the entry here, in the same change.** Set `Status: closed (<commit>)` and add
+6. **An open question (Appendix B) is closed by a ruling, not code.**
+   - Write the decision in its `Ruling` field, dated, with a line on why.
+   - Set `Status: ruled (YYYY-MM-DD)`.
+   - Update the acceptance criteria of every entry it unblocks, so they test the ruling.
+   - If the ruling deliberately departs from RAW, also add an Appendix A entry.
+   - Only the maintainer makes rulings. An agent may draft options, never decide.
+7. **Close the entry here, in the same change.** Set `Status: closed (<commit>)` and add
    one line on what was done. Do **not** delete a closed entry. If you deliberately
    stop short of RAW, move it to Appendix A with the reason.
 
@@ -3771,6 +3777,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### TURN-Q-01 — Decide whether identical creatures share one initiative roll
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S4
 - **SRD:** p.90 "Initiative": "The GM makes one roll for an entire group of identical creatures, so each member of the group acts at the same time."
 - **Current behaviour:** every combatant rolls separately (`src/combat/initiative.py:55`). Grouping is not expressible (no group id), and "act at the same time" has no meaning in a one-actor-at-a-time engine (`active_entity_ids` is a singleton, `src/combat/combat_system.py:615-629`; its docstring anticipates a "Phase 2" of simultaneous allied turns).
@@ -3785,6 +3792,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### TURN-Q-02 — Decide what ends a fight in which no creature can act
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S4
 - **SRD:** p.90 "The Order of Combat": "Once everyone has taken a turn, the fight continues to the next round if neither side has defeated the other." p.90 "Combat Step by Step" 5: "Repeat step 4 until the fighting stops."
 - **Current behaviour:** when every creature due a turn has a skip-condition, `TurnManager.end_turn` ends the combat (`src/combat/turn_manager.py:118-122`, log "Combat ended", no winner), even when all are conscious and at full HP and their conditions would expire. Today this guard is also the only way out of a mutual stun, because durations never expire while turns are skipped (TURN-D-01). (The related case — a side whose only creatures are *unconscious* at full HP counting as defeated — is COND-D-01, with the win-condition decision there and in ATK-Q-01.)
@@ -3805,6 +3813,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### TURN-Q-03 — Decide whether (and how) improvised actions are allowed
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S4
 - **SRD:** p.93 "Actions in Combat": "When you describe an action not detailed elsewhere in the rules, the GM tells you whether that action is possible and what kind of roll you need to make, if any, to determine success or failure."
 - **Current behaviour:** no improvised actions: every action must be a stat-block `AttackAction` or a known `SpellAction` (`src/arena/tools.py` four tools; C1's grammar `src/arena/free_text.py` rejects any other verb as `UNKNOWN_ACTION`).
@@ -3819,6 +3828,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### MOVE-Q-01 — Decide what happens when forced movement is blocked
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** Thunderwave: "is pushed 10 feet away from you" (no rule for obstacles). p.92
   "Moving Around Other Creatures": "you can't willingly end your move in its space" (the
@@ -3843,6 +3853,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### MOVE-Q-02 — Decide how a mid-turn speed change alters the movement left this turn
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** p.91 "Movement and Position": "you can move a distance up to your speed ...
   you deduct the distance of each part of your move from your speed". p.91 "Using
@@ -3872,6 +3883,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### MOVE-Q-03 — Decide whether a 0-HP or dead creature still occupies its space
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** p.92 "Space": "A creature's space is the area in feet that it effectively
   controls in combat". The SRD gives no rule for a body; a dead creature is no longer a
@@ -3898,6 +3910,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### ATK-Q-01 — Decide which creatures die at 0 HP and which fall unconscious
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S2
 - **SRD:** p.98 "Monsters and Death": "Most GMs have a monster die the instant it drops to 0 hit points, rather than having it fall unconscious and make death saving throws. Mighty villains and special nonplayer characters are common exceptions; the GM might have them fall unconscious". p.98 "Knocking a Creature Out" (an attacker's choice).
 - **Current behaviour:** every creature is treated the same: at 0 HP it is out of the fight (`is_alive()` False), but nothing marks it dead (ATK-D-01) and healing brings it back (ATK-D-02). In practice this is "everyone follows Monsters and Death, except they can be healed".
@@ -3917,6 +3930,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### ATK-Q-02 — Decide how cover is determined from the battlefield
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S2
 - **SRD:** p.94 "Making an Attack": "The GM determines whether the target has cover". p.96 "Cover": "A target has half cover if an obstacle blocks at least half of its body." "…a creature, whether that creature is an enemy or a friend." "…only when an attack or other effect originates on the opposite side of the cover."
 - **Current behaviour:** not modelled (ATK-M-04). The battlefield is continuous feet with no grid (settled ruling 2026-09-19, ENGINE_MAP). Creatures are axis-aligned boxes, and nothing else occupies space.
@@ -3936,6 +3950,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### SPELL-Q-01 — Decide how much of a creature must be inside an area to be affected
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** p.102-103 "Areas of Effect": "Every area of effect has a point of origin … A spell's effect expands in straight lines from the point of origin." Spells say "each creature in a 20-foot-radius sphere" without defining partial occupancy.
 - **Current behaviour:** any positive overlap of the creature's bounding box counts (`get_targets_in_aoe`, `src/combat/combat_system.py:844-871`); touching also counts for most shapes (SPELL-D-05).
@@ -3950,6 +3965,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### COND-Q-01 — Decide whether a charmed creature may include its charmer in an area effect
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** p.358 "Charmed": "can't attack the charmer or target the charmer with harmful
   abilities or magical effects."
@@ -3974,6 +3990,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### COND-Q-02 — Decide when a creature may hide, and when hiding survives approaching
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** p.80 "Hiding": "The GM decides when circumstances are appropriate for hiding."
   "You can't hide from a creature that can see you clearly". p.81: "if you come out of
@@ -3998,6 +4015,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### COND-Q-03 — Decide when the Help action's ability-check form applies
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S4
 - **SRD:** p.79 "Working Together": "A character can only provide help if the task is one
   that he or she could attempt alone ... a character can help only when two or more
@@ -4021,6 +4039,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 
 #### MON-Q-01 — Decide how many legendary actions may be used at one turn's end
 - **Status:** open
+- **Ruling:** _pending: the maintainer fills this in._
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** p.260 "Legendary Actions": "Only one legendary action option can be used at a
   time and only at the end of another creature's turn."
