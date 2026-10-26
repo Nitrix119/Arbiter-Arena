@@ -10,7 +10,10 @@ of the codebase and the open repair roadmap, read
 [docs/current/CODEBASE_REVIEW.md](docs/current/CODEBASE_REVIEW.md). For **what's genuinely left in the
 spell/combat rework** — remaining deletions, carried deviations to not lose, and known
 awkwardness worth refining — read
-[docs/current/SPELL_SYSTEM_REMAINING.md](docs/current/SPELL_SYSTEM_REMAINING.md).
+[docs/current/SPELL_SYSTEM_REMAINING.md](docs/current/SPELL_SYSTEM_REMAINING.md). For
+**where the engine misses or departs from SRD 5.1 combat rules**, and the roadmap toward
+rules-as-written, read [docs/current/SRD_FIDELITY.md](docs/current/SRD_FIDELITY.md):
+cite an entry ID when you work one, and close the entry in the same change.
 
 ---
 
@@ -241,6 +244,7 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
 | Read one match, decision by decision | `python -m src.arena.study show <transcript.jsonl> [--refused]` |
 | No-key demo of the whole pipeline | `python -m src.arena.study run examples/study/demo.toml --out results/demo` |
 | Draw the write-up's charts | `pip install -e ".[plots]"`, then `python tools/plot_study.py results/<name> --out docs/figures` |
+| Make the SRD searchable (needs the local PDF + `pdftotext`) | `python tools/extract_srd.py` → `docs/reference/srd_5.1.txt` |
 | C1 parser audit | `python -m src.arena.audit sample results/<name> --out audit/` → `… label audit/` → `… score audit/ --report results/<name>/report` |
 
 - **Check exit codes, not tails.** In a chained command, never pipe a check through `tail`/`head`

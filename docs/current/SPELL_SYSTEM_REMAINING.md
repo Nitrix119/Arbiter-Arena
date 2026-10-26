@@ -141,5 +141,8 @@ Noticed while working; recorded so they aren't lost, but they predate the block 
 - **Design intent & the block vocabulary:** [SPELL_SYSTEM_VISION.md](SPELL_SYSTEM_VISION.md),
   [SPELL_SYSTEM_DESIGN.md](../archive/SPELL_SYSTEM_DESIGN.md).
 - **Codebase health / older enumerated issues (E-series):** [CODEBASE_REVIEW.md](CODEBASE_REVIEW.md).
+- **Where the engine misses or departs from the SRD 5.1 combat rules:**
+  [SRD_FIDELITY.md](SRD_FIDELITY.md). Upcasting, composite damage and concentration
+  items there cite this file.
 - **The code is the source of truth for _what exists_;** this file is the source of truth for
   _what's left_. When they disagree, trust the code and fix this file.

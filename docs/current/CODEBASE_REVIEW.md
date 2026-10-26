@@ -92,6 +92,12 @@ catalogue remains.)_
 
 ## 4. Significant missing features
 
+> **2026-10-26: superseded for rules gaps.** Where the engine misses or departs from the
+> SRD 5.1 combat rules is now tracked in [SRD_FIDELITY.md](SRD_FIDELITY.md), the single
+> home for that work: 137 entries with citations, evidence and acceptance criteria. This
+> list is older and partly out of date (split multi-target spells and damage upcasting
+> now exist); it is kept as history.
+
 1. **No autonomous AI / auto-battle loop** — the defining feature of an "auto-battler." Biggest
    product gap. (README Future Goal: LLM action selection.)
 2. **Spell upcasting / level scaling** — `higher_level_scaling` is **prose only**; explicit TODO
@@ -514,6 +520,46 @@ names where it should be addressed. Append; strike through and date an item when
   - **Accepted as a known limitation (user decision, 2026-09-30).** It is unlikely to
     affect a between-condition measure measurably. Worth fixing after the study.
     Recorded in prereg §9; the prompt is unchanged.
+  - Tracked as **MOVE-D-01** in [SRD_FIDELITY.md](SRD_FIDELITY.md) (2026-10-26).
+- **A44. Removing a condition by type leaves its mechanics running. Open.**
+  - Found 2026-10-26 by the SRD fidelity audit (COND cross-area notes).
+  - `Entity.remove_condition_by_type` (`src/models/entity.py`) strips the markers but
+    not the lifetime scopes and reactive riders that `apply_condition` installed, so
+    the condition's rules keep firing. And `CONDITION_REMOVED` is declared
+    (`src/combat/events.py`) but never emitted.
+  - No production caller uses it today. But a "stand up from prone" or "escape a
+    grapple" built on it (MOVE-M-04, COND-M-08) would leave the mechanics running.
+    Remove through the owning scope (`remove_condition`), and emit `CONDITION_REMOVED`.
+- **A43. Shipped creatures disagree with their SRD stat blocks. Open.**
+  - Found 2026-10-26 by the SRD fidelity audit. These are authoring errors, so fix the
+    JSON, not the engine. None of these creatures is used by an arena scenario, so the
+    fix doesn't change the study scenarios.
+  - `goblin.json`: AC 12 → 15; STR 10 → 8; Scimitar and Shortbow `1d6` → `1d6+2`.
+  - `stone_golem.json`: STR 20 → 22; proficiency bonus 5 → 4 (CR 10). Its legendary
+    actions are invented, because the SRD stone golem has none. It is the creature
+    guide's legendary demo, so label it as non-SRD or move the demo to a made-up
+    creature.
+  - `characters/ranger.json`: the Shortsword is piercing, not slashing, and both weapons
+    lack the +3 DEX damage.
+  - `characters/paladin.json`: "Sacred Flame" is authored as an attack roll with a damage
+    modifier. In RAW it is a DEX-save cantrip, and it is not on the paladin list.
+  - Engine-caused differences for the same creatures are entries in SRD_FIDELITY.md
+    (Appendix D, MON).
+- **A42. The creature guide makes three wrong statements. Open.**
+  - Found 2026-10-26 by the SRD fidelity audit.
+  - `examples/creatures/CREATURE_DEFINITION_GUIDE.md` says `recharge` is "shown in UI",
+    but nothing in `web/` reads it, and the engine never rolls it (MON-M-02).
+  - It says damage types "must be uppercase", but the loader is case-insensitive.
+  - It presents the stone golem's invented legendary actions as if they were SRD (A43).
+- **A41. Condition rule notes are stale and mis-encoded. Open.**
+  - Found 2026-10-26 by the SRD fidelity audit.
+  - In `rules/entity_effects/conditions/*.json`, the `_note`s of paralyzed, stunned,
+    unconscious and petrified say auto-fail saves are "pending save system". The save
+    event has existed since E3, so these notes now describe COND-M-01.
+  - Unconscious's note says onset-prone is "pending ... CONDITION_ADDED trigger", but a
+    `CONDITION_ADDED` trigger works today.
+  - Several notes contain double-encoded dashes (`â€"` for an em dash).
+  - Update each note when its SRD_FIDELITY.md entry closes, and fix the encoding now.
 - **A40. ~~`study show` crashed on a Windows console.~~ Fixed 2026-10-08.** Sonnet switched
   to Chinese in round 10 of the seed-108 C2+M kiting match. Printing that through a
   cp1252 console raised `UnicodeEncodeError`, so a documented command crashed on a real
@@ -532,6 +578,7 @@ names where it should be addressed. Append; strike through and date an item when
     only explicit `slot_level` values are 27 Fireballs at level 3, the base, so the
     study is unaffected. A future study that offers upcasting should fix this first,
     or an upcast would buy nothing and look like a mistake.
+  - Tracked as **SPELL-M-05** in [SRD_FIDELITY.md](SRD_FIDELITY.md) (2026-10-26).
 - **A38. Three authored fields are never loaded. Open.**
   - `aoe.height_ft` and `aoe.width_ft` exist on `AOEProperties`, but
     `StatBlockLoader._parse_action` reads only `shape` and `size_ft`. A custom cylinder
@@ -540,6 +587,8 @@ names where it should be addressed. Append; strike through and date an item when
     it doesn't round-trip.
   - The rewritten spell guide documents only what loads. It says a custom height or
     width is not supported yet.
+  - Cylinder height is tracked as **SPELL-M-09** in [SRD_FIDELITY.md](SRD_FIDELITY.md)
+    (2026-10-26).
 - **A37. `roll_once` outside `for_each_target` is accepted and ignored. Open.**
   - An area spell written flat still runs once per target
     (`evaluator.resolve_program`), but each target rolls its own damage, and the
@@ -558,6 +607,8 @@ names where it should be addressed. Append; strike through and date an item when
     fire. SRD 5.1 ends the old concentration when a new concentration spell is cast.
   - Pinned by `test_vampiric_touch_recast_heals_once`, a strict xfail that will report
     an unexpected pass when this is fixed.
+  - Root cause found 2026-10-26: the old concentration is still in place while the new
+    spell resolves. Tracked as **SPELL-D-09** in [SRD_FIDELITY.md](SRD_FIDELITY.md).
   - It cannot have touched the study: no scenario includes Vampiric Touch, and it
     appears nowhere in `results/final`.
 - **A35. ~~The audit's decision table listed the baselines as "not computable".~~ Fixed
