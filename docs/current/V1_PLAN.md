@@ -382,7 +382,7 @@ Runner and analysis:
 **Recommended order from here (2026-10-05).** Phases 3 and 4 interleave; the article is the
 main deliverable.
 1. ~~**Results skeleton and failure story**~~ **Drafted 2026-10-05:**
-   `docs/current/ARTICLE_DRAFT.md`, about 2,900 words. The method and results are drafted;
+   `docs/archive/ARTICLE_DRAFT.md`, about 2,900 words. The method and results are drafted;
    the [YOUR VOICE] sections are left with notes. The failure story is Sonnet, kiting,
    seed 108, C2 against C2+M.
 2. ~~**Charts** (A11)~~ **Done 2026-10-07:** `tools/plot_study.py` writes

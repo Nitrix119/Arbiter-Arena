@@ -152,3 +152,6 @@ docs/current/.tmp*
 # Study run output: result bundles and audit samples (published separately)
 results/
 audit/
+
+# Local Claude Code settings (per-machine, not shared)
+.claude/settings.local.json
