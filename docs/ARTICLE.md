@@ -1,6 +1,6 @@
 # Show, don't make them guess: how the action interface shapes LLM agents in a tactical game
 
-*Logan Nilson, October 2026. Code, data and pre-registration: [github.com/Nitrix119/Arbiter-Arena](https://github.com/Nitrix119/Arbiter-Arena).*
+*Logan Nilson, November 2026. Code, data and pre-registration: [github.com/Nitrix119/Arbiter-Arena](https://github.com/Nitrix119/Arbiter-Arena).*
 
 *I'm an independent AI developer and researcher, with a peer-reviewed paper on LLM-based assessment of student work (ACE 2026), and a proud lifelong geek, which goes some way to explaining why this study involves D&D. [LinkedIn](https://www.linkedin.com/in/logan-nilson/)*
 
