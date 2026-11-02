@@ -67,11 +67,11 @@ The full write-up, including the match shown above, is in [the article](docs/ART
 
 ## Watch a match
 
-Both matches shown above are included in the repository, along with the model's reasoning at
-every turn. After following the quick start below, run `uvicorn web.app:app` and open
-`http://localhost:8000/playback?match=sonnet_kiting_seed108_C2.jsonl&step=21` to see the
+[Open the replay](https://nitrix119.github.io/Arbiter-Arena/) to watch these matches in your browser, with nothing to install,
+along with the model's reasoning at every turn. [This link](https://nitrix119.github.io/Arbiter-Arena/?match=sonnet_kiting_seed108_C2.jsonl&step=21) goes straight to the
 turn where the model explains that it "can't do both in one action", with its words beside
-the board.
+the board. The list at the top left of the page also offers the same seed with the legal
+actions listed, and with the model choosing from the menu.
 
 ## Where this is going
 

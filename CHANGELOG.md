@@ -4,6 +4,28 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] — 2026-11-03
+
+### Added
+- A hosted replay: the playback page is published to GitHub Pages
+  (<https://nitrix119.github.io/Arbiter-Arena/>), so a match can be watched without
+  cloning anything. A new picker on the page lists the featured matches
+  (`web/static/matches/featured.json`), and it opens on the first of them.
+- The C3 match for seed 108, so all three Sonnet interfaces on that seed can be compared.
+- `docs/README.md`, a short index of which documents matter.
+
+### Changed
+- The article is revised and restructured: it opens on the seed-108 failure, follows with
+  what was found, and states the hypotheses in plain words. It also corrects several
+  claims, including saying outright that the registered movement prediction did not hold.
+- The README has a new plain-language top half, with a readable seed-108 hero image.
+- The article's images are all pinned to this release's tag.
+
+### Removed
+- `.claude/settings.local.json` from the repository: it is per-machine configuration.
+
+The study's data is unchanged: the v1.0.0 bundle remains the dataset.
+
 ## [1.0.1] — 2026-10-11
 
 ### Fixed
