@@ -89,8 +89,9 @@ Nemotron's C1 < C2.
 - **The reversal is robust.** Sonnet is *more* valid in free text (C1, 0.981) than with
   raw tool calls (C2, 0.893), the opposite of H1's prediction for that step, with the
   interval well clear of zero.
-- **Most C2 misses are bookkeeping.** 56 times it attacked after its action was already
-  spent, plus 36 moves onto occupied ground.
+- **Most C2 misses are bookkeeping.** 56 times it tried to act after its action was
+  already spent (54 attacks and 2 spell casts; corrected 2026-11-03), plus 36 moves onto
+  occupied ground.
 - **C2 is also Sonnet's worst condition tactically:**
 
   | | C1 | C2 | C2+M | C3 |
@@ -114,8 +115,9 @@ Nemotron's C1 < C2.
   model's working, not through parsing failures. Our addition is that *showing the
   options* compensates for the lost working.
 
-- **Refinement (measured 2026-10-05).** Sonnet's prose rate is 53% of decisions in C1,
-  against 26% in C2, 24% in C2+M and 27% in C3. C2 and C2+M write the same amount of
+- **Refinement (measured 2026-10-05; C1 corrected 2026-11-03).** Sonnet's prose rate is
+  60% of decisions in C1 (554 of 918; first recorded here as 53%), against 26% in C2, 24%
+  in C2+M and 27% in C3. C2 and C2+M write the same amount of
   prose, so what separates C2's failure from C2+M's recovery is **the menu, not the
   prose**. The two rescues are distinct: working it out in the open (C1), or being shown
   the options (C2+M and C3).

@@ -21,6 +21,7 @@ import argparse
 import csv
 import sys
 from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -238,12 +239,18 @@ def _save(fig: object, out: Path, name: str) -> List[Path]:
     return paths
 
 
+def _round_half_up(v: float, places: str) -> Decimal:
+    # Python's format rounds an exact half to the nearest even digit (0.125 -> "0.12"),
+    # which would disagree with the tables of the same numbers beside these charts.
+    return Decimal(str(v)).quantize(Decimal(places), rounding=ROUND_HALF_UP)
+
+
 def _two_dp(v: float) -> str:
-    return f"{v:.2f}"
+    return str(_round_half_up(v, "0.01"))
 
 
 def _percent(v: float) -> str:
-    return f"{v:.0%}"
+    return f"{_round_half_up(v * 100, '1')}%"
 
 
 def draw(rows: Sequence[Row], out: Path) -> List[Path]:
@@ -262,8 +269,7 @@ def draw(rows: Sequence[Row], out: Path) -> List[Path]:
         _panel(ax, validity(rows, model), title=name, ylim=(0, 1.05), fmt=_two_dp)
     axes[0].set_ylabel("First-attempt validity\n(fresh decisions)")
     fig.suptitle(
-        "Constraining the action interface raises validity; how much depends on "
-        "the model",
+        "First-attempt validity by interface, for each model",
         x=0.01,
         ha="left",
         fontsize=12,
@@ -287,8 +293,7 @@ def draw(rows: Sequence[Row], out: Path) -> List[Path]:
         )
     axes[0].set_ylabel("Allies caught per area cast")
     fig.suptitle(
-        "Choosing from the menu (C3) all but ends friendly fire; only seeing it "
-        "(C2+M) helps the stronger models",
+        "Allies caught per area spell cast, by interface, for each model",
         x=0.01,
         ha="left",
         fontsize=12,
@@ -318,8 +323,7 @@ def draw(rows: Sequence[Row], out: Path) -> List[Path]:
         _panel(ax, points, title=title, ylim=(0, 1.05), fmt=_percent)
     axes[0].set_ylabel("Share (Claude Sonnet 5.5)")
     fig.suptitle(
-        "Claude Sonnet 5.5 plays worst with bare tool calls (C2), "
-        "and a menu rescues it",
+        "Claude Sonnet 5.5's tactical results by interface",
         x=0.01,
         ha="left",
         fontsize=12,
