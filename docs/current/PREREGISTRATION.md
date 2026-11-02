@@ -930,6 +930,27 @@ refusal. A move too short to cost any movement (under 0.05 ft, since movement is
 to 0.1 ft) is the same no-op and is refused too. Forced movement is unaffected. The
 baseline agents never make such a move, so the baselines are unchanged. Ledger A31.
 
+### 2026-11-03 — The opponent rule was not re-applied after Gemini's pilot
+
+Recorded after the final run, when an audit of the write-up found it. It was not
+written down at the time, so the reasons below are the author's recollection.
+
+**What happened.** §4.4 says to switch to the Heuristic opponent if Scripted puts the
+model at a ceiling: a win rate of 0.95 or higher in at least two of the four scenarios,
+pooled over conditions. §11 settled on Scripted on 2026-09-30, from the Nemotron pilot
+(`results/pilot-2`). The Gemini pilot on 2026-10-01 (`results/pilot-gemini`) won 8/8 in
+aoe_placement, kiting and protect_squishy, which meets that threshold. The Sonnet pilot
+the same day (`results/pilot-sonnet`) met it in only one scenario. The final run kept
+Scripted for every model.
+
+**Why.** Every model facing the same opponent, with the interface as the one variable,
+was judged more valuable than following the rule for one model, and a Heuristic agent
+was expected to make no difference in these simple opponent roles.
+
+**Effect.** No data or analysis changes. The expectation was never tested, since Gemini
+did not play the Heuristic. The ceiling is reported as a limitation, and H3 was not
+supported for Gemini.
+
 ---
 
 ## 11. Open items before freeze

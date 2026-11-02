@@ -40,7 +40,7 @@ Sonnet was the only model to become less reliable as the interface became more
 structured. With bare tool calls its validity fell from 0.98 to 0.89 compared with free
 text, its win rate fell from 0.80 to 0.60, and its kiting archer survived only 4 times
 in 10 rather than every time. The most likely cause appears to be that free text let it
-reason out loud (it wrote a line of working alongside 53% of its free-text commands,
+reason out loud (it wrote a line of working alongside 60% of its free-text commands,
 compared with around 25% elsewhere), while the tool-call format squeezed this out at a
 low reasoning setting. Moving an agent from text to tool calls can therefore make it
 less reliable, and this is worth testing for rather than assuming.
@@ -48,19 +48,21 @@ less reliable, and this is worth testing for rather than assuming.
 ### Showing the options helped, even without enforcing them
 
 Giving the same raw tool calls along with a visible list of legal actions (C2+M)
-recovered most of the gap for both Sonnet and Nemotron, without restricting either model
-to the list. Sonnet's validity rose from 0.89 to 0.98, and its archer survived 9 times
-in 10 instead of 4. This is a cheap change to make in almost any agent, since it only
-means putting the legal actions and remaining resources into what the model sees.
+recovered most of the validity gap for both Sonnet and Nemotron, without restricting
+either model to the list. Sonnet's validity rose from 0.89 to 0.98, and its archer
+survived 9 times in 10 instead of 4. Nemotron's wins barely moved however, going only
+from 0.05 to 0.10. This is a cheap change to make in almost any agent, since it only
+means putting the legal actions into what the model sees.
 
 ### The flagship model's slips were in bookkeeping
 
-Of Sonnet's 56 refusals for acting after its action had been spent, 52 came immediately
+Of Sonnet's 56 refusals for acting after its action had been spent, 53 came immediately
 after an attack which the engine had just accepted, meaning that it simply tried to
 attack twice in one turn. It knew the tactics well enough, and its mistakes were in
 keeping track of what it had already done. The real-world equivalent would be an agent
-which resubmits a form or sends the same email twice, and surfacing what has already
-been done in a turn appears to be a simple way to prevent it.
+which resubmits a form or sends the same email twice. Sonnet's action count was already
+visible in the state, so simply showing that number was not enough, and showing what can
+still be done in a turn appears to be a better way to prevent it.
 
 ### The menu cost far less than expected
 
@@ -83,15 +85,15 @@ misleading on its own.
 At the same nominal "low" reasoning setting, Gemini still thought briefly on almost
 every turn, while Sonnet returned any reasoning on only 19 of 663 requests in the pilot.
 Comparing models across vendors at what is supposedly the same setting is therefore not
-a like-for-like comparison, and this may also explain why only Sonnet was hurt by bare
-tool calls.
+a like-for-like comparison, and this may also explain why Sonnet was hurt by bare tool
+calls and Gemini was not.
 
 ### Did the interface matter more than the model?
 
 As for whether the idea that the interface matters more than the model actually held up,
 the answer depended almost entirely on which model was being tested. It held very
 clearly for Nemotron, while it barely applied to Gemini at all, and for Sonnet the
-interface only seemed to matter when it took away both its room to reason and its view
+interface seemed to matter most when it took away both its room to reason and its view
 of the options.
 
 ## 2. Background and motivation
@@ -204,7 +206,8 @@ reasoning of its own.
 - Pre-registered before any confirmatory data and tagged `study-freeze`: hypotheses,
   metrics, exclusions, decision rules, seeds and prompt hashes. Every later change is a
   dated deviation in the pre-registration.
-- Cost and integrity: 18,023 model decisions and about 31M tokens, with $24.30 billed
+- Cost and integrity: 14,992 LLM decisions (18,023 with the baselines) and about 31M
+  tokens, with $24.30 billed
   ($29.90 at list price, the difference being due to prompt caching). There were no
   infrastructure exclusions, and every match replayed exactly (100% replay).
 
@@ -278,16 +281,16 @@ valid at the first attempt, compared with 85% of its attacks.
 ### 7.2 How validity fails
 
 Breaking the refusals down by type showed a different pattern for each model. Nemotron's
-failures were a mix of spatial and bookkeeping errors, the most common of which were as
-follows:
+failures were a mix of spatial and bookkeeping errors, some of the most common of which
+were as follows:
 
 1. In C2, attempting to "move" to the position where it already stood (754 times)
 2. In C1, moving onto occupied ground (638 times)
 3. In C1, acting after its action had already been spent (308 times)
 
-Sonnet's failures in C2 were mostly bookkeeping, with 56 attacks made after its action
-had already been spent. The menu removed whole categories of error outright, and C3 had
-no refusals of any kind for any model. (Every count can be found in the report's
+Sonnet's failures in C2 were mostly bookkeeping, with 56 attempts to act after its
+action had already been spent. The menu removed whole categories of error outright, and
+C3 had no refusals of any kind for any model. (Every count can be found in the report's
 `summary.md`.)
 
 Interestingly, however, validity and effectiveness did not always move together:
@@ -309,15 +312,15 @@ the same pattern:
 
 Bare C2 was the only condition in which the flagship model visibly struggled, and the
 way in which it failed was very specific. Of its 56 refusals for acting after its action
-had already been spent, 52 came immediately after an attack which the engine had just
+had already been spent, 53 came immediately after an attack which the engine had just
 accepted, meaning that it had tried to attack a second time in the same turn, a mistake
 which it never made once in C1.
 
 In C1, free text seemed to invite Sonnet to work through its turn in prose before
-committing to an action. It wrote a line of reasoning alongside around 53% of its C1
+committing to an action. It wrote a line of reasoning alongside around 60% of its C1
 commands, compared with 24–27% in every other condition, and that reasoning was largely
-spatial bookkeeping done out loud, such as "edge to edge that is 0 ft, so I'm already in
-melee range".
+spatial bookkeeping done out loud, such as "Reach is measured edge to edge, so I'm
+already in melee range".
 
 Being shown the options (C2+M and C3) also prevented the mistake, but in a different
 way. C2 and C2+M use the same tool-call format and have a near-identical prose rate (26%
@@ -418,14 +421,15 @@ the live parser, and a lenient one), and all three agree exactly for every model
 no response being unreadable. A blind human audit of 200 C1 responses also found only 2
 disagreements (1.0%, interval 0.3–3.6%), neither of which was a fault in the parser: one
 was a typo in a label, and the other was a response whose reasoning and committed action
-disagreed. Even at the worst-case error rate, every verdict still stands.
+disagreed. Even at the worst-case error rate, Nemotron's ordering and Sonnet's reversal
+both still stand.
 
 **Doing the audit.** Labelling 200 responses was a mix of tedious and interesting,
 solely based on which model I was labelling. Sonnet's reasoning prose was interesting to
-read and occasionally quite charming, while labelling plain tool calls was fairly
-tedious after dozens of very similar labels. Blind labelling definitely felt different,
-however, because I fully believed the parser to be infallible. Were it to have made a
-genuine mistake, or in the case where Sonnet's reasoning was inconsistent but its action
+read and occasionally quite charming, while labelling plain commands was fairly tedious
+after dozens of very similar labels. Blind labelling definitely felt different, however,
+because I fully believed the parser to be infallible. Were it to have made a genuine
+mistake, or in the case where Sonnet's reasoning was inconsistent but its action
 properly formatted, I would have been too likely to not question it had I been able to
 see the parser's label. Finding that one of the two disagreements was my own error felt
 mildly annoying, but ultimately was a mark of honest human labelling.
@@ -452,17 +456,16 @@ close the gap. In round 4, with the Bruiser now next to it, it explains its reas
 
 It then shoots and ends its turn while still in melee, having confused the prompt's rule
 of 'one tool call per response' with a belief that it could only do one thing per turn,
-either moving or attacking but not both. From round 5 onwards it goes back to moving and
-shooting, but by then it has already taken too much damage, and the archer dies in round
-10 with the Bruiser still on 14 of 45 HP, largely because of those three turns spent
-standing still.
+either moving or attacking but not both. From round 5 onwards it mostly goes back to
+moving and shooting, however it stands still again in round 8, and once more in round
+10, when it says "Moving away would help, but I can only take one action." The archer
+dies in that round with the Bruiser still on 14 of 45 HP.
 
 ![Seed 108 in C2: the archer shoots and stays put while the Bruiser closes in, and the archer dies](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.0/docs/figures/seed108_C2.gif)
 
 In C2+M, the difference is visible from the very first turn. After shooting, the archer
-reads its action count off the list and does not attempt a second shot ("My action count
-is 0, so I can't attack this turn."), and from round 2 onwards it shoots and then
-retreats on almost every turn:
+does not attempt a second shot ("My action count is 0, so I can't attack this turn."),
+and from round 2 onwards it shoots and then retreats on almost every turn:
 
 > "Actions are 0, so I can't attack. I'll retreat to keep my distance from the Bruiser and
 > stay in longbow range."
@@ -474,8 +477,9 @@ full health.
 
 In C2 the model stated quite plainly that it should kite, so it knew what it wanted to
 do, but it had misread the rule of one tool call per response as allowing only one thing
-per turn. In C2+M it could read its remaining actions off the list, and it stopped
-making that mistake.
+per turn. Its action count was visible in both matches, however in C2+M the list also
+stopped offering an attack once its action was spent, and it stopped making that
+mistake.
 
 Both matches can be watched directly in the browser, with nothing to install. [This
 link](https://nitrix119.github.io/Arbiter-Arena/?match=sonnet_kiting_seed108_C2.jsonl&step=21) opens the "I can't do both" turn, with the model's words displayed beside
@@ -514,6 +518,13 @@ entirely most of the time while Gemini only tried to keep it short.
   tuned to any model. A prompt engineered for each model might narrow the gaps.
 - Gemini saturates validity and tactics, so H3 was not supported for it, largely because
   there was no room left for any interface to improve on.
+- The pre-registration says to switch to the Heuristic opponent if a model wins at least
+  95% of its matches in two scenarios. I settled on the Scripted opponent from Nemotron's
+  pilot, and Gemini's pilot a day later met that threshold in three scenarios, however I
+  chose to keep the Scripted opponent, since I wanted every model to face the same
+  opponent, and I expected a Heuristic agent to make no difference in these simple
+  opponent roles. I did not test this, and it is recorded as a deviation in the
+  pre-registration.
 - The menu also carries tactical hints in its labels, such as "retreat", so format and
   affordance are confounded. C2+M separates seeing the options from being restricted to
   them, however it cannot separate the hint from the list itself.

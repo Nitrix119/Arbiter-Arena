@@ -298,6 +298,22 @@ leave a brief note here.
 - **Rule going forward:** the concrete, testable rule.
 ```
 
+### 2026-11-03 — Two audits read the article, and the third read the data
+- **Context:** Preparing the article for release. Two fresh-context reviews had read it
+  closely and judged how it read, and it went out as v1.1.0.
+- **What went wrong:** those reviews could only check the article against itself. A third,
+  told to check every claim against the report, transcripts and code, found what they
+  could not: a wrong prose rate (53%, really 60%), a quote spliced from two responses, a
+  seed-108 story that omitted two of the turns, and advice resting on a false premise (the
+  action count was in every condition's state, not only the menu). The prose rate had been
+  copied faithfully from a working note that was itself wrong. It also found a registered
+  rule that one model's pilot had triggered, which nobody had recorded.
+- **Rule going forward:** before publishing, check each claim against the source of truth,
+  not against the document or its notes. A quotation must be found verbatim in a
+  transcript, and a recorded rule must be re-read whenever new data arrives that it could
+  apply to. A review that reads only the text can tell you how it reads, not whether it is
+  true.
+
 ### 2026-10-08 — An authoring guide with no test outlived the engine it described
 - **Context:** Rewriting `SPELL_DEFINITION_GUIDE.md` for V1.
 - **What went wrong:** the whole `effects` engine was deleted, but its guide survived for
