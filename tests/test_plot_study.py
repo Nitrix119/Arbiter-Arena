@@ -68,6 +68,23 @@ ROWS = [
 ]
 
 
+@pytest.mark.parametrize(
+    "value, two_dp, percent",
+    [
+        (5 / 40, "0.13", "13%"),  # Gemini C1 allies per cast: 0.13 in the article
+        (33 / 40, "0.83", "83%"),  # Sonnet C3 win rate: 0.83 in the article
+        (31 / 40, "0.78", "78%"),
+        (0.0, "0.00", "0%"),
+        (1.0, "1.00", "100%"),
+    ],
+)
+def test_labels_round_halves_up_like_the_tables(plot_study, value, two_dp, percent):
+    # The charts sit beside tables of the same numbers, so an exact half has to round
+    # the way a reader does, not to the nearest even digit as Python's format does.
+    assert plot_study._two_dp(value) == two_dp
+    assert plot_study._percent(value) == percent
+
+
 def test_importing_the_script_does_not_load_matplotlib():
     # CI has no [plots] extra, so only drawing may import it. A fresh process,
     # because this suite's other imports could have loaded it already.

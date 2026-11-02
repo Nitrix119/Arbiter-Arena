@@ -92,9 +92,7 @@ As for whether the idea that the interface matters more than the model actually 
 the answer depended almost entirely on which model was being tested. It held very
 clearly for Nemotron, while it barely applied to Gemini at all, and for Sonnet the
 interface only seemed to matter when it took away both its room to reason and its view
-of the options. The rest of this article explains how the study was set up and gives
-each of these results in full, starting with how I came to be asking the question at
-all.
+of the options.
 
 ## 2. Background and motivation
 
@@ -126,10 +124,8 @@ what it is able to and permitted to do.
 The way I came to see it, a tool-using agent fails either by choosing badly, or by
 proposing an action which the system cannot accept. The second of these tends to be
 blamed on the model, but the way in which a model is able to act is decided by whoever
-designed the system, and the model has no say in it. It might be asked to write free
-text for a parser, fill in a tool call's raw parameters, or pick from a list of actions
-which have already been checked as legal. With this in mind, I chose to hold the model
-fixed and vary only that one decision.
+designed the system, and the model has no say in it. With this in mind, I chose to hold
+the model fixed and vary only that one decision.
 
 Going in, I expected the interface to prove extremely impactful, as the paradigm
 suggested, and for each new element introduced to make taking action easier, I
@@ -154,9 +150,6 @@ turn which is going nowhere.
 | C2, raw tool calls | `attack(action_name, defender_id)`, `move(x, z)`, … | The state |
 | C2+M, tool calls plus menu | The same raw tool calls | The state plus the list of legal actions |
 | C3, menu choice | `choose(action_id)` from the list | The state plus the list |
-
-C2+M uses the same raw tool calls as C2, but with the list of legal actions visible, and
-serves as the control between C2 and C3.
 
 **What I decided, and why.** Avoiding an LLM parser for C1 was a clear and important
 decision to me, despite it being initially considered. The heart of that choice was
@@ -263,27 +256,24 @@ decisions (first attempts only, not retries after a refusal).
 
 Nemotron, the small model, supported all three of the hypotheses with registered
 decision rules (H1–H3), with the full ordering of C3 > C2+M > C2 > C1 and a clear gap at
-each step. It won 13 of its 40 matches in C1 and 25 of 40 in C3, and in the protection
-scenario its fragile ally survived 6 times in 10 in C3, compared with only 1–2 in 10 in
-the other conditions.
+each step. In the protection scenario its fragile ally survived 6 times in 10 in C3,
+compared with only 1–2 in 10 in the other conditions.
 
 The registered verdicts for each hypothesis are given in the table below. Each verdict
 compares conditions over the same 40 (scenario, seed) pairs for a model, with confidence
 intervals found by resampling those pairs, and *Supported* means that the 95% interval
 of the contrast lies entirely above zero.
 
-| Model | H1 (C3 > C2+M > C2 > C1) | H2 (the deficit is spatial) | H3 (constraint buys legality more than tactics) |
+| Model | H1 (C3 > C2+M > C2 > C1) | H2 (failures concentrate in spatial actions) | H3 (validity improves more than tactics) |
 |---|---|---|---|
 | Nemotron | Supported | Supported | Supported |
 | Gemini | Only C2+M > C2 (tiny; ceiling) | Supported (small effect) | Not supported (wins at the ceiling in 3 of 4 scenarios) |
 | Sonnet | C3 > C2+M > C2 supported; **C2 < C1, reversed** | Supported | Not supported |
 
-H2 should be read in terms of rates rather than counts. It asks whether the validity
-deficit in C1 and C2 is concentrated in spatial actions (moving, and aiming area spells)
-rather than in attacks or ending the turn, which depends on how often each type of
-action fails. This is why it can be supported for Sonnet even though its most common
-single error was in bookkeeping (§7.2): in C2, only 65% of its moves were valid at the
-first attempt, compared with 85% of its attacks.
+H2 should be read in terms of rates rather than counts, since it depends on how often
+each type of action fails. This is why it can be supported for Sonnet even though its
+most common single error was in bookkeeping (§7.2): in C2, only 65% of its moves were
+valid at the first attempt, compared with 85% of its attacks.
 
 ### 7.2 How validity fails
 
@@ -300,16 +290,15 @@ had already been spent. The menu removed whole categories of error outright, and
 no refusals of any kind for any model. (Every count can be found in the report's
 `summary.md`.)
 
-Interestingly, however, validity and effectiveness did not always move together.
+Interestingly, however, validity and effectiveness did not always move together:
 Nemotron's validity was higher in C2 than in C1 (0.58, compared with 0.33), yet its win
-rate fell from 0.33 in C1 to only 0.05 in C2. Of its 1,614 fresh decisions in C2, 1,460
-were moves, and it appears that the tool-call format pulled it into wandering around the
-map rather than fighting.
+rate fell from 0.33 to only 0.05, with 1,460 of its 1,614 fresh decisions in C2 being
+moves.
 
 ### 7.3 Sonnet and the bare tool call
 
-Sonnet's first-attempt validity was 0.98 in C1, 0.89 in C2, 0.98 in C2+M and 1.00 in C3,
-and its tactical results followed the same pattern, dipping noticeably in C2 alone:
+Sonnet's validity dipped noticeably only in C2 (§7.1), and its tactical results followed
+the same pattern:
 
 | Sonnet | C1 | C2 | C2+M | C3 |
 |---|---|---|---|---|
@@ -448,12 +437,9 @@ model adopted the simple action syntax.
 
 ## 8. A failure story: Sonnet, kiting, seed 108
 
-This is the match described at the start of this article, and it is the clearest single
-example of how the menu helped. It comes from a pair of kiting matches played by the
-same model, on the same seed, and with the same tool-call format, where the only
-difference is whether the legal actions are listed. In both, an archer (18 HP, 40 ft of
-movement, and a longbow) faces a slower Bruiser (45 HP, with a greatsword), and the
-winning play is to shoot and then step back every turn.
+This is the pair of matches described at the start of this article, and the clearest
+single example of how the menu helped. In both, the archer has 18 HP, 40 ft of movement
+and a longbow, while the slower Bruiser has 45 HP and a greatsword.
 
 In C2, the archer shoots, then immediately tries to shoot again, and is refused because
 its action has already been spent. After being told why, it retreats, however in rounds
@@ -526,9 +512,6 @@ entirely most of the time while Gemini only tried to keep it short.
   vendor (§7.3), so the between-model comparison mixes capability with both.
 - Every condition shares one neutral prompt that scripts no tactics, and it was not
   tuned to any model. A prompt engineered for each model might narrow the gaps.
-- The movement menu reaches as little as a third of the positions free movement can
-  (§7.4), and no scenario rewards a precise position, so this cost has been measured but
-  has not yet been tested.
 - Gemini saturates validity and tactics, so H3 was not supported for it, largely because
   there was no room left for any interface to improve on.
 - The menu also carries tactical hints in its labels, such as "retreat", so format and
