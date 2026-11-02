@@ -135,7 +135,7 @@ anticipated that there would be a clear payoff visible in the metrics.
 
 ## 3. Architecture
 
-![One decision: the observation goes through the interface to the model; the engine validates and executes what it proposes, and the recorder keeps everything](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.0/docs/figures/architecture.png)
+![One decision: the observation goes through the interface to the model; the engine validates and executes what it proposes, and the recorder keeps everything](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.1/docs/figures/architecture.png)
 
 Every action a model proposes is either accepted as legal, or refused with a typed
 reason (`destination_blocked`, `action_economy_spent`, `out_of_range`, …), which means
@@ -255,7 +255,7 @@ decisions (first attempts only, not retries after a refusal).
 | Gemini 3.8 Flash | 0.99 | 0.99 | 1.00 | 1.00 |
 | Claude Sonnet 5.5 | 0.98 | 0.89 | 0.98 | 1.00 |
 
-![First-attempt validity by condition for each model, with 95% intervals](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.0/docs/figures/validity.png)
+![First-attempt validity by condition for each model, with 95% intervals](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.1/docs/figures/validity.png)
 
 Nemotron, the small model, supported all three of the hypotheses with registered
 decision rules (H1–H3), with the full ordering of C3 > C2+M > C2 > C1 and a clear gap at
@@ -308,7 +308,7 @@ the same pattern:
 | Win rate | 0.80 | **0.60** | 0.78 | 0.83 |
 | Kiting: archer survives | 10/10 | **4/10** | 9/10 | 10/10 |
 
-![Claude Sonnet 5.5's matches won, HP left, kiting survival and time out of melee, by condition](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.0/docs/figures/sonnet_tactics.png)
+![Claude Sonnet 5.5's matches won, HP left, kiting survival and time out of melee, by condition](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.1/docs/figures/sonnet_tactics.png)
 
 Bare C2 was the only condition in which the flagship model visibly struggled, and the
 way in which it failed was very specific. Of its 56 refusals for acting after its action
@@ -378,7 +378,7 @@ any data was collected this was revised (as a dated deviation) to predict that C
 do better on area spells, since C2 has to compute coordinates and can get them wrong.
 This result supports the revised direction.
 
-![Allies caught per area cast by condition for each model, with the number of casts](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.0/docs/figures/friendly_fire.png)
+![Allies caught per area cast by condition for each model, with the number of casts](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.1/docs/figures/friendly_fire.png)
 
 #### Movement
 
@@ -461,7 +461,7 @@ moving and shooting, however it stands still again in round 8, and once more in 
 10, when it says "Moving away would help, but I can only take one action." The archer
 dies in that round with the Bruiser still on 14 of 45 HP.
 
-![Seed 108 in C2: the archer shoots and stays put while the Bruiser closes in, and the archer dies](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.0/docs/figures/seed108_C2.gif)
+![Seed 108 in C2: the archer shoots and stays put while the Bruiser closes in, and the archer dies](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.1/docs/figures/seed108_C2.gif)
 
 In C2+M, the difference is visible from the very first turn. After shooting, the archer
 does not attempt a second shot ("My action count is 0, so I can't attack this turn."),
@@ -473,7 +473,7 @@ and from round 2 onwards it shoots and then retreats on almost every turn:
 It wins in round 16 with 12 of 18 HP remaining, and in C3, on the same seed, it wins at
 full health.
 
-![Seed 108 in C2+M: the archer shoots and steps back every turn, keeps its distance, and wins](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.0/docs/figures/seed108_C2M.gif)
+![Seed 108 in C2+M: the archer shoots and steps back every turn, keeps its distance, and wins](https://raw.githubusercontent.com/Nitrix119/Arbiter-Arena/v1.1.1/docs/figures/seed108_C2M.gif)
 
 In C2 the model stated quite plainly that it should kite, so it knew what it wanted to
 do, but it had misread the rule of one tool call per response as allowing only one thing

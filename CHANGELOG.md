@@ -4,6 +4,33 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] — 2026-11-03
+
+### Fixed
+- Corrections to the article, found by checking its claims against the report, the
+  transcripts and the code. No headline result or registered verdict changes.
+  - Seeing the action count did not explain the seed-108 recovery: the count is in the
+    state in every condition, including bare C2. What the list adds is that it stops
+    offering an attack once the action is spent. The practical advice is corrected to
+    match.
+  - The seed-108 loss now includes the stationary turns in rounds 8 and 10.
+  - Sonnet's C1 prose rate is 60%, not 53%.
+  - A reasoning quote spliced from two responses is replaced with a verbatim one.
+  - Smaller counts and claims: which refusals were most common, the breakdown of Sonnet's
+    56 refused actions, LLM decisions separated from the baselines, the worst-case parser
+    claim, and two overstatements.
+- Chart labels rounded exact halves to the nearest even digit, so they disagreed with the
+  tables beside them (0.12 against 0.13). They now round halves up.
+
+### Changed
+- The article discloses that Gemini's pilot met the registered threshold for switching
+  opponents, and that Scripted was kept. This is also recorded as a dated deviation in
+  the pre-registration, written after the fact.
+- The article drops repetition between its summary and its results.
+- Chart titles now say what is plotted.
+
+The study's data is unchanged: the v1.0.0 bundle remains the dataset.
+
 ## [1.1.0] — 2026-11-03
 
 ### Added
