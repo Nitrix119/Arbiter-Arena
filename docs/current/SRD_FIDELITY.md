@@ -156,14 +156,14 @@ These decide what the code should do, so settle them before the work they block.
 
 | Ruling | Blocks |
 |---|---|
-| ATK-Q-01: which creatures die at 0 HP, and which fall unconscious | F1, ATK-M-10, ATK-M-11 |
-| MOVE-Q-03: whether a 0-HP or dead creature still occupies its space | F1 (MOVE-D-03) |
-| SPELL-Q-01: how much of a creature must be inside an area | SPELL-D-05 |
-| MOVE-Q-02: how a mid-turn speed change alters movement left | F3 |
-| MOVE-Q-01: what happens when forced movement is blocked | MOVE-M-08 |
-| MON-Q-01: legendary actions per turn end | MON-M-01 |
+| ~~ATK-Q-01: which creatures die at 0 HP, and which fall unconscious~~ ruled 2026-11-08 | F1, ATK-M-10, ATK-M-11 |
+| ~~MOVE-Q-03: whether a 0-HP or dead creature still occupies its space~~ ruled 2026-11-08 | F1 (MOVE-D-03) |
+| ~~SPELL-Q-01: how much of a creature must be inside an area~~ ruled 2026-11-08 | SPELL-D-05 |
+| ~~MOVE-Q-02: how a mid-turn speed change alters movement left~~ ruled 2026-11-08 | F3 |
+| ~~MOVE-Q-01: what happens when forced movement is blocked~~ ruled 2026-11-08 | MOVE-M-08 |
+| ~~MON-Q-01: legendary actions per turn end~~ ruled 2026-11-08 | MON-M-01 |
 | ATK-Q-02: how cover is determined | ATK-M-04 |
-| COND-Q-01, COND-Q-02, COND-Q-03, TURN-Q-01, TURN-Q-02, TURN-Q-03 | their own entries; none blocks a foundation |
+| COND-Q-01, COND-Q-02, COND-Q-03, TURN-Q-01, ~~TURN-Q-02~~ (ruled 2026-11-08), TURN-Q-03 | their own entries; none blocks a foundation |
 
 ### Phase 1: independent fixes
 
@@ -758,16 +758,17 @@ are independent of each other.
   1. Caster at x=0, Medium target at x=5 fails Thunderwave's save → target ends at x=15,
      its movement budget unchanged; on a success it stays at x=5.
   2. Two targets in the cube both fail → each is pushed directly away from the caster.
-  3. A target whose push path is blocked behaves per MOVE-Q-01's ruling, never raising out
-     of the spell (the damage already applied stays applied).
+  3. A target whose push path is blocked stops at the last clear point along the line
+     (MOVE-Q-01, ruled 2026-11-08), never raising out of the spell (the damage already
+     applied stays applied). See MOVE-Q-01's criteria for the exact cases.
   4. A pushed creature that was grappled by a creature it is pushed out of reach of loses
      the grappled condition (once grapple tracking exists).
 - **Depends on / unblocks:** MOVE-Q-01 ruling; a movement event so grapple/OA logic can
   tell forced from willing (MOVE-M-01). Unblocks Shove's push option (ATK),
   Eldritch Blast + Repelling Blast, Gust of Wind, etc.
 - **Tests pinning current behaviour:** `tests/test_movement.py::TestPushEntity::
-  test_push_still_checks_overlap` (pins "raise on overlap" — change if the ruling is
-  "stop short").
+  test_push_still_checks_overlap` (pins "raise on overlap". It must change: the ruling
+  is "stop short", MOVE-Q-01).
 - **Arena impact:** none today (only Fireball is in arena scenarios,
   `src/arena/scenarios.py:191-200`); a pushing spell later would need its predicted
   displacement in AoE menus/observation.
@@ -1151,15 +1152,16 @@ are independent of each other.
   has death-save state on Entity? []
   ```
   `grep -rni "death_save\|stable\|stabiliz\|instant death\|massive" src rules` → no hits.
-- **Gap:** for creatures that use the PC rules (ATK-Q-01), RAW needs a dying state with death saves at turn start, nat 1 / nat 20 handling, failures from damage (two on a crit), instant death from massive damage (both on the drop to 0 and while at 0), stabilization (an action plus a DC 10 Medicine check), and resets on regaining HP or becoming stable.
+- **Gap:** for creatures with `death_saves: true` (ATK-Q-01, ruled), RAW needs a dying state with death saves at turn start, nat 1 / nat 20 handling, failures from damage (two on a crit), instant death from massive damage (both on the drop to 0 and while at 0), stabilization (an action plus a DC 10 Medicine check), and resets on regaining HP or becoming stable.
 - **Acceptance criteria:**
   1. A PC-rules creature with max 12 / current 6 takes 18 damage → dead (instant death). Taking 17 → dying, 0 HP, unconscious.
   2. A dying creature starts its turn and rolls (patched) 10 → one success. With three successes it is stable and makes no further saves. A 1 → two failures. A 20 → 1 HP, conscious, and the counters reset.
   3. A dying creature takes 3 damage → one failure. Damage from a critical hit → two. Damage ≥ its HP max → dead.
   4. Healing a dying creature → it has the healed HP, is no longer unconscious from 0 HP, and its counters are at zero.
-- **Depends on / unblocks:** ATK-Q-01, ATK-D-01. Death saves at turn start need the turn to *happen* for an unconscious creature: today `_SKIP_CONDITIONS` skips it entirely, with no `TURN_START` (TURN area). Stabilizing needs an ability-check system (COND) and an action (TURN). The crit flag must reach `DAMAGE_INCOMING`/`DAMAGE_DEALT` data (it is on `ATTACK_HIT` only).
+  5. The same 18 damage to a creature with `death_saves` absent or false → dead at once, no death saves (ATK-Q-01 default). A stat block that sets `death_saves` to a non-boolean fails to load, naming the field.
+- **Depends on / unblocks:** ATK-Q-01 (ruled 2026-11-08: the `death_saves` flag), ATK-D-01. Death saves at turn start need the turn to *happen* for an unconscious creature: today `_SKIP_CONDITIONS` skips it entirely, with no `TURN_START` (TURN area). Stabilizing needs an ability-check system (COND) and an action (TURN). The crit flag must reach `DAMAGE_INCOMING`/`DAMAGE_DEALT` data (it is on `ATTACK_HIT` only).
 - **Tests pinning current behaviour:** none assert the absence. 0-HP-is-dead tests are listed under ATK-D-01.
-- **Arena impact:** large if arena creatures use PC rules. Matches would not end at 0 HP, observation needs death-save state, and the heuristic needs a "finish the downed" target value. If ATK-Q-01 rules that arena creatures die at 0, the arena is unaffected.
+- **Arena impact:** none by default: no arena creature sets `death_saves`, so every creature dies at 0 (ATK-Q-01). A scenario that opts in needs death-save state in the observation, and the heuristic needs a "finish the downed" target value. Under the ruled match end, a side made up only of dying creatures has already lost, so opting in does not lengthen matches.
 - **Known in:** CODEBASE_REVIEW §4 item 5; ENGINE_MAP lead.
 - **Size:** L. Dying state on `Entity`, a death-save rule on turn start, massive-damage checks in `DamageProcessor`, a first-aid action, and event-data additions.
 
@@ -1304,7 +1306,7 @@ are independent of each other.
 - **Evidence:** `grep -rni "knock\|nonlethal\|non_lethal" src rules` → no hits.
 - **Gap:** RAW gives the attacker an option, at the moment a melee attack takes the target to 0, to leave it unconscious and stable rather than dead or dying.
 - **Acceptance criteria:**
-  1. A melee attack declared non-lethal that reduces a dies-at-zero creature to 0 → the target is unconscious and stable, not dead, and `ENTITY_DIES` is not emitted.
+  1. A melee attack declared non-lethal that reduces a creature to 0 → the target is unconscious and stable, not dead, and `ENTITY_DIES` is not emitted. This holds whether its `death_saves` flag is on or off (ATK-Q-01, ruled), and a stable creature with the flag on makes no death saves.
   2. The same option on a ranged attack or spell → refused or ignored, as the ruling picks.
 - **Depends on / unblocks:** ATK-M-01 (melee), ATK-Q-01, ATK-M-10 (stable state).
 - **Tests pinning current behaviour:** none.
@@ -2433,7 +2435,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
   1. A creature with `stunned` applied with `duration: 1` loses it at the end of its next turn (same as the `poisoned` control in p01).
   2. Each `end_turn` that reaches an incapacitated creature emits `TURN_START` and then (after its turn ends) `TURN_END` with that creature as `entity`; a `TURN_END` save rider on it fires.
   3. On its turn an `incapacitated`-only creature can `move_entity` (speed intact) but `resolve_attack`/`resolve_spell` are refused with a specific code; a `stunned`/`paralyzed`/`petrified`/`unconscious` creature's moves are refused too (can't move).
-  4. The arena turn driver handles such a turn without asking an LLM for a decision it cannot make (or offers only `move`/`end_turn`), and the all-incapacitated guard (`turn_manager.py:121-122`) is replaced by something that still terminates (TURN-Q-02).
+  4. The arena turn driver never asks an agent to decide a turn in which the creature can neither act nor move: zero agent calls (TURN-Q-02, ruled). A creature that can move but not act (`incapacitated` only) is offered just `move`/`end_turn` (maintainer confirmed 2026-11-08: a turn is skipped only when the creature can do nothing at all). The all-incapacitated guard (`turn_manager.py:118-122`) is removed: per TURN-Q-02, the engine keeps cycling and the caller's round cap ends a true deadlock.
 - **Depends on / unblocks:** COND-M-05 (the single "is incapacitated" predicate every action path checks — the enforcement point that replaces the skip) and a can't-move mechanism (MOVE-M-05's speed-0 shape). Unblocks MON-D-06 (fixing this fixes it), Hold Person–style "save at end of each turn", Sleep, stun durations, ATK-M-10 death saves at turn start. SPELL-D-11 (how a duration counts rounds) is separate but touches the same clock.
 - **Tests pinning current behaviour:** none found (no test asserts a skipped turn; `tests/arena/test_turn_driver.py::test_dead_actor_turn_is_skipped` is about 0 HP, ATK-D-01).
 - **Arena impact:** `turn_driver.run_turn` would start receiving turns for incapacitated creatures; it must auto-end or restrict them. Observation should show the condition. Menus (`action_space.legal_actions`) must drop actions for such a creature.
@@ -2566,12 +2568,23 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
   1. Creature B at x=10 with 30 HP and UNCONSCIOUS: `move_entity(A, 10, 0, 0)` raises
      `DESTINATION_BLOCKED`; `is_destination_clear` is False.
   2. B paralyzed/stunned/petrified (also non-acting) → same.
-  3. Corpse behaviour follows MOVE-Q-03 (today `test_dead_entity_does_not_block_movement`).
+  3. Corpses (MOVE-Q-03, ruled 2026-11-08): a dead creature's body at x=10 → A may move
+     through it and end at x=10, and it is not difficult terrain (keep
+     `test_dead_entity_does_not_block_movement`).
+  4. A dying or stable creature (0 HP, `death_saves` on) at x=10 → `DESTINATION_BLOCKED`
+     for every mover. An ally may pass through it as difficult terrain. A hostile
+     Medium mover may not pass through a Medium dying creature (MOVE-D-01).
+  5. Revival (MOVE-Q-03): a dead creature at x=10 with nothing on its body is restored
+     to life → it rises at x=10. With another creature standing at x=10 → it rises in
+     the nearest unoccupied space, the revival succeeds, and no two spaces overlap.
+     If several spaces are equally near, the choice is deterministic under a seed.
 - **Depends on / unblocks:** separating "on the battlefield" from "able to act"
   (`is_alive` conflates them; the same conflation drives AoE targeting and turn skipping —
   see Cross-area notes). ENTITY_LIFECYCLE_DECISIONS "downed but present".
 - **Tests pinning current behaviour:** `tests/test_movement.py::TestMoveEntity::
-  test_dead_entity_does_not_block_movement` (0 HP corpse — fine to keep, pending MOVE-Q-03).
+  test_dead_entity_does_not_block_movement` (0 HP corpse: keep. It is correct under
+  MOVE-Q-03 for a dead creature. Make sure its fixture stays dead, not dying, once
+  `death_saves` exists).
 - **Arena impact:** menus share `is_destination_clear`, so they follow; no scenario applies
   unconscious today.
 - **Known in:** new.
@@ -2624,10 +2637,11 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
   1. Damage that reduces a creature to 0 HP and does not kill it (ATK-M-10, ATK-Q-01) gives it the `UNCONSCIOUS` condition through the same path as `apply_condition`, so the condition's rule is installed.
   2. A 0-HP creature's `resolve_attack`/`resolve_spell` call is refused with a specific code, in the engine, not only in the arena turn driver.
   3. Healing a 0-HP unconscious (not dead) creature removes the unconsciousness that 0 HP caused.
-  4. A creature made unconscious by an effect at positive HP is not "dead". `ENTITY_DIES` fires if damage then takes it to 0 and it dies (whichever death rule ATK-Q-01 picks), and `sides_standing` tells "out of the fight" apart from "dead" as decided there.
-- **Depends on / unblocks:** ATK-Q-01 (who dies outright), ATK-M-10 (dying), the unconscious condition rule (COND). Unblocks paralyzed/unconscious auto-crits being meaningful against downed PCs.
+  4. A creature made unconscious by an effect at positive HP is not "dead". If damage then takes it to 0, `ENTITY_DIES` fires when its `death_saves` flag is off and does not when it is on (ATK-Q-01, ruled).
+  5. Match end (ATK-Q-01, ruled): `sides_standing` drops a side once every creature on it is at 0 HP: dead, dying or stable. So a 2v1 in which one defender is dead and the other dying ends with the attackers winning. A side with one member still above 0 HP is still standing.
+- **Depends on / unblocks:** ATK-Q-01 (ruled 2026-11-08: a per-creature `death_saves` flag, default off), ATK-M-10 (dying), the unconscious condition rule (COND). Unblocks paralyzed/unconscious auto-crits being meaningful against downed PCs.
 - **Tests pinning current behaviour:** `tests/arena/test_turn_driver.py:147,303` (a 0-HP creature is skipped by the driver; keep). `tests/test_aoe_casting.py::test_dead_entities_not_targeted` and `tests/test_movement.py` (`corpse.current_hp = 0`) treat 0 HP as dead; they stay valid for monsters under ATK-Q-01. Any test relying on `is_alive()` being False for a sleeping creature needs revisiting.
-- **Arena impact:** `observation.py` reports `alive` from `is_alive()`. `sides_standing` decides match end, and the study's win/loss metrics read it. A dying-but-not-dead state changes when a match ends; ATK-Q-01 should decide this for the arena explicitly (e.g. all arena creatures follow "Monsters and Death").
+- **Arena impact:** `observation.py` reports `alive` from `is_alive()`. `sides_standing` decides match end, and the study's win/loss metrics read it. Under the ATK-Q-01 ruling, arena creatures don't set `death_saves`, so they die at 0 and matches end exactly as today. The observation field still has to come from the new predicates, not `is_alive()`.
 - **Known in:** CODEBASE_REVIEW §4 item 5 ("`is_alive()` is binary at 0 HP"); ENGINE_MAP lead. The engine-API hole (0-HP creature can act) and the sleep/`ENTITY_DIES` interaction are new.
 - **Size:** M. A 0-HP state transition in `DamageProcessor`, an engine-side "can act" guard, and an `is_alive` split into "dead" and "incapacitated/down".
 
@@ -2643,7 +2657,7 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
   ```
 - **Gap:** after `ENTITY_DIES`, a dead creature must not regain HP until it is raised. A dying (PC-rules) creature *may* be healed, which is RAW and is how it gets back up. The engine cannot tell the two apart today (ATK-Q-01).
 - **Acceptance criteria:**
-  1. A creature that died (dies-at-zero creature at 0 HP, or a PC-rules creature after three failures or instant death) targeted by Cure Wounds → refused with a specific code, or a no-op recorded as `healing=0`. The ruling picks which, and HP stays 0.
+  1. A creature that died (at 0 HP with `death_saves` off, or with it on after three failures or instant death) targeted by Cure Wounds → refused with a specific code, or a no-op recorded as `healing=0`. The ruling picks which, and HP stays 0.
   2. A dying PC-rules creature targeted by Cure Wounds → regains HP (and ATK-D-01 criterion 3 applies).
   3. Single-target damage spells and weapon attacks against a dead creature are refused, or explicitly allowed as attacks on an object/corpse; the ruling picks which.
 - **Depends on / unblocks:** ATK-Q-01, ATK-D-01 (a dead state).
@@ -3148,7 +3162,12 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
   1. Cone: a Huge creature whose box overlaps the cone by >= 5% of its volume is in the target set (pick a case printed by `p04_cone_sampling.py`).
   2. Line: a creature whose box only touches the line's side face (zero-volume intersection) is not in the target set.
   3. Cube: same as 2 for a cube face.
-- **Depends on / unblocks:** SPELL-Q-01 decides the rule; SPELL-D-03 relies on touching != inside.
+  4. Sphere and cylinder: a creature whose box touches the boundary at one point or
+     face → not in the target set. One that intrudes by a sliver (e.g. 0.1 ft) → in.
+     The same sliver case passes for cone, cube and line.
+  5. The rule is stated in `src/spatial/aoe.py`'s module docstring.
+- **Depends on / unblocks:** SPELL-Q-01 (ruled 2026-11-08: any positive volume inside
+  counts, touching does not); SPELL-D-03 relies on touching != inside.
 - **Tests pinning current behaviour:** none found by name asserting boundary-touch inclusion; re-run `tests/test_aoe*.py`.
 - **Arena impact:** `aim_candidates`/`aim_coverage` consume the same test, so menus and coverage numbers shift slightly.
 - **Known in:** new.
@@ -3312,14 +3331,37 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
   **condition** at >0 HP; the 0-HP state (a creature at 0 HP should *gain* unconscious,
   and must not act) is ATK-D-01/ATK-D-02, and the occupied-space consequence is
   MOVE-D-03.
+- **Direction (maintainer, 2026-11-08; not yet a ruling):**
+  - **One check.** Match end becomes a single "can still fight" check per creature; a
+    side whose creatures all fail it is defeated. 0 HP fails it (ATK-Q-01, ruled).
+  - **Lasting conditions count.** A condition that won't end on a combat timescale is
+    treated like "unconscious and stable": a DM would call the fight won with enemies
+    left asleep or petrified to tie up. Examples: petrified until Greater Restoration,
+    an indefinite magical sleep.
+  - **Brief or resisted conditions don't count.** Examples: a 1-minute concentration
+    hold, anything that breaks on damage, anything the creature saves against each
+    turn.
+  - **Proposed mechanism: opt-in.** Beyond the obvious cases, a condition takes a
+    creature out of the fight only if a flag says so. The flag would sit on the
+    condition, or on the block that applies it (e.g. `apply_condition`), so the same
+    condition can count from one source and not another.
+  - **Not ready to build yet.** Condition management in the block engine is too thin for
+    this today, and the implementation needs its own design pass.
+  - **To settle when ruling:** the SRD's Sleep spell lasts 1 minute and ends if the
+    sleeper takes damage or is shaken awake (p.180). By duration alone it is "brief",
+    yet a fully asleep side has no way to end it itself. One test that would sort it:
+    *can the creature, or its side, end the condition without the other side's help
+    before the fight would otherwise be over?*
 - **Acceptance criteria:**
   1. Apply unconscious to a full-HP enemy → it remains in `get_enemies(attacker)`.
   2. An attack on it from 5 ft resolves with advantage (and, with COND-M-02, crits).
   3. The match does not end on the unconscious condition alone unless the recorded
      win-condition decision says so (test pins whichever is decided).
   4. A creature at 0 HP is unaffected by this change (still handled by ATK lifecycle).
-- **Depends on / unblocks:** ATK-D-01 / ATK-Q-01 (decide `is_alive` vs "can act" vs "is
-  defeated" as separate predicates; once 0 HP applies unconscious, `is_alive` cannot
+- **Depends on / unblocks:** ATK-D-01 / ATK-Q-01 (ATK-Q-01 ruled 2026-11-08 that a side is
+  defeated when all its creatures are at 0 HP; whether one unconscious at *positive* HP
+  is also defeated is still this entry's open decision. Split `is_alive` vs "can act" vs
+  "is defeated" into separate predicates; once 0 HP applies unconscious, `is_alive` cannot
   mean "not unconscious" any more). MOVE-D-03 shares the predicate. Unblocks COND-M-02's
   unconscious half.
 - **Tests pinning current behaviour:** none found that apply the UNCONSCIOUS marker
@@ -3480,7 +3522,8 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
   2. Before `start_combat`, it raises.
   3. During the goblin's turn, before `end_turn`, it raises; in the window opened by the
      goblin's `end_turn` (after TURN_END, before the next TURN_START) it succeeds.
-  4. See MON-Q-01 for how many may be used in one window.
+  4. At most one legendary action per window, per legendary creature (MON-Q-01, ruled
+     2026-11-08).
 - **Depends on / unblocks:** needs an "end-of-turn window" in the turn loop — the same
   off-turn decision point the reactions framework needs (**TURN-M-01**, shared
   dependency; opportunity attacks MOVE-M-01 ride on it). Unblocks MON-M-01.
@@ -3791,8 +3834,32 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 - **Size:** S.
 
 #### TURN-Q-02 — Decide what ends a fight in which no creature can act
-- **Status:** open
-- **Ruling:** _pending: the maintainer fills this in._
+- **Status:** ruled (2026-11-08)
+- **Ruling:** (2026-11-08) Option (a): keep cycling turns.
+  - **Being unable to act is not losing.** A fight ends only when sides are defeated.
+    That is ATK-Q-01's match end (all at 0 HP), plus any lasting condition flagged as
+    taking a creature out of the fight (COND-D-01's direction). A brief stun on both
+    sides defeats neither side.
+  - **The engine keeps cycling.** Turns still run for creatures that can't act:
+    `TURN_START`/`TURN_END` fire, durations expire, and end-of-turn saves are retried,
+    so a mutual stun resolves itself.
+  - **The engine has no stalemate rule.** The all-skipped guard
+    (`turn_manager.py:118-122`) goes. A true deadlock (say, both sides permanently held
+    by conditions not flagged as defeating) is ended by the caller's round cap. In the
+    arena that is `_decide_result`'s `round_cap`, which goes to the higher HP fraction
+    and is a draw only on a tie.
+  - **No prompt for a turn with no choices.** A creature that can neither act nor move
+    takes its turn without the driver calling its controller: no agent call, no tokens.
+    A DM simply skips that turn.
+  - **Simultaneous defeat is a draw.** If both sides are defeated at once (one Fireball
+    drops the last of each, or a lasting effect takes both out), the match ends with no
+    winner. That is today's `last_standing` result with `winner=None`.
+
+  _Why:_ RAW, the fight goes on "if neither side has defeated the other" (p.90), and
+  common practice treats a fight in which everyone is held as unfinished. Once lasting
+  incapacitation counts as defeat, the only fights left cycling are ones that will
+  resolve soon or that the round cap ends. Idle turns cost nothing, because nobody is
+  prompted.
 - **Type / severity:** OPEN QUESTION — S4
 - **SRD:** p.90 "The Order of Combat": "Once everyone has taken a turn, the fight continues to the next round if neither side has defeated the other." p.90 "Combat Step by Step" 5: "Repeat step 4 until the fighting stops."
 - **Current behaviour:** when every creature due a turn has a skip-condition, `TurnManager.end_turn` ends the combat (`src/combat/turn_manager.py:118-122`, log "Combat ended", no winner), even when all are conscious and at full HP and their conditions would expire. Today this guard is also the only way out of a mutual stun, because durations never expire while turns are skipped (TURN-D-01). (The related case — a side whose only creatures are *unconscious* at full HP counting as defeated — is COND-D-01, with the win-condition decision there and in ATK-Q-01.)
@@ -3804,7 +3871,15 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
   both stunned (both alive, HP full): state ENDED | log tail: Combat ended
   ```
 - **Decision needed:** once TURN-D-01 gives incapacitated creatures their turns, the engine no longer needs this guard for termination. Options: (a) keep cycling turns (durations expire, saves are retried) and let the caller's round cap end a true deadlock (the arena already has one: `_decide_result` `reason = "round_cap"`, `src/arena/match.py:81-93`); (b) end the fight as a draw when no creature can act and no timed effect is pending; (c) keep today's immediate end. Common practice: a fight in which everyone is held is not over; the GM narrates until someone recovers.
-- **Acceptance criteria:** once decided, e.g. "both sides stunned for 1 round → both recover and combat is still ACTIVE in round 2", and "both permanently paralyzed → the arena's round cap ends it as a draw".
+- **Acceptance criteria:**
+  1. Both sides stunned for 1 round → both recover, and combat is still ACTIVE in round 2.
+  2. Both sides paralyzed with no end (no duration, no save, not flagged as defeating) →
+     the engine never ends combat by itself. The arena's round cap ends the match with
+     `reason="round_cap"`, and the winner is decided by HP fraction (a draw if equal).
+  3. In an arena match, a stunned creature's turn makes zero calls to its agent, and the
+     transcript records the turn as skipped.
+  4. A Fireball that drops the last creature of both sides → the match ends with
+     `winner=None`.
 - **Depends on / unblocks:** TURN-D-01.
 - **Tests pinning current behaviour:** none found for the all-skipped branch (`tests/arena/test_match.py::test_round_cap_ends_a_stalemate_as_a_draw` covers the arena cap).
 - **Arena impact:** match outcome (`result.reason`) in rare mutual-disable states.
@@ -3827,8 +3902,26 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 - **Size:** S under (a).
 
 #### MOVE-Q-01 — Decide what happens when forced movement is blocked
-- **Status:** open
-- **Ruling:** _pending: the maintainer fills this in._
+- **Status:** ruled (2026-11-08)
+- **Ruling:** (2026-11-08) Option (a), with a clear path required.
+  - **Stop short.** A pushed creature moves along the push line until the next step
+    would put its space into another creature (ally or enemy) or, once terrain exists,
+    a solid obstacle. It stops at the last clear point, which may be where it started.
+  - **Clear path, not just endpoint.** It is never carried through anything to a clear
+    point beyond. Being pushed is not a willing move, so the "move through a
+    nonhostile creature" allowance (p.92) does not apply.
+  - **Never fails.** A push never raises mid-spell. The damage already applied stands,
+    and the distance actually moved is recorded.
+  - **No extras.** No chain pushing (the blocker is not shoved along) and no collision
+    damage. Both are table add-ons, not SRD (the SRD text has neither), so they are not
+    modelled.
+  - **Same for every push.** Shove's "push it 5 feet away", and any other push, follow
+    the same rule.
+
+  _Why:_ shoving a creature through 5 ft of rock or another body makes no sense, and
+  "moves as far as it can" is the common reading. Without SRD support for collision
+  effects, stopping is the minimal, faithful choice. (Note that MOVE-D-01, a move
+  passing through a hostile, is the willing-move counterpart.)
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** Thunderwave: "is pushed 10 feet away from you" (no rule for obstacles). p.92
   "Moving Around Other Creatures": "you can't willingly end your move in its space" (the
@@ -3843,8 +3936,15 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
   Common table practice (not RAW): (a) — the creature moves as far as it can and stops;
   "pushed up to N feet" wordings (e.g. Shove's "5 feet away") are read the same way.
   Also: does a push need a clear *path* (MOVE-D-01) or only a clear endpoint?
-- **Acceptance criteria:** once ruled, a test per case: target at x=5 pushed 10 ft
-  toward a creature at x=12 → ends at the ruled point; never raises mid-spell.
+- **Acceptance criteria:**
+  1. Medium target (5 ft box) centred at x=5, pushed 10 ft toward a Medium creature
+     centred at x=12 → the target stops at x=7 (boxes touching, not overlapping), and no
+     exception is raised.
+  2. The same push with the blocker already touching (centred at x=10) → the target
+     doesn't move, and the result records 0 ft moved.
+  3. An ally of the target in the path blocks exactly as an enemy does.
+  4. A clear point beyond the blocker is never used. The blocker doesn't move and takes
+     no damage, and neither does the target.
 - **Depends on / unblocks:** MOVE-M-08.
 - **Tests pinning current behaviour:** `test_push_still_checks_overlap`.
 - **Arena impact:** none until a push spell is in a scenario.
@@ -3852,8 +3952,17 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 - **Size:** S once ruled.
 
 #### MOVE-Q-02 — Decide how a mid-turn speed change alters the movement left this turn
-- **Status:** open
-- **Ruling:** _pending: the maintainer fills this in._
+- **Status:** ruled (2026-11-08)
+- **Ruling:** (2026-11-08) Movement left is derived, not stored as a budget:
+  **movement left = max(0, current speed + Dash increments − distance moved this turn)**.
+  - It is recalculated whenever speed changes.
+  - A gain is usable at once. A loss below what you've already moved leaves 0, never a
+    negative.
+  - Each Dash adds the *current* speed, so it tracks later changes too (p.93).
+
+  _Why:_ the p.91 switching-speeds rule and the p.93 Dash wording both work this way,
+  and in every common interpretation newly gained movement is available immediately.
+  It is also simpler than adjusting a budget by deltas.
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** p.91 "Movement and Position": "you can move a distance up to your speed ...
   you deduct the distance of each part of your move from your speed". p.91 "Using
@@ -3882,8 +3991,28 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 - **Size:** S (decision) — implementation is part of MOVE-M-03.
 
 #### MOVE-Q-03 — Decide whether a 0-HP or dead creature still occupies its space
-- **Status:** open
-- **Ruling:** _pending: the maintainer fills this in._
+- **Status:** ruled (2026-11-08)
+- **Ruling:** (2026-11-08) Follow RAW for anything that is still a creature, and let
+  corpses be walked over.
+  - A **dying or stable** creature (0 HP, death saves on, not dead) is still a creature
+    and occupies its space under p.92 "Moving Around Other Creatures". No creature may
+    willingly end its move there. Allies may move through it as difficult terrain. A
+    hostile mover may pass through only if the two are at least two sizes apart. The
+    same applies to any creature down at positive HP (MOVE-D-03).
+  - A **dead** creature does not occupy space. Others may move through and end their
+    move on its body, and it is not difficult terrain.
+  - **Revival lands clear.** A creature restored to life rises in its body's space if
+    that space is unoccupied. Otherwise it rises in the nearest unoccupied space. Revival
+    is never refused because someone is standing over the body.
+
+  _Why:_ p.92 governs *creatures*; the SRD speaks of the dead as corpses, and the rules
+  give no blocking rule for a body. Not walking over the dying keeps RAW where RAW
+  speaks. The revival spells (Revivify, Raise Dead, Resurrection, Reincarnate) don't say
+  where the creature appears. Where the SRD does place a creature, it falls back to the
+  nearest unoccupied space: the Wraith's Create Specter ("in the space of its corpse or
+  in the nearest unoccupied space"), True Resurrection's new body, and planar returns.
+  Following that pattern, a revival is never blocked by an enemy standing on the body.
+  (This replaces an earlier same-day draft that refused the revival.)
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** p.92 "Space": "A creature's space is the area in feet that it effectively
   controls in combat". The SRD gives no rule for a body; a dead creature is no longer a
@@ -3909,8 +4038,29 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 - **Size:** S once ruled.
 
 #### ATK-Q-01 — Decide which creatures die at 0 HP and which fall unconscious
-- **Status:** open
-- **Ruling:** _pending: the maintainer fills this in._
+- **Status:** ruled (2026-11-08)
+- **Ruling:** (2026-11-08) Option (a), as one boolean.
+  - **`death_saves`** on the creature's stat block, default **false**.
+    - Off: the creature dies the instant it drops to 0 HP ("Monsters and Death").
+    - On: it falls unconscious and makes death saving throws (ATK-M-10).
+    - It is set per creature. It is meant for player characters, important NPCs and
+      creatures an agent controls. Making it the default for everything later is a
+      one-line change.
+  - **Knocking out** (ATK-M-11) works for both. A melee attacker who chooses it leaves
+    the target unconscious and stable at 0 HP instead of dead or dying.
+  - **Match end.** A side is defeated when every creature on it is at 0 HP: dead, dying
+    (making death saves), or unconscious and stable (for example, knocked out).
+    Creatures removed from the battlefield don't count. Conditions that take a creature
+    out of the fight at *positive* HP are not ruled yet. COND-D-01 records the agreed
+    direction (a "can still fight" check, and an opt-in flag on lasting conditions).
+
+  _Why:_ this is the SRD's own default, with the exception it names. It is also how
+  Baldur's Gate and most tables run it: a downed monster making death saves is almost
+  never seen. Defaulting to off fits a corpus that is overwhelmingly monsters. It also
+  leaves the arena unchanged unless a scenario opts in: no shipped creature sets the
+  flag, so every match still ends at 0 HP, as `PREREGISTRATION` assumes. Not a
+  departure from RAW (the SRD makes this the GM's call), so no Appendix A entry is
+  needed.
 - **Type / severity:** OPEN QUESTION — S2
 - **SRD:** p.98 "Monsters and Death": "Most GMs have a monster die the instant it drops to 0 hit points, rather than having it fall unconscious and make death saving throws. Mighty villains and special nonplayer characters are common exceptions; the GM might have them fall unconscious". p.98 "Knocking a Creature Out" (an attacker's choice).
 - **Current behaviour:** every creature is treated the same: at 0 HP it is out of the fight (`is_alive()` False), but nothing marks it dead (ATK-D-01) and healing brings it back (ATK-D-02). In practice this is "everyone follows Monsters and Death, except they can be healed".
@@ -3949,8 +4099,17 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 - **Size:** S to decide. M to L to implement, depending on the option.
 
 #### SPELL-Q-01 — Decide how much of a creature must be inside an area to be affected
-- **Status:** open
-- **Ruling:** _pending: the maintainer fills this in._
+- **Status:** ruled (2026-11-08)
+- **Ruling:** (2026-11-08) Option (a). A creature is in an area if **any positive volume**
+  of its space is inside the area. Merely touching the boundary (a zero-volume
+  intersection) is not inside. This holds identically for every shape: sphere,
+  cylinder, cone, cube and line.
+
+  _Why:_ this is the natural gridless reading, the engine's existing intent, and the
+  same "touching is not overlapping" convention as `BoundingBox.overlaps` (2026-09-30).
+  Grid-template conventions (how much of a square an area must cover for that square
+  to be hit) exist to speed up play on a grid. They are not SRD, and the grid is out of
+  scope (MOVE-I-01).
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** p.102-103 "Areas of Effect": "Every area of effect has a point of origin … A spell's effect expands in straight lines from the point of origin." Spells say "each creature in a 20-foot-radius sphere" without defining partial occupancy.
 - **Current behaviour:** any positive overlap of the creature's bounding box counts (`get_targets_in_aoe`, `src/combat/combat_system.py:844-871`); touching also counts for most shapes (SPELL-D-05).
@@ -4038,8 +4197,23 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
 - **Size:** S once ruled.
 
 #### MON-Q-01 — Decide how many legendary actions may be used at one turn's end
-- **Status:** open
-- **Ruling:** _pending: the maintainer fills this in._
+- **Status:** ruled (2026-11-08)
+- **Ruling:** (2026-11-08) Reading (a).
+  - **One per window.** When another creature ends its turn, each legendary creature
+    with actions left may take at most one legendary action. Taking none is equally
+    valid.
+  - **Each creature decides separately.** Two legendary creatures each get their own
+    single choice.
+  - **The window closes.** A second legendary action in the same window is refused, and
+    the next window opens at the next other creature's turn end.
+  - **Same plumbing as reactions.** The mechanism is meant to share the off-turn
+    decision framework (TURN-M-01) that opportunity attacks and other reactions use.
+    It is a decision offered to the creature's controller when a specific event
+    (another creature's turn ending) happens.
+
+  _Why:_ the common reading of "only one legendary action option can be used at a time
+  and only at the end of another creature's turn" (p.260), matching published designer
+  guidance. Reading (b) would let a creature spend its whole pool after a single turn.
 - **Type / severity:** OPEN QUESTION — S3
 - **SRD:** p.260 "Legendary Actions": "Only one legendary action option can be used at a
   time and only at the end of another creature's turn."
@@ -4051,8 +4225,13 @@ condition ships (Hold Person, Sleep, a shove, a poison bite).
   commentary, not RAW) and most table practice take reading (a): one legendary action at
   the end of each other creature's turn. Reading (b) lets a creature dump its whole pool
   after a single turn.
-- **Acceptance criteria:** once decided, e.g. under (a): after the goblin's turn ends, the
-  first legendary action succeeds and a second in the same window raises.
+- **Acceptance criteria:**
+  1. After the goblin's turn ends, the golem's first legendary action succeeds, and a
+     second in the same window raises with a specific code and leaves the pool unchanged.
+  2. At the next creature's turn end, the golem may take one more (pool permitting).
+  3. Declining in a window spends nothing and does not carry over: the next window
+     still allows exactly one.
+  4. With two legendary creatures, each may take one in the same window.
 - **Depends on / unblocks:** MON-D-01 (the window must exist first).
 - **Tests pinning current behaviour:** none found.
 - **Arena impact:** shapes how many off-turn decisions an agent gets.
