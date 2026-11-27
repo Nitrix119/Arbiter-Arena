@@ -23,8 +23,9 @@ the mistake is not repeated.
 - Keep entries **short, imperative, and scannable**. Prefer a one-line rule over a
   paragraph; if a rule needs justification, add a parenthetical _(why: ...)_.
 - **Edit rules in place; git keeps the history.** Change a rule where it stands and give
-  the reason in the commit message. Don't leave "changed from" notes in this file
-  (shared standards, `../standards/AGENTS.md` §0).
+  the reason in the commit message. Don't leave "changed from" notes on rules (shared
+  standards, `../standards/AGENTS.md` §0). §9's lessons are different: they stay
+  append-only, with their dated notes.
 - New durable lessons go in [§9 Lessons Learned](#9-lessons-learned-append-only) as
   dated, append-only entries. Promote stable lessons up into the relevant section.
 - Keep the commands in [§7](#7-stack--commands) exact — agents rely on them. Fix a
