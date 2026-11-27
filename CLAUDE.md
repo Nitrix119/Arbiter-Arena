@@ -22,8 +22,9 @@ the mistake is not repeated.
 
 - Keep entries **short, imperative, and scannable**. Prefer a one-line rule over a
   paragraph; if a rule needs justification, add a parenthetical _(why: ...)_.
-- **Do not delete history.** Supersede a rule by editing it and noting the change,
-  rather than silently rewriting the project's reasoning.
+- **Edit rules in place; git keeps the history.** Change a rule where it stands and give
+  the reason in the commit message. Don't leave "changed from" notes in this file
+  (shared standards, `../standards/AGENTS.md` §0).
 - New durable lessons go in [§9 Lessons Learned](#9-lessons-learned-append-only) as
   dated, append-only entries. Promote stable lessons up into the relevant section.
 - Keep the commands in [§7](#7-stack--commands) exact — agents rely on them. Fix a
@@ -222,8 +223,6 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
 9. **Branch, don't touch `main`.** Do work on a feature branch. The agent commits, pushes
    and opens PRs itself, the same way every time, and Logan merges: see the shared rules,
    `../standards/AGENTS.md` §3. Write commit messages that explain the _why_.
-   _(Changed 2026-11-28: was "commit/push only when asked". Keeping pushes in Logan's hands
-   slowed both sides down, and an IDE push once sent commits straight to `main`.)_
 
 ---
 
