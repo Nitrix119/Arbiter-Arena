@@ -84,7 +84,7 @@ Non-negotiable. Every change should be justifiable against these.
      a `Field` to its `BlockContract` — `tests/test_block_schema_drift.py` reads the
      handlers' real `block.get` calls and fails if the two disagree.
 6. **Small, reversible changes.** Many small, well-tested commits over one large one.
-   Keep `main` clean; do non-trivial work on a branch.
+   Keep `main` clean; do all work on a branch ([§6.9](#6-agent-working-agreement)).
 7. **Debt and convolution are first-class.** In an engine whose whole value is modular
    flexibility to absorb new mechanics, technical debt and tangle are not side concerns —
    they are the thing that kills that flexibility. Treat a change's effect on them as a
