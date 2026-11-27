@@ -219,8 +219,11 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
    README, and the relevant guide in the same change.
 8. **Capture lessons.** When a non-obvious mistake is found and fixed, append to
    [§9](#9-lessons-learned-append-only).
-9. **Branch, don't touch `main`.** Do work on a feature branch; commit/push only when
-   asked; write commit messages that explain the _why_.
+9. **Branch, don't touch `main`.** Do work on a feature branch. The agent commits, pushes
+   and opens PRs itself, the same way every time, and Logan merges: see the shared rules,
+   `../standards/AGENTS.md` §3. Write commit messages that explain the _why_.
+   _(Changed 2026-11-28: was "commit/push only when asked". Keeping pushes in Logan's hands
+   slowed both sides down, and an IDE push once sent commits straight to `main`.)_
 
 ---
 
