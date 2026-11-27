@@ -22,8 +22,10 @@ the mistake is not repeated.
 
 - Keep entries **short, imperative, and scannable**. Prefer a one-line rule over a
   paragraph; if a rule needs justification, add a parenthetical _(why: ...)_.
-- **Do not delete history.** Supersede a rule by editing it and noting the change,
-  rather than silently rewriting the project's reasoning.
+- **Edit rules in place; git keeps the history.** Change a rule where it stands and give
+  the reason in the commit message. Don't leave "changed from" notes on rules (shared
+  standards, `../standards/AGENTS.md` §0). §9's lessons are different: they stay
+  append-only, with their dated notes.
 - New durable lessons go in [§9 Lessons Learned](#9-lessons-learned-append-only) as
   dated, append-only entries. Promote stable lessons up into the relevant section.
 - Keep the commands in [§7](#7-stack--commands) exact — agents rely on them. Fix a
@@ -84,7 +86,7 @@ Non-negotiable. Every change should be justifiable against these.
      a `Field` to its `BlockContract` — `tests/test_block_schema_drift.py` reads the
      handlers' real `block.get` calls and fails if the two disagree.
 6. **Small, reversible changes.** Many small, well-tested commits over one large one.
-   Keep `main` clean; do non-trivial work on a branch.
+   Keep `main` clean; do all work on a branch ([§6.9](#6-agent-working-agreement)).
 7. **Debt and convolution are first-class.** In an engine whose whole value is modular
    flexibility to absorb new mechanics, technical debt and tangle are not side concerns —
    they are the thing that kills that flexibility. Treat a change's effect on them as a
@@ -219,8 +221,9 @@ TDD is the default workflow, not an afterthought. The suite is a genuine strengt
    README, and the relevant guide in the same change.
 8. **Capture lessons.** When a non-obvious mistake is found and fixed, append to
    [§9](#9-lessons-learned-append-only).
-9. **Branch, don't touch `main`.** Do work on a feature branch; commit/push only when
-   asked; write commit messages that explain the _why_.
+9. **Branch, don't touch `main`.** Do work on a feature branch. The agent commits, pushes
+   and opens PRs itself, the same way every time, and Logan merges: see the shared rules,
+   `../standards/AGENTS.md` §3. Write commit messages that explain the _why_.
 
 ---
 
